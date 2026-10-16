@@ -17,12 +17,20 @@
 //     node setup-email.mjs --provider brevo --name <project-name> \
 //       --brevo-sender <verified-email> [--brevo-sender-name <name>] [--web-dir .]
 //
+//   Either, when the need is not a contact form (password resets, notifications): add
+//   --no-contact-router, and the contact router is neither written nor registered.
+//   The contact router alone, for a project whose email was set up without it (the contact page
+//   asks for it): --contact-router-only.
+//
 // Args:
 //   --provider <resend|brevo>     required
 //   --name <project-name>         required (used as the Brevo sender name default)
 //   --web-dir <path>              default: cwd
-//   --brevo-sender <email>        required if --provider brevo (must be verified in Brevo dashboard)
+//   --brevo-sender <email>        required if --provider brevo (an active sender at Brevo: /add-email
+//                                 creates it through Brevo's API when the account has none)
 //   --brevo-sender-name <name>    optional, default = project-name
+//   --no-contact-router           skip the contact router and its registration in root.ts
+//   --contact-router-only         write the contact router and register it, nothing else
 //
 // Prerequisites assumed by the script:
 //   - The API key is in the Bitwarden vault (item RESEND / BREVO, field "api_key") and the
@@ -30,7 +38,8 @@
 //     No provider CLI is involved: everything goes through the vault + the REST API / SDK.
 //     A legacy RESEND_API_KEY / BREVO_API_KEY env var is still accepted as a fallback.
 //   - The project has a working T3 scaffold (Next.js + tRPC + setup-security from /bootstrap,
-//     because the contact router uses rateLimitedProcedure).
+//     because the contact router uses rateLimitedProcedure). Without rateLimitedProcedure, the
+//     contact router is skipped with a warning (3.4.13): written anyway, it broke the build.
 //
 // stdout layout:
 //   - Live logs: ▸ <step>, ✅ <result>, ⚠️ <warning>
@@ -49,7 +58,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "./_render.mjs";
 import { envValue } from "./env-value.mjs";
-import { senderPlan } from "./email-sender.mjs";
+import { contactRouterPlan, senderPlan } from "./email-sender.mjs";
 import { readUserEnv } from "./_read-user-env.mjs";
 import { getSecret } from "./vault/vault.mjs";
 
@@ -69,6 +78,8 @@ let name = "";
 let webDir = ".";
 let brevoSender = "";
 let brevoSenderName = "";
+let noContactRouter = false;
+let contactRouterOnly = false;
 
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -77,6 +88,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--web-dir" && args[i + 1]) webDir = args[++i];
   else if (a === "--brevo-sender" && args[i + 1]) brevoSender = args[++i];
   else if (a === "--brevo-sender-name" && args[i + 1]) brevoSenderName = args[++i];
+  else if (a === "--no-contact-router") noContactRouter = true;
+  else if (a === "--contact-router-only") contactRouterOnly = true;
   else fail(`Unknown arg: ${a}`);
 }
 
@@ -98,7 +111,8 @@ const senderInPlace = {
   BREVO_SENDER_EMAIL: envValue(WEB_DIR, "BREVO_SENDER_EMAIL"),
   BREVO_SENDER_NAME: envValue(WEB_DIR, "BREVO_SENDER_NAME"),
 };
-if (provider === "brevo" && !senderInPlace.BREVO_SENDER_EMAIL) {
+if (noContactRouter && contactRouterOnly) fail("--no-contact-router and --contact-router-only cannot go together.");
+if (provider === "brevo" && !senderInPlace.BREVO_SENDER_EMAIL && !contactRouterOnly) {
   if (!brevoSender) fail("--brevo-sender <email> is required when --provider brevo and the project has no BREVO_SENDER_EMAIL yet");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(brevoSender)) {
     fail(`--brevo-sender must be a valid email. Got: ${brevoSender}`);
@@ -111,16 +125,25 @@ function senderPairs() {
   return senderPlan({ provider, inPlace: senderInPlace, brevoSender, brevoSenderName });
 }
 
+// Whether the contact router is written: decided once, from the flags and the project's tRPC.
+const TRPC_PATH = join(WEB_DIR, "src/server/api/trpc.ts");
+const ROUTER = contactRouterPlan({
+  skip: noContactRouter,
+  only: contactRouterOnly,
+  trpc: existsSync(TRPC_PATH) ? readFileSync(TRPC_PATH, "utf8") : null,
+});
+
 // ─── helpers ──────────────────────────────────────────────────────────
-const STEPS = [
-  "preflight",
-  "getApiKey",
-  "installSdk",
-  "writeMailTs",
-  "writeContactRouter",
-  "registerRouter",
-  "pushEnvVars",
-];
+const STEPS = contactRouterOnly
+  ? ["preflight", "writeContactRouter", "registerRouter"]
+  : [
+      "preflight",
+      "getApiKey",
+      "installSdk",
+      "writeMailTs",
+      ...(ROUTER.write ? ["writeContactRouter", "registerRouter"] : []),
+      "pushEnvVars",
+    ];
 const completed = [];
 const warnings = [];
 let current = null;
@@ -220,27 +243,35 @@ async function preflight() {
     fail(`${WEB_DIR} doesn't depend on @trpc/server - the contact router requires tRPC.`);
   }
 
-  // Check rateLimitedProcedure exists (created by setup-security.mjs in bootstrap).
-  // Without it, the contact router won't compile.
-  const trpcPath = join(WEB_DIR, "src/server/api/trpc.ts");
-  if (existsSync(trpcPath)) {
-    const trpcContent = readFileSync(trpcPath, "utf8");
-    if (!trpcContent.includes("rateLimitedProcedure")) {
-      warn(
-        "rateLimitedProcedure not found in src/server/api/trpc.ts. The contact router uses it " +
-          "for rate limiting. Either run /bootstrap (which calls setup-security.mjs to add it), " +
-          "or expect a TS build error after this script and fall back to publicProcedure manually.",
+  // The contact router uses rateLimitedProcedure (created by setup-security.mjs in /bootstrap):
+  // without it, the router is not written (it would break the build), and that is said.
+  if (!ROUTER.write) {
+    if (contactRouterOnly) {
+      fail(
+        ROUTER.reason === "no-trpc"
+          ? `${TRPC_PATH} not found - T3 may have moved its tRPC config: the contact router cannot be wired.`
+          : "rateLimitedProcedure not found in src/server/api/trpc.ts: the contact router needs it for its " +
+              "rate limiting. Run the security setup of /bootstrap first, then ask again.",
       );
     }
-  } else {
-    warn(`${trpcPath} not found - T3 may have moved tRPC config. Verify the contact router compiles.`);
+    if (ROUTER.reason === "no-rate-limit") {
+      warn(
+        "rateLimitedProcedure not found in src/server/api/trpc.ts: the contact router (which needs it) " +
+          "was NOT written, so the build stays green. Everything else is set up. For a contact form " +
+          "later: the security setup of /bootstrap, then /add-email's contact page.",
+      );
+    } else if (ROUTER.reason === "no-trpc") {
+      warn(`${TRPC_PATH} not found - T3 may have moved its tRPC config: the contact router was not written.`);
+    }
   }
 
   // Block accidental overwrites: refuse if mail.ts or contact router already exists.
   // Re-config flow is handled by Claude in SKILL Step 0 - by the time we're here, this
-  // should be a fresh install.
+  // should be a fresh install. The contact router alone needs the mail utility it calls.
   const mailPath = join(WEB_DIR, "src/server/mail.ts");
-  if (existsSync(mailPath)) {
+  if (contactRouterOnly) {
+    if (!existsSync(mailPath)) fail(`${mailPath} not found: the contact router sends through it. Run /add-email first.`);
+  } else if (existsSync(mailPath)) {
     fail(
       `${mailPath} already exists. If you meant to re-configure email, use the /add-email ` +
         "re-configuration menu (Step 0 of the SKILL). To force a fresh install, delete the " +
@@ -248,16 +279,22 @@ async function preflight() {
     );
   }
   const contactRouterPath = join(WEB_DIR, "src/server/api/routers/contact.ts");
-  if (existsSync(contactRouterPath)) {
-    fail(
-      `${contactRouterPath} already exists. If you meant to re-configure email, use the ` +
-        "/add-email re-configuration menu. To force a fresh install, delete the file manually first.",
-    );
+  if (ROUTER.write && existsSync(contactRouterPath)) {
+    if (contactRouterOnly) {
+      ok("The contact router is already there (no-op)");
+    } else {
+      fail(
+        `${contactRouterPath} already exists. If you meant to re-configure email, use the ` +
+          "/add-email re-configuration menu. To force a fresh install, delete the file manually first.",
+      );
+    }
   }
 
-  // pnpm available?
-  const pnpm = capture("pnpm --version", WEB_DIR);
-  if (pnpm.status !== 0) fail("pnpm CLI is missing or broken.");
+  // pnpm available? (The contact router alone installs nothing.)
+  if (!contactRouterOnly) {
+    const pnpm = capture("pnpm --version", WEB_DIR);
+    if (pnpm.status !== 0) fail("pnpm CLI is missing or broken.");
+  }
 
   ok(`Web dir OK: ${WEB_DIR}`);
 }
@@ -338,6 +375,10 @@ async function writeMailTs() {
 async function writeContactRouter() {
   log("Writing src/server/api/routers/contact.ts");
   const dest = join(WEB_DIR, "src/server/api/routers/contact.ts");
+  if (contactRouterOnly && existsSync(dest)) {
+    ok(`${dest} kept as it is`);
+    return;
+  }
   // Templates: templates/email/<provider>/contact-router.ts (no vars).
   writeFileSync(dest, render(`email/${provider}/contact-router.ts`, {}));
   ok(`${dest} written`);
@@ -413,11 +454,21 @@ async function pushEnvVars() {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────
 await step("preflight", preflight);
+if (contactRouterOnly) {
+  await step("writeContactRouter", writeContactRouter);
+  await step("registerRouter", registerRouter);
+  dumpHandoff(true);
+  console.log(`\n🎉 Contact router in place (${provider}): src/server/api/routers/contact.ts, registered as \`contact\` in root.ts.`);
+  console.log(JSON.stringify({ success: true, provider, contactRouter: "written" }));
+  process.exit(0);
+}
 await step("getApiKey", getApiKey);
 await step("installSdk", installSdk);
 await step("writeMailTs", writeMailTs);
-await step("writeContactRouter", writeContactRouter);
-await step("registerRouter", registerRouter);
+if (ROUTER.write) {
+  await step("writeContactRouter", writeContactRouter);
+  await step("registerRouter", registerRouter);
+}
 await step("pushEnvVars", pushEnvVars);
 
 dumpHandoff(true);
@@ -427,7 +478,7 @@ console.log(`
 
    Provider:      ${provider}
    mail.ts:       src/server/mail.ts
-   Contact route: src/server/api/routers/contact.ts (registered as \`contact\` in root.ts)
+   Contact route: ${ROUTER.write ? "src/server/api/routers/contact.ts (registered as `contact` in root.ts)" : `not written (${ROUTER.reason === "asked" ? "not asked for" : "the project's tRPC has no rateLimitedProcedure"})`}
    Env vars:      ${state.envVarsPushed.join(", ")}
 
 Next: Claude takes over for the CLAUDE.md update (via _update-claude-md), the optional
@@ -441,5 +492,6 @@ console.log(
     success: true,
     provider,
     envVars: state.envVarsPushed,
+    contactRouter: ROUTER.write ? "written" : `skipped:${ROUTER.reason}`,
   }),
 );

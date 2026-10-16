@@ -1579,6 +1579,27 @@ function valuesOf(raw, vars) {
  *  one, between double quotes with what they would read escaped. */
 const asWord = (value) => (value.includes("'") ? `"${value.replace(/[\\"$`]/g, "\\$&")}"` : `'${value}'`);
 
+/** A segment read through the variables the command line set, EVERY word of it: its readings
+ *  (READINGS at most, each word written out as one word no shell reads anything into), or null
+ *  when none of its words names one of them. An API's address kept in a variable
+ *  (`CF="https://api.cloudflare.com/client/v4"; curl -X DELETE "$CF/zones/..."`) hid the host from
+ *  the rules on raw calls, which read the curl line as typed: the call walked past them, on one
+ *  line as on two (outside review of the 3.4.11). Read like a script's path since 3.3.10. */
+function wordsThroughVariables(seg, vars) {
+  if (!vars.size || !seg.includes("$")) return null;
+  let readings = [[]];
+  let read = false;
+  for (const w of words(seg)) {
+    const r = valuesOf(w.raw, vars);
+    if (r.read) read = true;
+    const forms = r.read ? r.values.map(asWord) : [w.raw];
+    const next = [];
+    for (const acc of readings) for (const form of forms) if (next.length < READINGS) next.push([...acc, form]);
+    readings = next;
+  }
+  return read ? readings.map((list) => list.join(" ")) : null;
+}
+
 /** The lines a runtime's segment runs once its script's path is read through the variables the
  *  command line set, or null when its script names none of them. */
 function throughVariables(seg, vars) {
@@ -2038,7 +2059,10 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //     alone, now every management API the plugin's own scripts call (outside review,
     //     3.2.5: a Vercel project and a Cloudflare DNS record went unasked). Reads (GET) and
     //     creations (POST) pass.
-    if (destructiveApiCall(seg, parts, index)) {
+    //     An address the command line put in a variable is read through it: the call is judged as
+    //     typed AND as the shell will run it (outside review of the 3.4.11).
+    const apiReadings = /^curl\s/.test(seg) ? [seg, ...(wordsThroughVariables(seg, vars) ?? [])] : [seg];
+    if (apiReadings.some((s) => destructiveApiCall(s, parts, index))) {
       keep(
         ASK,
         "This call deletes or rewrites something at a provider the plugin manages (a project, a database and its data, a DNS record, a key in service). Say exactly what is targeted, by name, and confirm with the user. Prefer the plugin's scripts, which check the provider's answers.",
@@ -2050,7 +2074,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //     for it. The whole domain moves with it, its site and its mail, and a rewrite at
     //     Cloudflare already asked (5b) while this, heavier, passed (outside review, 3.4.10).
     //     Reads pass, as each registrar says them (REGISTRAR_APIS).
-    if (registrarChange(seg, parts, index)) {
+    if (apiReadings.some((s) => registrarChange(s, parts, index))) {
       keep(
         ASK,
         "This call changes a domain at its registrar (its nameservers, or the records the registrar keeps for it): the whole domain moves with it, its site and its mail. Say which domain and what changes, and confirm with the user.",

@@ -49,7 +49,7 @@ No menu. Skip to **Step 1**.
 | Choice | Action |
 |---|---|
 | 1 | UPGRADE Section - Case A. |
-| 2 | `node "${CLAUDE_SKILL_DIR}/../../scripts/hash-password.mjs" --generate --length 24 --format alphanumeric` → push `ADMIN_PASSWORD_HASH_PROD` via `_push-env-vars --target=production,preview`, show the `password=` ONCE to the user. |
+| 2 | `node "${CLAUDE_SKILL_DIR}/../../scripts/admin-password.mjs" rotate --project-dir "<WEB_DIR>"` → a new password, written in a file of the user's downloads folder, only its hash pushed (`ADMIN_PASSWORD_HASH_PROD`). Give the user the file's path (`file`), never the password; it works once the site is deployed again. |
 | 3 | List the files to delete manually, then ask to re-run. |
 | 4 | Ask for clarification. |
 
@@ -150,8 +150,8 @@ Steps (all driven by Claude):
 
 Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, password.ts}` (for the snippets to integrate).
 
-1. **Hash passwords**: DEV via stdin (`printf '%s' "Admin1234!" | node "<path>/hash-password.mjs"`), PROD via `--generate --length 24 --format alphanumeric`. Capture `password=` and `hash=`.
-2. **Push env vars**: `_push-env-vars --target=all ADMIN_USERNAME=admin ADMIN_PASSWORD_HASH_DEV=<dev> ADMIN_PASSWORD_HASH_PROD=<prod>`.
+1. **Hash the DEV password and push it**: `H=$(printf '%s' "Admin1234!" | node "<path>/hash-password.mjs") && [ -n "$H" ] && printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD_HASH_DEV=%s\n' "$H" | node "<path>/push-env-vars.mjs" --target=all --stdin`.
+2. **The PROD password, never in the conversation**: `node "<path>/admin-password.mjs" rotate --project-dir <app folder>`. It generates it, writes it with the identifier and the sign-in page in a file of the user's downloads folder, and pushes only `ADMIN_PASSWORD_HASH_PROD`. Its JSON gives the file's path (`file`), never the password: never read that file. Never `hash-password.mjs --generate` here: it prints the password where you read it.
 3. **Extend `password.ts`** - add `getAdminPasswordHash()` from the admin template. Keep `hashPassword` + `verifyPassword`.
 4. **Patch `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `getAdminPasswordHash` from `~/lib/password`. In `authorize()`, BEFORE the DB lookup, add the admin path:
    ```ts
@@ -164,7 +164,7 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, p
    Add `export async function isAdmin() { return (await auth())?.user?.id === "admin"; }`.
 5. **Update CLAUDE.md** - add the admin section in addition to the users sections.
 6. **`pnpm tsc --noEmit`** - check.
-7. **Summary**: show the PROD password ONCE (never on disk), explain the coexistence in authorize.
+7. **Summary**: give the path of the file that holds the PROD credentials (open it, save the password in a password manager, delete the file), never the password; explain the coexistence in authorize.
 
 ### Case C - Enable password reset on an existing `users` (email already OK)
 

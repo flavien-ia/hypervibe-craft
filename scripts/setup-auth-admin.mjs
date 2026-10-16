@@ -16,8 +16,11 @@
 // stdout layout:
 //   - Live logs: ▸ <step>, ✅ <result>, ⚠️ <warning>
 //   - Handoff banner at the end
-//   - Last line on success: JSON Claude can parse to surface the prod password
-//     once: {"success":true,"prodPassword":"<plain>","authMode":"admin"}
+//   - Last line on success: JSON Claude can parse:
+//     {"success":true,"authMode":"admin","credentialsFile":"<path>","envVars":[...]}
+//     The production password is NEVER in it (3.4.13): it is written, with the identifier and the
+//     sign-in page, in a file of the person's downloads folder (admin-password.mjs), and only its
+//     hash goes to the project. Displayed in the chat, it stayed in the conversation's history.
 //
 // Exit codes:
 //   0 = success
@@ -30,6 +33,7 @@ import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { render } from "./_render.mjs";
+import { newAdminPassword, signinUrl, writeCredentialsFile } from "./admin-password.mjs";
 
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 
@@ -78,7 +82,7 @@ const state = {
   authSecret: null,
   devHash: null,
   prodHash: null,
-  prodPassword: null,
+  credentialsFile: null,
 };
 
 async function step(stepName, fn) {
@@ -251,28 +255,17 @@ async function hashPasswords() {
   }
   ok("Dev hash ready");
 
-  // Prod: --generate produces `password=<plain>\nhash=<salt:hash>` on stdout
-  const prodRes = spawnSync(
-    "node",
-    [hashScript, "--generate", "--length", "24", "--format", "alphanumeric"],
-    {
-      cwd: WEB_DIR,
-      stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf8",
-    },
-  );
-  if (prodRes.status !== 0) {
-    if (prodRes.stderr) process.stderr.write(prodRes.stderr);
-    fail(`hash-password.mjs --generate failed with exit ${prodRes.status}`);
+  // Prod: a generated password, written for the person in a file of their downloads folder, never
+  // printed; only its hash is kept here. The file is written BEFORE anything is pushed: a password
+  // nobody can read would lock the admin out.
+  const { password, hash } = newAdminPassword();
+  state.prodHash = hash;
+  try {
+    state.credentialsFile = writeCredentialsFile({ project: name, username: "admin", password, url: signinUrl(WEB_DIR) });
+  } catch (e) {
+    fail(`The production password's file could not be written in the downloads folder (${e.code ?? e.message}). Nothing was pushed.`);
   }
-  for (const line of prodRes.stdout.split(/\r?\n/)) {
-    if (line.startsWith("password=")) state.prodPassword = line.slice("password=".length);
-    else if (line.startsWith("hash=")) state.prodHash = line.slice("hash=".length);
-  }
-  if (!state.prodPassword || !state.prodHash) {
-    fail(`Could not parse --generate output. Got: ${prodRes.stdout.slice(0, 200)}`);
-  }
-  ok("Prod hash + plain password ready (will be displayed once at the end)");
+  ok(`Prod hash ready; the password is in ${state.credentialsFile}`);
 }
 
 // ─── Step 5: write src/lib/password.ts ────────────────────────────────
@@ -380,19 +373,18 @@ console.log(`
    Env vars:       AUTH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH_DEV, ADMIN_PASSWORD_HASH_PROD
 
 Dev login:    admin / Admin1234!
-Prod login:   admin / <see JSON below - display this ONCE to the user, never write to disk>
+Prod login:   admin / the password written in ${state.credentialsFile}
 
 Next: Claude takes over for the CLAUDE.md update (via _update-claude-md) and the user-facing
-summary (which MUST display the prod password from the JSON line below).
+summary, which gives the file's path: never the password itself.
 `);
 
-// Last line: structured JSON. The prodPassword field is sensitive - Claude must
-// surface it to the user once in the summary, then never reference it again.
+// Last line: structured JSON. It carries the file's path, never the password.
 console.log(
   JSON.stringify({
     success: true,
     authMode: "admin",
-    prodPassword: state.prodPassword,
+    credentialsFile: state.credentialsFile,
     envVars: ["AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD_HASH_DEV", "ADMIN_PASSWORD_HASH_PROD"],
   }),
 );

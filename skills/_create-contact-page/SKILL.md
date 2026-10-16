@@ -17,7 +17,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 Creates a functional `/contact` page with a secured form (invisible honeypot anti-spam, server-side rate limiting, HTML/Brevo escaping on every user field). Invoked by `/add-email` after the user has accepted the offer to create it.
 
 **Expected prerequisites** (normally guaranteed by the calling skill):
-- The tRPC procedure `contact.send` exists (created by `add-email`)
+- The tRPC procedure `contact.send` exists (created by `add-email`, or put in place at Step 1 below when the email was set up without it)
 - The `mail.ts` utility exports `sendMail` + the escape function (`escapeHtml` for Resend, `escapeForBrevo` for Brevo)
 - shadcn/ui is installed (via `/bootstrap`)
 
@@ -41,6 +41,14 @@ i18n_ok=$(echo "$result" | node -e "console.log(JSON.parse(require('fs').readFil
 
 Otherwise (`resend` or `brevo`) -> continue. The React client page is **identical in both cases** (the HTML/Brevo escaping happens server-side in `contact.send`, not in the page). No need to distinguish.
 
+**The contact router may be missing**: `/add-email` does not write it when the email was wanted for something else, nor when the project had no rate limiting yet. When `<WEB_DIR>/src/server/api/routers/contact.ts` is not there, put it in place first:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/setup-email.mjs" --provider "$email_provider" --name "<PROJECT_NAME>" --web-dir "<WEB_DIR>" --contact-router-only
+```
+
+It writes the router and registers it in `root.ts`, nothing else. If it refuses because `rateLimitedProcedure` is missing from the project's tRPC, stop here and say so plainly: the form needs the rate limiting that `/bootstrap`'s security setup adds, and a page without its back-end would break the build.
+
 Also retrieve the current sender email from the local env (useful for Step 2):
 
 ```bash
@@ -57,6 +65,18 @@ The Resend API does not cleanly expose the account email -> we **ask the user di
 ---
 
 ## Step 2 - Ask for the receiving email address
+
+**First, does the sender's domain relay its addresses?** When a domain's mail goes through Cloudflare's Email Routing (its mail servers are `route1.mx.cloudflare.net` and siblings), its addresses are not mailboxes: Cloudflare forwards what they receive to another inbox. A notification sent to an address of the sending domain then goes out and comes back through that relay, which can break its DKIM signature, and the message ends up in spam. Read it for the sender's domain (`CURRENT_SENDER` after its `@`):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/domain-mx.mjs" <sender's domain>
+```
+
+It reads the domain's mail servers in public DNS: no key, no vault.
+
+- `relayed: true` -> **no default on that domain**, the sender included. Ask for the final inbox (the one the relay forwards to, often a Gmail or Outlook address), and say why in one sentence, for example: *"Your addresses at <domain> are forwarded to another inbox: sending the form's messages there through that relay can land them in spam, so tell me the inbox they finally arrive in."* If the user still gives an address of that domain, say it once more, then respect their choice.
+- `relayed: false` -> the defaults below apply.
+- Exit `1` (the DNS could not be read) -> ask for the receiving address with no default.
 
 Proposed default:
 - **Resend**: no guessed default - ask for the address, optionally proposing `$CURRENT_SENDER` if it is defined and is not `onboarding@resend.dev`.

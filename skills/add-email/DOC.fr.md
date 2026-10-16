@@ -36,13 +36,13 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 4. **Installation du SDK + scaffolding** :
    - Le SDK approprié est installé (`resend` ou `@getbrevo/brevo`)
    - Un fichier `src/server/mail.ts` est créé avec une fonction `sendMail()` réutilisable + tous les garde-fous (`escapeHtml` pour Resend, `escapeForBrevo` pour Brevo qui a un quirk de templating Mustache silencieux)
-   - Un router tRPC `contact` est ajouté pour gérer le formulaire de contact côté serveur (honeypot anti-spam, rate limiting, sanitisation)
+   - Un router tRPC `contact` est ajouté pour gérer le formulaire de contact côté serveur (honeypot anti-spam, rate limiting, sanitisation), quand l'envoi sert à un formulaire de contact et que le projet a déjà sa limitation de débit ; sinon, la page de contact l'ajoute plus tard
 
 5. **Variables d'environnement** : les bonnes clés sont poussées dans `.env` + Vercel.
 
-6. **Adresse d'expédition (optionnel)** : pour Resend, vous démarrez sur `onboarding@resend.dev` (adresse de test) et Hypervibe vous propose de configurer votre domaine (ajout DNS records dans Cloudflare, vérification Resend automatique). Pour Brevo, vous renseignez votre sender dès le départ (il doit être *verified* dans le dashboard Brevo - c'est une particularité Brevo).
+6. **Adresse d'expédition (optionnel)** : pour Resend, vous démarrez sur `onboarding@resend.dev` (adresse de test) et Hypervibe vous propose de configurer votre domaine (ajout DNS records dans Cloudflare, vérification Resend automatique). Pour Brevo, vous renseignez votre expéditeur dès le départ, et Hypervibe le crée chez Brevo par son API quand votre compte ne l'a pas encore, puis vérifie qu'il est actif.
 
-7. **Page de contact (optionnel)** : à la fin, Hypervibe vous propose de créer une page `/contact` fonctionnelle (formulaire Nom, Email, Message + react-hook-form + zod, responsive).
+7. **Page de contact (optionnel)** : à la fin, Hypervibe vous propose de créer une page `/contact` fonctionnelle (formulaire Nom, Email, Message + react-hook-form + zod, responsive). Il vous demande où les messages doivent arriver : une vraie boîte, jamais une adresse que votre domaine ne fait que relayer ailleurs (ce relais peut les envoyer dans les indésirables).
 
 ## Ce que ça crée pour vous
 
@@ -67,8 +67,8 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 Par défaut, `RESEND_FROM_EMAIL` est `onboarding@resend.dev` (adresse de test Resend). Avec cette adresse, **les emails ne peuvent partir que vers VOTRE propre adresse** (celle de votre compte Resend). C'est parfait pour vérifier que tout marche, mais pas suffisant pour envoyer à vos utilisateurs. Pour envoyer à n'importe qui, configurez votre domaine (Hypervibe vous le propose à la fin de la skill).
 {{/callout}}
 
-{{callout:warning|Brevo - le sender doit être verified}}
-Côté Brevo, le sender email (`BREVO_SENDER_EMAIL`) doit être un **sender vérifié** dans votre dashboard Brevo (Settings → Senders & IPs). Sans ça, les emails partent en erreur silencieuse - Brevo accepte la requête mais ne livre pas. Hypervibe vous le rappelle à la fin de l'install.
+{{callout:warning|Brevo - un expéditeur actif}}
+Côté Brevo, l'adresse d'expédition (`BREVO_SENDER_EMAIL`) doit être un **expéditeur actif**. Hypervibe le crée par l'API de Brevo quand votre compte ne l'a pas, et lit son état : sur un domaine que Brevo a authentifié, il est actif tout de suite ; sinon, Brevo envoie un message de confirmation à cette adresse, à ouvrir une fois. Sans expéditeur actif, les emails partent en erreur silencieuse - Brevo accepte la requête mais ne livre pas.
 {{/callout}}
 
 {{callout:tip|Plans gratuits}}

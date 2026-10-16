@@ -38,7 +38,7 @@ Output: the secret on stdout, no trailing newline. Capture it with `SECRET=$(nod
 
 - `CRON_SECRET` → `node ...generate-secret.mjs` (hex, 32 bytes = 64 hex chars)
 - `AUTH_SECRET` (NextAuth) → `node ...generate-secret.mjs --format base64url`
-- Random admin password → prefer `_hash-password --generate` which does both generation + hashing in one go
+- Random admin password for production → `admin-password.mjs rotate` (see `_hash-password`): it generates it, writes it in a file of the user's downloads folder and pushes only its hash, so the password never appears in the conversation
 
 ## Rules
 

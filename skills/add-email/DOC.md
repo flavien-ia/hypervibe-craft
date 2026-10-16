@@ -36,13 +36,13 @@ The skill **handles both providers** and chooses automatically, without asking, 
 4. **SDK install + scaffolding**:
    - The appropriate SDK is installed (`resend` or `@getbrevo/brevo`)
    - A `src/server/mail.ts` file is created with a reusable `sendMail()` function + all the guards (`escapeHtml` for Resend, `escapeForBrevo` for Brevo, which has a silent Mustache templating quirk)
-   - A `contact` tRPC router is added to handle the contact form on the server side (anti-spam honeypot, rate limiting, sanitization)
+   - A `contact` tRPC router is added to handle the contact form on the server side (anti-spam honeypot, rate limiting, sanitization), when the email is meant for a contact form and the project already has its rate limiting; otherwise the contact page adds it later
 
 5. **Environment variables**: the right keys are pushed to `.env` + Vercel.
 
-6. **Sending address (optional)**: for Resend, you start on `onboarding@resend.dev` (test address) and Hypervibe offers to configure your domain (add DNS records in Cloudflare, automatic Resend verification). For Brevo, you provide your sender from the start (it must be *verified* in the Brevo dashboard - this is a Brevo quirk).
+6. **Sending address (optional)**: for Resend, you start on `onboarding@resend.dev` (test address) and Hypervibe offers to configure your domain (add DNS records in Cloudflare, automatic Resend verification). For Brevo, you provide your sender from the start, and Hypervibe creates it at Brevo through its API when your account does not have it yet, then checks that it is active.
 
-7. **Contact page (optional)**: at the end, Hypervibe offers to create a working `/contact` page (Name, Email, Message form + react-hook-form + zod, responsive).
+7. **Contact page (optional)**: at the end, Hypervibe offers to create a working `/contact` page (Name, Email, Message form + react-hook-form + zod, responsive). It asks where the messages should arrive: a real inbox, never an address your domain only forwards elsewhere (that relay can send them to spam).
 
 ## What it creates for you
 
@@ -67,8 +67,8 @@ The skill **handles both providers** and chooses automatically, without asking, 
 By default, `RESEND_FROM_EMAIL` is `onboarding@resend.dev` (Resend test address). With this address, **emails can only go to YOUR own address** (the one on your Resend account). It is perfect for checking that everything works, but not enough to send to your users. To send to anyone, configure your domain (Hypervibe offers this at the end of the skill).
 {{/callout}}
 
-{{callout:warning|Brevo - the sender must be verified}}
-On the Brevo side, the sender email (`BREVO_SENDER_EMAIL`) must be a **verified sender** in your Brevo dashboard (Settings then Senders & IPs). Without it, emails fail silently - Brevo accepts the request but does not deliver. Hypervibe reminds you of this at the end of the install.
+{{callout:warning|Brevo - an active sender}}
+On the Brevo side, the sender email (`BREVO_SENDER_EMAIL`) must be an **active sender**. Hypervibe creates it through Brevo's API when your account does not have it, and reads its state: on a domain Brevo has authenticated, it is active right away; otherwise Brevo sends a confirmation message to that address, to open once. Without an active sender, emails fail silently - Brevo accepts the request but does not deliver.
 {{/callout}}
 
 {{callout:tip|Free plans}}

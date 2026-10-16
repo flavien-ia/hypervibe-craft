@@ -158,6 +158,10 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
 
 For Brevo, the script needs `--brevo-sender <email>`. By default, **ask the user** for their desired sending email, OR take the email from the user's Resend / Brevo account (found in their user doc or their `.env`). For `--brevo-sender-name`, default = `<PROJECT_NAME>`.
 
+### Is it for a contact form?
+
+The script writes a contact form's back-end (the `contact.send` procedure) unless told otherwise. When the email is wanted for something else (the user or the calling skill said so: password resets, notifications, a newsletter), it is added for nothing: pass `--no-contact-router` at Step 3, and do not propose the contact page at Step 7. It can be added later: the contact page puts it in place itself.
+
 For Resend, no need - by default the script writes `RESEND_FROM_EMAIL=onboarding@resend.dev` (test sender) and we ask at Step 6 whether the user wants a custom domain.
 
 ---
@@ -184,7 +188,9 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/setup-email.mjs" \
   --web-dir "<WEB_DIR>"
 ```
 
-The script chains 7 sub-steps: preflight, get/read API key, install SDK, write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push env vars.
+Add `--no-contact-router` to either command when the need is not a contact form (Step 2).
+
+The script chains 7 sub-steps: preflight, get/read API key, install SDK, write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push env vars. The two contact router steps are skipped with `--no-contact-router`, and also when the project's tRPC has no `rateLimitedProcedure` (the router needs it: written anyway, it would break the build). The script then says so in a warning, and its last line carries `contactRouter: "skipped:no-rate-limit"`: say it in the summary, and do not propose the contact page before the security setup of `/bootstrap` is in place.
 
 ### During execution
 
@@ -195,7 +201,8 @@ The script prints live:
 - At the end, a structured **handoff banner**
 - On the last line on success, a parseable JSON object:
   - Resend: `{"success":true,"provider":"resend","envVars":["RESEND_API_KEY","RESEND_FROM_EMAIL"]}`
-  - Brevo: `{"success":true,"provider":"brevo","envVars":["BREVO_API_KEY","BREVO_SENDER_EMAIL","BREVO_SENDER_NAME"]}`
+  - Brevo: `{"success":true,"provider":"brevo","envVars":["BREVO_API_KEY","BREVO_SENDER_EMAIL","BREVO_SENDER_NAME"],"contactRouter":"written"}`
+  - `contactRouter`: `written`, `skipped:asked` (`--no-contact-router`), `skipped:no-rate-limit` or `skipped:no-trpc`
 
 Let the output through live (no `> /tmp/...`, no capture).
 
@@ -224,7 +231,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 - `env-vars`:
   - `- \`RESEND_API_KEY\` - Resend API key`
   - `- \`RESEND_FROM_EMAIL\` - default sender email`
-  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`RESEND_FROM_EMAIL\`)`
+  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`RESEND_FROM_EMAIL\`); a real inbox, never an address relayed by Email Routing`
 - `conventions`:
   - `- Email: always use \`escapeHtml()\` from \`~/server/mail\` on user data before injecting it into an email's HTML.`
 
@@ -235,7 +242,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
   - `- \`BREVO_API_KEY\` - Brevo transactional API key`
   - `- \`BREVO_SENDER_EMAIL\` - default sender email`
   - `- \`BREVO_SENDER_NAME\` - default sender name`
-  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`)`
+  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`); a real inbox, never an address relayed by Email Routing`
 - `conventions`:
   - `- Email: always pipe user data through \`escapeForBrevo()\` (from \`~/server/mail\`) before inserting into \`htmlContent\`. NEVER let a raw \`{{\` (user input, stack trace, JSON) through into \`htmlContent\` or \`textContent\` - Brevo does a silent Mustache-style templating pass that drops the email with no visible error.`
 
@@ -331,7 +338,13 @@ The Brevo sender was passed to the script at Step 3 and is already in place. If 
 
 Ask which sender they want. If custom domain, invoke `_dns-brevo` with the domain to configure it in Brevo (SPF, DKIM, DMARC) + via the Cloudflare API. Then `_push-env-vars BREVO_SENDER_EMAIL=<new>`.
 
-⚠️ **Manual action Brevo**: the sender must be **verified** in the Brevo dashboard (Settings then Senders & IPs). Remind them of this.
+**The sender at Brevo, checked through its API** (the Brevo key is in the vault: it was needed at Step 2). Whatever the sender (the one passed at Step 3, or the new one):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/brevo-domain.mjs" sender <sender-email> --name "<PROJECT_NAME>"
+```
+
+It creates the sender when the account has none for this address (`created: true`), and reads its state. `active: true` -> nothing to do. `active: false` -> the address is on a domain Brevo has not authenticated: Brevo sends a confirmation message to that address, which the user must open once; or authenticate the domain (`_dns-brevo`), which makes the sender active. Say which one, in plain words. Only when the vault cannot be opened does it come back to a manual check in the Brevo dashboard (Settings then Senders & IPs).
 
 ---
 
@@ -347,9 +360,11 @@ Propose to the user:
 >
 > It takes 30 seconds.
 
+Do not propose it when the script did not write the contact router because of a missing `rateLimitedProcedure` (`contactRouter: "skipped:no-rate-limit"`), nor when the user said the email is not for a contact form.
+
 ### If accepted
 
-Invoke `_create-contact-page`. That skill automatically detects the provider via `_check-deps email` and adapts what it creates.
+Invoke `_create-contact-page`. That skill automatically detects the provider via `_check-deps email` and adapts what it creates. It also asks where the form's messages go: when the sender's domain relays its addresses to another inbox (Email Routing), the recipient must be that final inbox, not an address of the domain (its Step 2 checks it).
 
 ### If declined
 
@@ -377,7 +392,7 @@ Adapt depending on the provider and the situation:
 
 > ✅ Brevo is configured (`sendMail()` + `escapeForBrevo()` in `<WEB_DIR>/src/server/mail.ts`).
 >
-> ⚠️ **Manual action required**: check that `<sender-email>` is a verified sender in Brevo (Settings then Senders & IPs). Without it, emails fail silently on the Brevo side.
+> The sender `<sender-email>` is <active at Brevo / waiting for its confirmation: open the message Brevo sent to that address>. (Read at Step 6 through Brevo's API; without an active sender, emails fail silently on the Brevo side.)
 >
 > A note on the Brevo templating quirk has been added to CLAUDE.md (`## Email - Brevo quirk`) so future Claude sessions do not reintroduce the silent-send bug.
 

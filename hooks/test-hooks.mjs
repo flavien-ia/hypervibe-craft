@@ -617,10 +617,19 @@ console.log("\n── La table OpenCode : pas plus large que le garde-fou, la ou
   // table let `--dry-run` through wherever it stood, and on scripts that do not read it.
   const { decide } = await import(pathToFileURL(join(dirname(HOOK), "rules.mjs")).href);
   const bash = JSON.parse(readFileSync(join(dirname(HOOK), "opencode.permission.json"), "utf8")).permission?.bash ?? {};
-  const asGlob = (g) => new RegExp(`^${g.split("*").map((s) => s.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`);
+  // OpenCode's own matching, read in its source (packages/core/src/util/wildcard.ts, 16/10/2026):
+  // backslashes read as slashes, `*` for anything INCLUDING a line break (the `s` flag), `?` for one
+  // character, and a final " *" made optional. Until 3.4.13 this model let `*` stop at a line
+  // break, stricter than OpenCode: a rule that asks across two lines read as passing here.
+  const asGlob = (g) => {
+    let escaped = g.replaceAll("\\", "/").replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".");
+    if (escaped.endsWith(" .*")) escaped = `${escaped.slice(0, -3)}( .*)?`;
+    return new RegExp(`^${escaped}$`, "s");
+  };
   const openCodeSays = (command) => {
     let said = "allow";
-    for (const [glob, verdict] of Object.entries(bash)) if (asGlob(glob).test(command)) said = verdict;
+    const input = command.replaceAll("\\", "/");
+    for (const [glob, verdict] of Object.entries(bash)) if (asGlob(glob).test(input)) said = verdict;
     return said;
   };
   const hookSays = (command) => (decide(command) === null ? "allow" : "ask");
@@ -777,6 +786,23 @@ console.log("\n── La table OpenCode : pas plus large que le garde-fou, la ou
   checks += 1;
   if (plus.length) failures += 1;
   console.log(`${plus.length ? "FAIL" : "OK  "} chez OpenCode, une lecture chez un registraire demande aussi, ou le garde-fou la laisse passer${plus.length ? ` : ${plus.join(" | ")}` : ""}`);
+
+  // Une adresse d'API posee dans une variable plus tot sur la ligne (revue externe de la 3.4.11) :
+  // l'hote vient alors AVANT curl dans le texte. La table le dit par des motifs dans cet ordre-la,
+  // et demande comme le garde-fou.
+  const variables = [
+    'CF="https://api.cloudflare.com/client/v4"; curl -s -X DELETE "$CF/zones/z/dns_records/r"',
+    'CF="https://api.cloudflare.com/client/v4"\ncurl -s -X DELETE "$CF/zones/z/dns_records/r"',
+    "CF=https://api.cloudflare.com/client/v4; curl -s -X PUT \"$CF/zones/z/dns_records/r\" -d '{}'",
+    'N="https://console.neon.tech/api/v2"; curl -s -X DELETE "$N/projects/p/branches/b"',
+    'V=https://api.vercel.com; curl -s -X DELETE "$V/v9/projects/prj_1"',
+    "G=\"https://api.gandi.net/v5\"; curl -s -X PUT \"$G/domain/domains/example.fr/nameservers\" -d '{}'",
+    'PB="https://api.porkbun.com/api/json/v3"; curl -s -X POST "$PB/domain/updateNs/example.fr" --data @-',
+  ];
+  const passees = variables.filter((command) => openCodeSays(command) !== "ask" || hookSays(command) !== "ask");
+  checks += 1;
+  if (passees.length) failures += 1;
+  console.log(`${passees.length ? "FAIL" : "OK  "} la table OpenCode demande aussi quand l'adresse d'une API est posee dans une variable${passees.length ? ` : ${passees.join(" | ")}` : ""}`);
 }
 
 console.log("\n── Robustesse (fail-open) ──");
@@ -1152,6 +1178,26 @@ console.log("\n── Un changement chez un registraire demande, comme une reecr
   if (absents.length) failures += 1;
   console.log(`${absents.length ? "FAIL" : "OK  "} la lecture des skills trouve les cinq registraires appeles par curl${absents.length ? ` : manquent ${absents.join(", ")}` : ""}`);
 }
+
+console.log("\n── Une adresse d'API posee dans une variable est lue a travers elle (revue externe de la 3.4.11) ──");
+// La forme qu'un modele tape pour raccourcir une longue adresse. Aucune skill ne l'ecrit, mais elle
+// passait les regles 5b et 5c, qui ne lisaient que la ligne de curl telle qu'elle est tapee : chez
+// Cloudflare, Neon, Vercel, Gandi, et pour updateNs chez Porkbun, sur une ligne comme sur deux.
+expect('CF="https://api.cloudflare.com/client/v4"; curl -s -X DELETE "$CF/zones/z/dns_records/r"', "ask");
+expect('CF="https://api.cloudflare.com/client/v4"\ncurl -s -X DELETE "$CF/zones/z/dns_records/r"', "ask");
+expect("export CF=https://api.cloudflare.com/client/v4 && curl -s -X PUT \"$CF/zones/z/dns_records/r\" -d '{}'", "ask");
+expect('N="https://console.neon.tech/api/v2"; curl -s -X DELETE "$N/projects/p/branches/b"', "ask");
+expect('V=https://api.vercel.com; curl -s -X DELETE "$V/v9/projects/prj_1"', "ask");
+expect('B="https://api.cloudflare.com"; Z="$B/client/v4/zones"; curl -s -X DELETE "$Z/z/dns_records/r"', "ask");
+expect("G=\"https://api.gandi.net/v5\"; curl -s -X PUT \"$G/domain/domains/example.fr/nameservers\" -d '{}'", "ask");
+expect('PB="https://api.porkbun.com/api/json/v3"; curl -s -X POST "$PB/domain/updateNs/example.fr" --data @-', "ask");
+expect('PB="https://api.porkbun.com/api/json/v3"\ncurl -s -X POST "$PB/domain/updateNs/example.fr" --data @-', "ask");
+expect(`CF="https://api.cloudflare.com/client/v4"; printf 'header = "Authorization: Bearer %s"\\n' "$T" | curl -s --config - -X DELETE "$CF/zones/z/dns_records/r"`, "ask");
+// Les lectures et les creations passent toujours, et une variable sans rapport ne change rien.
+expect('CF="https://api.cloudflare.com/client/v4"; curl -s "$CF/zones?name=example.fr"', "pass");
+expect("CF=\"https://api.cloudflare.com/client/v4\"; curl -s -X POST \"$CF/zones/z/dns_records\" -d '{}'", "pass");
+expect('PB="https://api.porkbun.com/api/json/v3"; curl -s -X POST "$PB/ping" --data @-', "pass");
+expect('X="https://api.exemple.fr"; curl -s -X DELETE "$X/v1/choses/3"', "pass");
 
 console.log("\n── Les deux gardes SQL lisent la meme chose, chaines comprises (revue externe, 3.2.5) ──");
 // La regle lit desormais la garde de run-sql.mjs dans le meme fichier : un mot-cle cite dans une

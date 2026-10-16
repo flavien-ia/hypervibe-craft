@@ -16,7 +16,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 
 Installs NextAuth in **admin mode**: a single admin account whose credentials live in the env vars (no DB). Invoked by `add-auth` when the user chose "Just a protected admin interface".
 
-The deterministic code (install, AUTH_SECRET generation, dev+prod hashes, scaffold `auth.ts` / `password.ts` / API route, scaffold pages `/admin/signin` + `/admin` (protected route group), push env vars) lives in `scripts/setup-auth-admin.mjs`. This SKILL only handles the pre-flight (passed by `add-auth`), the script invocation, and the post-script communication (display the prod password once + CLAUDE.md).
+The deterministic code (install, AUTH_SECRET generation, dev+prod hashes, scaffold `auth.ts` / `password.ts` / API route, scaffold pages `/admin/signin` + `/admin` (protected route group), push env vars) lives in `scripts/setup-auth-admin.mjs`. This SKILL only handles the pre-flight (passed by `add-auth`), the script invocation, and the post-script communication (where the prod password's file is, never the password itself + CLAUDE.md).
 
 **Input variables** (passed by `add-auth`): `WEB_DIR`, `IS_MONOREPO`, `PROJECT_NAME`.
 
@@ -43,14 +43,14 @@ The script prints live:
 - At the end, a structured **handoff banner**
 - On the last line on success, a parseable JSON object:
   ```json
-  {"success":true,"authMode":"admin","prodPassword":"<plain-24-chars>","envVars":["AUTH_SECRET","ADMIN_USERNAME","ADMIN_PASSWORD_HASH_DEV","ADMIN_PASSWORD_HASH_PROD"]}
+  {"success":true,"authMode":"admin","credentialsFile":"<path>","envVars":["AUTH_SECRET","ADMIN_USERNAME","ADMIN_PASSWORD_HASH_DEV","ADMIN_PASSWORD_HASH_PROD"]}
   ```
 
-⚠️ The `prodPassword` is **sensitive**: it is stored nowhere (only the hash is). You MUST display it ONCE to the user in the summary (Step 3) and never reuse it afterward.
+The production password is **never** in this output, and never goes through the conversation: the script writes it, with the identifier and the sign-in page, in a file of the person's downloads folder (`credentialsFile`), and only its hash goes to the project. Never open, read or display that file: it is the person's.
 
 ### On success
 
-Mark the step ✅, capture `prodPassword` from the JSON, and move on to Step 2.
+Mark the step ✅, capture `credentialsFile` from the JSON, and move on to Step 2.
 
 ### On failure
 
@@ -80,7 +80,7 @@ Invoke `_update-claude-md` with:
     ```
     Admin auth uses `ADMIN_PASSWORD_HASH_DEV` (dev) and `ADMIN_PASSWORD_HASH_PROD` (prod), selected via NODE_ENV.
     To change it, the user types the new password in the masked window, never in the conversation: `node "<path>/scripts/vault/launch.mjs" collect-env --keys "NEW_ADMIN_PASSWORD:secret" --project-dir <app folder> --file .env.admin-password`; then hash it and push the hash in one go: `H=$(node "<path>/scripts/env-value.mjs" --project-dir <app folder> --file .env.admin-password NEW_ADMIN_PASSWORD | node "<path>/scripts/hash-password.mjs") && [ -n "$H" ] && printf 'ADMIN_PASSWORD_HASH_PROD=%s\n' "$H" | node "<path>/scripts/push-env-vars.mjs" --stdin`, and delete `.env.admin-password`.
-    To generate a new random password AND hash it: `node "<path>/scripts/hash-password.mjs" --generate --length 24 --format alphanumeric` (2-line output: `password=<plain>` + `hash=<salt:hash>`).
+    To generate a new random password instead: `node "<path>/scripts/admin-password.mjs" rotate --project-dir <app folder>`. It writes the new password in a file of the user's downloads folder and pushes only its hash: the password never appears in the conversation, and it works once the site is deployed again.
     ```
 - `env-vars`:
   - `- \`AUTH_SECRET\` - NextAuth session secret`
@@ -92,7 +92,7 @@ Invoke `_update-claude-md` with:
 
 ## Step 3 - Summary for the user
 
-Display exactly (replacing `<PROD_PASSWORD>` with the value read from the `prodPassword` JSON of Step 1):
+Display exactly (replacing `<CREDENTIALS_FILE>` with the `credentialsFile` path of Step 1):
 
 > ## ✅ Your admin interface is ready
 >
@@ -102,14 +102,13 @@ Display exactly (replacing `<PROD_PASSWORD>` with the value read from the `prodP
 > - Username: `admin`
 > - Password: `Admin1234!`
 >
-> **In production (on your live site)**:
-> - Username: `admin`
-> - Password: `<PROD_PASSWORD>`
+> **In production (on your live site)**: the username and the password are in a file I have put in your downloads folder, so that the password never appears in our conversation:
+> `<CREDENTIALS_FILE>`
 >
-> ⚠️ **Save the production password in your password manager right now** - it is stored nowhere else, only a hash (an unreadable version) is kept. If you lose it, you will have to generate a new one.
+> ⚠️ **Open it, save the password in your password manager, then delete the file.** It is stored nowhere else, only a hash (an unreadable version) is kept in the project. If you lose it, ask me for a new one.
 >
 > **How to use it**: go to `/admin/signin` and sign in. You will be redirected to `/admin`, your admin space (which for now just contains a welcome message and a sign-out button). Ask me whenever you want *"add an admin page to manage X"* - I will create the pages directly in the right folder (`src/app/admin/(protected)/...`) with the protection already in place.
 
 If the script reported warnings (e.g. `rate-limit.ts` absent), mention it here.
 
-**Do not reuse the `<PROD_PASSWORD>` value** after this display. It disappears from your memory context as of this step.
+**Never ask for the production password, never read the file**: if the person pastes the password into the conversation anyway, say so plainly and offer a new one (`admin-password.mjs rotate`), since a password written in a conversation is kept in its history.

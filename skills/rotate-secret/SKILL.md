@@ -134,6 +134,7 @@ Store `PROVIDER_URL` and `PROVIDER_INSTRUCTIONS`.
 
 - `DATABASE_URL` Neon → Strategy = `neon-special`. Renew the Postgres role password via the Neon REST API (key from the vault) or the dashboard. Much rarer and more delicate - see the dedicated Step 4.
 - `CLOUDFLARE_API_TOKEN` → Strategy = `external-rotate` with URL https://dash.cloudflare.com/profile/api-tokens, instructions: "Find the token, click **Roll**, confirm."
+- `ADMIN_PASSWORD_HASH_PROD` (the admin's password in production) → Strategy = `admin-password`. A new password, which never goes through the conversation: see Step 3.
 
 
 ## Step 3 - Get the new value
@@ -181,10 +182,24 @@ Add `--target production,preview,development` only if the development value must
 
 See the dedicated Step 4.
 
+### If Strategy = `admin-password`
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/admin-password.mjs" rotate --project-dir "<WEB_DIR>"
+```
+
+It generates a new password, writes it with the identifier and the sign-in page in a file of the user's downloads folder, then pushes only its hash (`ADMIN_PASSWORD_HASH_PROD`, local `.env` and hosting). Its JSON gives the file's path (`file`), never the password: **never read that file, never display the password**, never ask for it. Exit `1` with `file` but an `error`: the file is written but the hash did not reach the project; follow the command the error gives, then nothing else changes.
+
+Tell the user, in plain words:
+
+> Your new admin password is in a file I have put in your downloads folder: `<file>`. Open it, save the password in your password manager, then delete the file. **It only works once the site is deployed again**: until then, the old password still opens `/admin`.
+
+Then offer to deploy now (the project's usual way: a push, or the host's facade). Nothing else is needed: the hash is not used anywhere outside the site, so Step 4 has nothing to propagate.
+
 
 ## Step 4 - Push the new value everywhere
 
-### Standard case (all categories except `neon-special`)
+### Standard case (all categories except `neon-special` and `admin-password`)
 
 Nothing to push again: in Step 3 the value went straight into `.env` and the hosting (the generator's pipe, or the masked window).
 

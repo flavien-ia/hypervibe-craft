@@ -82,7 +82,7 @@ export function vercelContext({
           return user;
         }
       }
-      const w = await cliJson(ctx, ["whoami", "--format", "json"]);
+      const w = await cliJson(ctx, ["whoami", "--json"]);
       if (w.ok) user = { username: w.data.username || null, northstar: false };
       return user;
     },
@@ -136,11 +136,27 @@ function lastLines(text, n = 3) {
     .slice(0, 300);
 }
 
-// The CLI prints its JSON on stdout, possibly after a notice line.
+// The CLI prints its JSON on stdout, possibly after a notice line. `--json` is the option CLI 64
+// documents (`--format json` lives on there as a hidden alias, and CLI 59 takes both): a CLI that
+// refuses it is asked once more with `--format json`. An answer that asks for a choice instead of
+// giving one (CLI 64, non-interactive, without --scope: {"status":"action_required","reason":
+// "missing_scope"}) is a failure that says so: read as an empty list, it made a project that is
+// still there look deleted (hypervibe-watch, 16/10/2026).
+const refusesJsonFlag = (r) => r.status !== 0 && /unknown or unexpected option:?\s*--json\b/i.test(`${r.stdout || ""}\n${r.stderr || ""}`);
+
 async function cliJson(ctx, args) {
-  const r = await ctx.cli("vercel", args, { input: "", timeout: CLI_TIMEOUT_MS });
+  let r = await ctx.cli("vercel", args, { input: "", timeout: CLI_TIMEOUT_MS });
+  const at = args.indexOf("--json");
+  if (at >= 0 && refusesJsonFlag(r)) {
+    r = await ctx.cli("vercel", [...args.slice(0, at), "--format", "json", ...args.slice(at + 1)], { input: "", timeout: CLI_TIMEOUT_MS });
+  }
+  const output = `${r.stdout || ""}\n${r.stderr || ""}`;
   const data = r.status === 0 ? extractJson(r.stdout) : null;
-  return { ok: data !== null && typeof data === "object", data, output: `${r.stdout || ""}\n${r.stderr || ""}` };
+  if (data && typeof data === "object" && data.status === "action_required") {
+    const why = [data.reason, data.message].filter(Boolean).join(": ") || "action_required";
+    return { ok: false, data: null, output: `the CLI asks for a choice it cannot be given here (${why})` };
+  }
+  return { ok: data !== null && typeof data === "object", data, output };
 }
 
 // ─── scopes ────────────────────────────────────────────────────────────────
@@ -199,14 +215,16 @@ async function scopesCli(ctx, extraTeamIds) {
   const teams = new Map();
   let next = null;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const args = ["teams", "ls", "--format", "json", "--limit", String(PAGE_LIMIT)];
+    const args = ["teams", "ls", "--json", "--limit", String(PAGE_LIMIT)];
     if (next) args.push("--next", String(next));
     const r = await cliJson(ctx, args);
-    if (!r.ok) {
-      if (page === 0) return { ok: false, reason: `vercel teams ls: ${lastLines(r.output)}` };
+    // Only a list counts: any other answer is a failure that says what came instead.
+    if (!r.ok || !Array.isArray(r.data.teams)) {
+      const why = r.ok ? `no team list in the answer: ${lastLines(JSON.stringify(r.data))}` : lastLines(r.output);
+      if (page === 0) return { ok: false, reason: `vercel teams ls: ${why}` };
       break;
     }
-    for (const t of r.data.teams || []) if (t.id) teams.set(t.id, teamScope(t));
+    for (const t of r.data.teams) if (t.id) teams.set(t.id, teamScope(t));
     const n = r.data.pagination?.next;
     if (!n || n === next) break;
     next = n;
@@ -244,12 +262,15 @@ async function projectsCli(ctx, scope, scopeArg = scope.teamId || scope.slug) {
   const projects = [];
   let next = null;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const args = ["project", "ls", "--format", "json", "--limit", String(PAGE_LIMIT)];
+    const args = ["project", "ls", "--json", "--limit", String(PAGE_LIMIT)];
     if (scopeArg) args.push("--scope", scopeArg);
     if (next) args.push("--next", String(next));
     const r = await cliJson(ctx, args);
     if (!r.ok) return { ok: false, reason: lastLines(r.output), projects };
-    for (const p of r.data.projects || []) if (p.id && p.name) projects.push(describe(p, scope));
+    // Only a list counts: an answer without one is not an empty scope, and an empty scope here is
+    // what tells a deletion that its project is gone.
+    if (!Array.isArray(r.data.projects)) return { ok: false, reason: `no project list in the answer: ${lastLines(JSON.stringify(r.data))}`, projects };
+    for (const p of r.data.projects) if (p.id && p.name) projects.push(describe(p, scope));
     const n = r.data.pagination?.next;
     if (!n || n === next) break;
     next = n;

@@ -5,13 +5,14 @@
 //
 //   node scripts/tests/test-email-sender.mjs
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { senderPlan } = await import(pathToFileURL(join(ROOT, "scripts", "email-sender.mjs")).href);
+const { contactRouterPlan, senderPlan } = await import(pathToFileURL(join(ROOT, "scripts", "email-sender.mjs")).href);
 const { envValue } = await import(pathToFileURL(join(ROOT, "scripts", "env-value.mjs")).href);
 
 let checks = 0;
@@ -48,7 +49,50 @@ console.log("\n── Le script lit l'expéditeur du projet avant de pousser ─
 const setup = readFileSync(join(ROOT, "scripts", "setup-email.mjs"), "utf8");
 check("setup-email.mjs lit les trois expéditeurs du projet par envValue", ["RESEND_FROM_EMAIL", "BREVO_SENDER_EMAIL", "BREVO_SENDER_NAME"].every((k) => setup.includes(`${k}: envValue(WEB_DIR, "${k}")`)));
 check("... et ne pousse que ce que le plan dit manquer", /senderPlan\(\{ provider, inPlace: senderInPlace/.test(setup) && /\.\.\.pushed\]|const kvs = pushed;/.test(setup) && !/kvs\.push\(`RESEND_FROM_EMAIL=onboarding@resend\.dev`\)/.test(setup));
-check("... et ne réclame l'adresse Brevo que si le projet n'en a pas", /if \(provider === "brevo" && !senderInPlace\.BREVO_SENDER_EMAIL\)/.test(setup));
+check("... et ne réclame l'adresse Brevo que si le projet n'en a pas", /if \(provider === "brevo" && !senderInPlace\.BREVO_SENDER_EMAIL(?: && !contactRouterOnly)?\)/.test(setup));
+
+console.log("\n── Le routeur de contact n'est écrit que s'il est voulu et s'il compile (3.4.13) ──");
+const AVEC = "export const rateLimitedProcedure = t.procedure;";
+let plan = contactRouterPlan({ skip: true, trpc: AVEC });
+check("--no-contact-router : ni écrit ni enregistré, et c'est dit", plan.write === false && plan.reason === "asked", JSON.stringify(plan));
+plan = contactRouterPlan({ trpc: "export const publicProcedure = t.procedure;" });
+check("sans rateLimitedProcedure : pas écrit (il casserait la compilation)", plan.write === false && plan.reason === "no-rate-limit", JSON.stringify(plan));
+plan = contactRouterPlan({ trpc: null });
+check("sans trpc.ts : pas écrit", plan.write === false && plan.reason === "no-trpc", JSON.stringify(plan));
+plan = contactRouterPlan({ trpc: AVEC });
+check("avec rateLimitedProcedure : écrit", plan.write === true, JSON.stringify(plan));
+plan = contactRouterPlan({ only: true, skip: true, trpc: AVEC });
+check("--contact-router-only l'emporte : c'est tout ce qu'on lui demande", plan.write === true, JSON.stringify(plan));
+check("setup-email.mjs n'écrit ni n'enregistre le routeur sans le feu vert du plan", /if \(ROUTER\.write\) \{\s*await step\("writeContactRouter", writeContactRouter\);\s*await step\("registerRouter", registerRouter\);\s*\}/.test(setup) && /contactRouterPlan\(\{\s*skip: noContactRouter,\s*only: contactRouterOnly,/.test(setup));
+check("... et dit dans sa dernière ligne ce qu'il en a fait", /contactRouter: ROUTER\.write \? "written" : `skipped:\$\{ROUTER\.reason\}`/.test(setup));
+
+{
+  // Un projet de test : le routeur de contact seul, demandé après coup par la page de contact.
+  const dir = mkdtempSync(join(tmpdir(), "hv-routeur-"));
+  const projet = (trpc) => {
+    mkdirSync(join(dir, "src", "server", "api", "routers"), { recursive: true });
+    writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "demo", dependencies: { next: "15.0.0", "@trpc/server": "11.0.0" } }));
+    writeFileSync(join(dir, "src", "server", "api", "trpc.ts"), trpc);
+    writeFileSync(join(dir, "src", "server", "api", "root.ts"), 'import { createTRPCRouter } from "~/server/api/trpc";\n\nexport const appRouter = createTRPCRouter({\n  post: postRouter,\n});\n');
+    writeFileSync(join(dir, "src", "server", "mail.ts"), "export async function sendMail() {}\n");
+  };
+  const lancer = () => spawnSync(process.execPath, [join(ROOT, "scripts", "setup-email.mjs"), "--provider", "brevo", "--name", "demo", "--web-dir", dir, "--contact-router-only"], { encoding: "utf8", windowsHide: true });
+  try {
+    projet(AVEC);
+    let r = lancer();
+    const routeur = join(dir, "src", "server", "api", "routers", "contact.ts");
+    check("--contact-router-only : le routeur écrit, sans rien installer ni lire au coffre", r.status === 0 && existsSync(routeur) && /"contactRouter":"written"/.test(r.stdout), `${r.status} ${r.stdout.slice(-300)} ${r.stderr.slice(-300)}`);
+    check("... et enregistré dans root.ts", readFileSync(join(dir, "src", "server", "api", "root.ts"), "utf8").includes("contact: contactRouter"));
+    r = lancer();
+    check("... relancé : rien n'est écrasé, rien n'est enregistré deux fois", r.status === 0 && readFileSync(join(dir, "src", "server", "api", "root.ts"), "utf8").split("contactRouter,").length === 2, `${r.status} ${r.stderr.slice(-300)}`);
+    rmSync(dir, { recursive: true, force: true });
+    projet("export const publicProcedure = t.procedure;");
+    r = lancer();
+    check("--contact-router-only sans rateLimitedProcedure : refusé, et rien n'est écrit", r.status !== 0 && !existsSync(routeur) && /rateLimitedProcedure/.test(`${r.stdout}${r.stderr}`), `${r.status} ${r.stderr.slice(-300)}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;

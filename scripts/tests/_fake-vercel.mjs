@@ -2,8 +2,9 @@
 // _fake-vercel.mjs - A Vercel account held in a JSON object, for the recettes.
 //
 // Two faces over the same state: `fakeRest` answers like the REST API,
-// `fakeCli` like the CLI (v59 output shapes, read on 2026-09-17), with the
-// traps the real ones set:
+// `fakeCli` like the CLI (v59 output shapes, read on 2026-09-17, and the two
+// v64 ones read on 2026-10-16: `--json` documented, a listing without --scope
+// that asks for one instead of answering), with the traps the real ones set:
 //   - a command without --scope acts on the CLI's `currentTeam`;
 //   - an API call without teamId lands on the DEFAULT TEAM of a current
 //     ("northstar") account, and a current account refuses its personal scope;
@@ -81,7 +82,10 @@ export function fakeCli(state, args, input = "") {
   state.calls.push({ via: "cli", args: [...args], input });
   const out = (stdout, stderr = "", status = 0) => ({ status, stdout, stderr });
   const json = args.includes("--format") || args.includes("--json");
-  if (json && !state.cliJson) return out("", "Error: unknown or unexpected option: --format\n", 2);
+  // A CLI without JSON output names the first option it does not know.
+  if (json && !state.cliJson) return out("", `Error: unknown or unexpected option: ${args.includes("--json") ? "--json" : "--format"}\n`, 2);
+  // A CLI that has `--format json` but not yet `--json`.
+  if (args.includes("--json") && state.cliJsonFlag === false) return out("", "Error: unknown or unexpected option: --json\n", 2);
 
   // What --scope, or its absence, designates.
   const scopeKey = flagValue(args, "--scope");
@@ -100,6 +104,15 @@ export function fakeCli(state, args, input = "") {
   };
 
   const [a0, a1] = args;
+  // CLI 64, non-interactive: a project command without --scope asks for one instead of acting,
+  // and says so in JSON with a success exit code.
+  if (state.scopeRequired && !scopeKey && (a0 === "project" || a0 === "projects")) {
+    return out(JSON.stringify({ status: "action_required", reason: "missing_scope", message: "Use --scope to choose a team or your personal account." }, null, 2));
+  }
+  // An answer of another shape than a list, without any request for a choice.
+  if (state.listWithoutProjects && (a0 === "project" || a0 === "projects") && (a1 === "ls" || a1 === "list")) {
+    return out(JSON.stringify({ contextName: "equipe-gratuite" }, null, 2));
+  }
   if (a0 === "whoami") {
     const team = state.teams.find((t) => t.id === state.currentTeam) || null;
     return json

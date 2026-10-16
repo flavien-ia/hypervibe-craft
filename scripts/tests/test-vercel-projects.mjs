@@ -134,6 +134,18 @@ console.log("\nLister quand le jeton est refusé : la CLI, équipe par équipe")
   egal("le refus de la portée personnelle n'est pas une erreur", r.partial, false);
   const listes = state.calls.filter((c) => c.via === "cli" && c.args[1] === "ls" && c.args[0] === "project");
   verifier("chaque liste de projets nomme sa portée", listes.length > 0 && listes.every((c) => c.args.includes("--scope")));
+  const json = state.calls.filter((c) => c.via === "cli" && (c.args.includes("--json") || c.args.includes("--format")));
+  verifier("la CLI est lue par l'option que documente la 64 (--json)", json.length > 0 && json.every((c) => c.args.includes("--json") && !c.args.includes("--format")), json.map((c) => c.args.join(" ")).join(" | "));
+}
+
+console.log("\nUne CLI qui connaît --format json mais pas encore --json");
+{
+  const state = compte({ tokenValid: false });
+  state.cliJsonFlag = false;
+  const r = await listAllProjects(contexte(state));
+  egal("elle répond quand même en JSON, équipe par équipe", r.via, "cli");
+  egal("les mêmes 154 projets", r.projects.length, 154);
+  verifier("redemandée une fois avec --format json", state.calls.some((c) => c.via === "cli" && c.args.includes("--format") && c.args.includes("json")));
 }
 
 console.log("\nLister avec une CLI ancienne, sans sortie JSON");
@@ -251,6 +263,32 @@ console.log("\nUn projet personnel, sans nom de compte, CLI réglée sur une éq
   egal("rien n'est tenté", r.status, "failed");
   egal("aucune commande de suppression", appelsRm(state).length, 0);
   egal("le projet est intact", existe(state, "prj_PERSO"), true);
+}
+
+console.log("\nUne CLI qui demande une équipe au lieu de répondre (CLI 64, sans --scope)");
+{
+  // Un projet personnel, le nom du compte inconnu, la CLI réglée sur la portée personnelle : la
+  // liste part sans --scope. La CLI 64 répond alors par une demande de choix, avec un code de
+  // sortie de réussite. Lue comme une liste vide, elle disait le projet supprimé (veille, 16/10/2026).
+  const state = compte({ tokenValid: false, northstar: false });
+  state.user.username = "";
+  state.scopeRequired = true;
+  const ctx = contexte(state, { currentTeam: null });
+  const etat = await getProject(ctx, { id: "prj_PERSO", teamId: null });
+  egal("le projet n'est pas dit absent", etat.status, "unknown");
+  verifier("la raison dit ce que la CLI a demandé", /asks for a choice[\s\S]*missing_scope/.test(etat.reason || ""), etat.reason);
+  const r = await deleteProject(ctx, { id: "prj_PERSO", name: "perso", teamId: null, personal: true });
+  verifier("la suppression ne se dit ni faite ni sans objet", r.status === "failed", JSON.stringify(r));
+  egal("le projet est toujours là", existe(state, "prj_PERSO"), true);
+}
+
+console.log("\nUne réponse sans liste de projets n'est pas une équipe vide");
+{
+  const state = compte({ tokenValid: false });
+  state.listWithoutProjects = true;
+  const etat = await getProject(contexte(state), { id: "prj_SEUL_FREE", teamId: "team_FREE" });
+  egal("le projet n'est pas dit absent", etat.status, "unknown");
+  verifier("la raison dit qu'aucune liste n'est venue", /no project list/.test(etat.reason || ""), etat.reason);
 }
 
 console.log("\nÉtat d'un projet");

@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.4.13 (16 octobre 2026)
+
+### Améliorations
+- **Brevo suit son nouveau format** : quand tu relies ton domaine à Brevo, Hypervibe publie ce que Brevo demande aujourd'hui (deux enregistrements pour la signature, un DMARC sans lequel Brevo refuse le domaine), sans jamais doubler ton DMARC ni durcir sa politique, puis envoie un message d'essai et vérifie qu'il est bien signé. L'ancienne méthode perdait la signature.
+- **L'expéditeur Brevo se crée tout seul** : plus de détour par le tableau de bord, l'adresse d'expédition est créée par l'API de Brevo et son état vérifié, dans la variable que ton site lit vraiment.
+- **Les messages de ton formulaire ne finissent plus dans les indésirables** : si les adresses de ton domaine ne font que relayer vers ta boîte, Hypervibe te demande ta vraie boîte au lieu de passer par ce relais.
+- **Un envoi d'emails sans formulaire de contact** : `/add-email` ne pose plus le moteur d'un formulaire quand tu n'en veux pas, ni un fichier qui casserait la compilation.
+- **Ton mot de passe d'administration ne passe plus par la conversation** : il est écrit dans un fichier de ton vrai dossier de téléchargements, et `/rotate-secret` sait le renouveler de la même façon.
+- **Le garde-fou lit l'adresse d'une API rangée dans une variable** : une suppression chez Cloudflare, Neon ou Vercel passait sans question sous cette forme (relecture de Bastien Detraz).
+- **Vercel CLI 64** : `/optimize` lit les requêtes avec la nouvelle commande, et `/delete-project` ne prend plus une demande de la CLI pour une liste vide.
+- **/security** repère les remboursements Stripe rendus en trop.
+
+### Coulisses
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision.
+
 ## v3.4.12 (14 octobre 2026)
 
 ### Améliorations

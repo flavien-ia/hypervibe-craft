@@ -32,24 +32,17 @@ HASH=$(printf '%s' "Admin1234!" | node "${CLAUDE_SKILL_DIR}/../../scripts/hash-p
 
 Returns a single line on stdout: `salt:hash` (both hex), no trailing newline. Capture it directly in a shell variable.
 
-### Generate a random password AND hash it
+### A random password for the user (the admin's, in production)
+
+Never generate it where you read it: a password shown in the conversation stays in its history. Use the script that writes it for the user alone:
 
 ```bash
-OUT=$(node "${CLAUDE_SKILL_DIR}/../../scripts/hash-password.mjs" --generate --length 24 --format alphanumeric)
+node "${CLAUDE_SKILL_DIR}/../../scripts/admin-password.mjs" rotate --project-dir "<app folder>"
 ```
 
-Returns two lines on stdout:
+It generates the password, writes it with the identifier and the sign-in page in a file of the user's downloads folder, and pushes only its hash (`ADMIN_PASSWORD_HASH_PROD`). Its JSON gives the file's path (`file`): give the user that path, never the password, and never read the file. The new password works once the site is deployed again.
 
-```
-password=<plain password>
-hash=<salt:hash>
-```
-
-Parse them with `grep '^password=' <<< "$OUT"` / `sed 's/^password=//'` (or with `OUT | awk -F= ...`).
-
-The caller must:
-1. Pass the `hash` to `_push-env-vars` to store it in `.env` and Vercel.
-2. Display the **plain password ONCE** to the user in the final summary, with a note that it's not stored anywhere else.
+`hash-password.mjs --generate` (which prints `password=` and `hash=` on its output) stays for scripts that capture it internally: never run it in a command whose output you read.
 
 ## Defaults
 
@@ -59,6 +52,6 @@ The caller must:
 ## Rules
 
 - **Always** use this helper (never inline `scryptSync` or `bcrypt`).
-- Never write the plain password or the hash to a file. Keep them in shell variables, pipe them to the next step.
-- Never log hashes or passwords to stdout outside of the dedicated display-once moment.
+- Never write the plain password in the project, and never display a password in the conversation. The only file that holds one is the file `admin-password.mjs` writes in the user's downloads folder, for them alone.
+- Never log hashes or passwords to stdout. A hash goes to `_push-env-vars` through a shell variable or a pipe.
 - The scrypt parameters are `salt=16 bytes`, `keylen=64 bytes`. Verification in the project uses the same params (in `src/lib/password.ts` created by `add-auth`), with `timingSafeEqual` to prevent timing attacks.

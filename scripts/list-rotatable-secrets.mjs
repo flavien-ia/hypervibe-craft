@@ -51,6 +51,10 @@ const PATTERNS = [
   { match: /^OPENROUTER_API_KEY$/, provider: "OpenRouter", label: "AI key of the project", category: "llm", autoGen: false },
   { match: /^OPENAI_API_KEY$/, provider: "OpenAI", label: "OpenAI API key", category: "llm", autoGen: false },
   { match: /^ANTHROPIC_API_KEY$/, provider: "Anthropic", label: "Anthropic API key", category: "llm", autoGen: false },
+  // The admin's production password (its hash): a new one through admin-password.mjs, which writes it
+  // in a file of the user's downloads folder, never in the conversation (3.4.13). The development
+  // one is the fixed Admin1234!: nothing to renew.
+  { match: /^ADMIN_PASSWORD_HASH_PROD$/, provider: "Internal", label: "Admin password (production)", category: "internal", autoGen: false, special: "admin-password" },
   // Self-managed (auto-generatable)
   { match: /^AUTH_SECRET$/, provider: "Internal", label: "NextAuth session secret", category: "internal", autoGen: true },
   { match: /^CRON_SECRET$/, provider: "Internal", label: "Scheduled tasks token", category: "internal", autoGen: true },
@@ -132,6 +136,7 @@ for (const cat of order) {
     out += `  ${n}. ${item.label} (\`${item.key}\`)`;
     if (item.autoGen) out += "  *- automatic renewal, no user action*";
     if (item.special === "neon") out += "  *- warning : brief site downtime*";
+    if (item.special === "admin-password") out += "  *- the new one works after the next deployment*";
     out += "\n";
   }
 }

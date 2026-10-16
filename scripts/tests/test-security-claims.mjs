@@ -642,6 +642,13 @@ check(
         said('node "$X" --kind ping') === "pass",
     );
     check(
+      "l'adresse d'une API rangee dans une variable est lue a travers elle (revue externe de la 3.4.11)",
+      says(/An API's address kept in a variable is read through it/, /adresse d'une API rangée dans une variable est lue à travers elle/) &&
+        said('CF="https://api.cloudflare.com/client/v4"; curl -s -X DELETE "$CF/zones/z/dns_records/r"') === "ask" &&
+        said('CF="https://api.cloudflare.com/client/v4"\ncurl -s -X DELETE "$CF/zones/z/dns_records/r"') === "ask" &&
+        said('CF="https://api.cloudflare.com/client/v4"; curl -s "$CF/zones?name=example.fr"') === "pass",
+    );
+    check(
       "un drapeau qui epargne une question ne l'epargne que si la commande le lit comme ce drapeau",
       says(/spares it only when the command reads it as that flag/, /ne l'épargne que si la commande le lit comme ce drapeau/) &&
         said("git push --dry-run origin main") === "pass" &&
@@ -973,7 +980,7 @@ console.log("\n── Aucune cle en argument de curl, de wget ou du CLI Vercel, 
 
 check(
   "SECURITY.md dit que le garde-fou demande avant un changement chez un registraire, et la regle existe (3.4.11)",
-  /a change of a domain at its registrar/.test(securite.replace(/\s+/g, " ")) && /export const REGISTRAR_APIS/.test(lire("hooks/rules.mjs")) && /registrarChange\(seg, parts, index\)/.test(lire("hooks/rules.mjs")),
+  /a change of a domain at its registrar/.test(securite.replace(/\s+/g, " ")) && /export const REGISTRAR_APIS/.test(lire("hooks/rules.mjs")) && /registrarChange\(\w+, parts, index\)/.test(lire("hooks/rules.mjs")),
 );
 
 console.log(`\n${checks - failures}/${checks} verifications`);

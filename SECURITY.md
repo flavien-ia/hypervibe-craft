@@ -104,7 +104,9 @@ reads is asked about rather than let through (outside review, 3.3.5).
 A script's path kept in a variable is read through it when the command line
 itself sets that variable (`X=".../register.mjs"`, then `node "$X" --kind ping`):
 the rules on the plugin's scripts see the script that runs, under every value
-the line gave the variable.
+the line gave the variable. An API's address kept in a variable is read through it
+the same way (`CF="https://api.cloudflare.com/client/v4"`, then
+`curl -X DELETE "$CF/zones/..."`), on one line or two (outside review, 3.4.11).
 A flag that spares a question (a dry run)
 spares it only when the command reads it as that flag: a word of its own, not
 inside a quoted value, not taken as the value of the option before it, not
