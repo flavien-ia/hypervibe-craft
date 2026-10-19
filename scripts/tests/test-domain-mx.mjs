@@ -37,5 +37,22 @@ check("... et le script le dit en code 1", r.code === EXIT.UNREADABLE);
 r = await main(["https://atelier.fr"]);
 check("une adresse au lieu d'un domaine : usage, code 5", r.code === EXIT.USAGE);
 
+// Ce que la page de contact fait d'une adresse relayée (la déconseiller, la redire une fois, puis
+// garder le choix de la personne), et ce qu'en disent les textes de /add-email : ils promettaient
+// « jamais » (revue externe de la 3.4.13).
+{
+  const { readFileSync } = await import("node:fs");
+  const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
+  const page = read("skills/_create-contact-page/SKILL.md");
+  const docs = [read("skills/add-email/DOC.md"), read("skills/add-email/DOC.fr.md")];
+  const lignes = read("skills/add-email/SKILL.md");
+  check("la page de contact déconseille une adresse relayée, puis garde le choix de la personne", /respect their choice|respecter son choix/.test(page));
+  check(
+    "... et /add-email dit la même chose, sans « jamais »",
+    docs.every((d) => !/never an address your domain only forwards|jamais une adresse que votre domaine/.test(d) && /once more, then keeps it|redit une fois, puis la garde/.test(d)) &&
+      !/never an address relayed|jamais une adresse relayée/.test(lignes),
+  );
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;

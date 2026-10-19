@@ -61,7 +61,7 @@ Mark the step ✅, capture `credentialsFile` from the JSON, and move on to Step 
    - `installNextAuth` failed → pnpm / network error → retry manually.
    - `hashPasswords` failed → often `hash-password.mjs` not found (sibling script absent) or Node too old. Diagnose with `node "${CLAUDE_SKILL_DIR}/../../scripts/hash-password.mjs" --help`.
    - `writeAuthTs` / `writePasswordTs` / `writeApiRoute` / `writeAdminPages` failed → filesystem permission (rare) or missing template.
-   - `pushEnvVars` failed → all the code is in place, only the env vars did not land → re-run `_push-env-vars` manually with the values visible in the logs.
+   - `pushEnvVars` failed → all the code is in place, only the env vars did not land → run the command the error message gives: it pushes them again from `.env` without showing them. Their values are in no output, so never look for them there.
 4. Continue the remaining steps manually.
 
 ---

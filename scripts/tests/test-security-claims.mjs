@@ -649,6 +649,21 @@ check(
         said('CF="https://api.cloudflare.com/client/v4"; curl -s "$CF/zones?name=example.fr"') === "pass",
     );
     check(
+      "l'adresse batie sur une variable dans la configuration que curl lit sur son entree standard est lue a travers elle (revue externe de la 3.4.13)",
+      says(/inside a config curl reads from its standard input/, /jusque dans la configuration que curl lit sur son entrée standard/) &&
+        said('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones/z/dns_records/r\\"" | curl -s -X DELETE -K -') === "ask" &&
+        said('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones?name=example.fr\\"" | curl -s -K -') === "pass",
+    );
+    check(
+      "le corps d'une fonction ecrite sur une ligne est lu comme un bloc, appelee ou non (revue externe de la 3.4.13)",
+      says(/A function's body is read like a block/, /Le corps d'une fonction est lu comme un bloc/) &&
+        said("f() { git push --force origin main; }; f") === "ask" &&
+        said("function f { git push --force origin main; }; f") === "ask" &&
+        said("f() ( git push --force origin main ); f") === "ask" &&
+        said("f() { git add -A; }") === "deny" &&
+        said("f() { git status; }; f") === "pass",
+    );
+    check(
       "un drapeau qui epargne une question ne l'epargne que si la commande le lit comme ce drapeau",
       says(/spares it only when the command reads it as that flag/, /ne l'épargne que si la commande le lit comme ce drapeau/) &&
         said("git push --dry-run origin main") === "pass" &&
@@ -980,7 +995,7 @@ console.log("\n── Aucune cle en argument de curl, de wget ou du CLI Vercel, 
 
 check(
   "SECURITY.md dit que le garde-fou demande avant un changement chez un registraire, et la regle existe (3.4.11)",
-  /a change of a domain at its registrar/.test(securite.replace(/\s+/g, " ")) && /export const REGISTRAR_APIS/.test(lire("hooks/rules.mjs")) && /registrarChange\(\w+, parts, index\)/.test(lire("hooks/rules.mjs")),
+  /a change of a domain at its registrar/.test(securite.replace(/\s+/g, " ")) && /export const REGISTRAR_APIS/.test(lire("hooks/rules.mjs")) && /registrarChange\(\w+, parts, index(?:, vars)?\)/.test(lire("hooks/rules.mjs")),
 );
 
 console.log(`\n${checks - failures}/${checks} verifications`);

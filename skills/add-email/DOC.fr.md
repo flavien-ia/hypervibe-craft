@@ -42,7 +42,7 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 
 6. **Adresse d'expédition (optionnel)** : pour Resend, vous démarrez sur `onboarding@resend.dev` (adresse de test) et Hypervibe vous propose de configurer votre domaine (ajout DNS records dans Cloudflare, vérification Resend automatique). Pour Brevo, vous renseignez votre expéditeur dès le départ, et Hypervibe le crée chez Brevo par son API quand votre compte ne l'a pas encore, puis vérifie qu'il est actif.
 
-7. **Page de contact (optionnel)** : à la fin, Hypervibe vous propose de créer une page `/contact` fonctionnelle (formulaire Nom, Email, Message + react-hook-form + zod, responsive). Il vous demande où les messages doivent arriver : une vraie boîte, jamais une adresse que votre domaine ne fait que relayer ailleurs (ce relais peut les envoyer dans les indésirables).
+7. **Page de contact (optionnel)** : à la fin, Hypervibe vous propose de créer une page `/contact` fonctionnelle (formulaire Nom, Email, Message + react-hook-form + zod, responsive). Il vous demande où les messages doivent arriver, de préférence une vraie boîte plutôt qu'une adresse que votre domaine ne fait que relayer ailleurs (ce relais peut les envoyer dans les indésirables) : si vous tenez à une telle adresse, il vous le redit une fois, puis la garde.
 
 ## Ce que ça crée pour vous
 

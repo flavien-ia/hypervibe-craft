@@ -579,6 +579,11 @@ function normalise(raw) {
     s = expandBraces(s, cut);
     // A word is read as the shell hands it over, whatever its quotes: `git "push"` is `git push`.
     s = plainWords(s);
+    // A function written on one line (`f() { git push; }; f`, `function f { ... }`, `f() ( ... )`,
+    // zsh's `() { ... }`): its header is no command, and the body behind it went unread. Peeled
+    // here, the body is read as any block is, called or not, like that of a function written over
+    // several lines, whose lines are segments of their own (outside review of the 3.4.13).
+    s = s.replace(/^(?:function(?:\s+[^\s(){};|&<>]+)?(?:\s*\(\s*\))?(?=[\s({]|$)|[^\s(){};|&<>=]*\s*\(\s*\))\s*/, "");
     // Openers and keywords a shell swallows before the command itself, and
     // the closers of the same blocks at the end.
     s = s.replace(/^(?:[({]\s*|(?:then|do|else|elif|if|while|until)\s+|!\s+)/, "");
@@ -1345,6 +1350,27 @@ function fedInput(parts, k) {
   return `${printfFilled(args)}\n${printed}`;
 }
 
+/** A text a command line prints for another command (a curl config it feeds on standard input),
+ *  read as the shell hands it over: each variable the line set replaced by its values, as the shell
+ *  expands them in an echo's double quotes, a printf's arguments and a heredoc's body. The text as
+ *  printed comes first, then every reading of it, READINGS at most (outside review of the 3.4.13:
+ *  an address built on `$CF` inside the config passed). */
+function readingsOfText(text, vars) {
+  if (!vars.size || !text.includes("$")) return [text];
+  let acc = [""];
+  let last = 0;
+  for (const m of text.matchAll(VARIABLE)) {
+    const name = m[1] ?? m[2];
+    if (!vars.has(name)) continue;
+    const before = text.slice(last, m.index);
+    const next = [];
+    for (const a of acc) for (const v of vars.get(name)) if (next.length < READINGS) next.push(a + before + v);
+    acc = next;
+    last = m.index + m[0].length;
+  }
+  return last ? [text, ...acc.map((a) => a + text.slice(last))] : [text];
+}
+
 /** The methods a curl config sets, one option per line as curl reads it: `request = "DELETE"`,
  *  `request: PUT`, `--request PATCH`, `-X DELETE`, grouped (`-sXDELETE`). */
 function configMethods(config) {
@@ -1365,7 +1391,7 @@ function configMethods(config) {
  *  heredoc): that is how the plugin's skills give curl a key off the command line, and a
  *  method or an address can ride in it just the same (outside review, 3.3.6). A config read
  *  from a file is not read, like a script file: this guard reads commands, not files. */
-function destructiveApiCall(seg, parts = [], k = -1) {
+function destructiveApiCall(seg, parts = [], k = -1, vars = new Map()) {
   if (!/^curl\s/.test(seg)) return false;
   const list = operandsOf(words(seg).slice(1)).map((w) => w.value);
   const methods = [];
@@ -1390,9 +1416,10 @@ function destructiveApiCall(seg, parts = [], k = -1) {
   }
   let text = seg;
   const config = configFromInput ? fedInput(parts, k) : null;
-  if (config !== null) {
-    text += `\n${config}`;
-    methods.push(...configMethods(config));
+  // The config as printed, then as the shell prints it, through the variables the line set.
+  for (const reading of config === null ? [] : readingsOfText(config, vars)) {
+    text += `\n${reading}`;
+    methods.push(...configMethods(reading));
   }
   // As written anywhere on the line too, as before: reading more can only ask more.
   const written = /(?:-X|--request)[\s=]*["']?(DELETE|PATCH|PUT)\b/i.exec(text)?.[1];
@@ -1408,7 +1435,7 @@ function destructiveApiCall(seg, parts = [], k = -1) {
  *  on its standard input), or the one its options make (data sends a POST, unless `-G` makes it
  *  a query; `-T` uploads, a PUT). A method the command line does not show (`-X "$M"`) is taken
  *  for a change: this guard cannot read it, and the domain is too much to lose on a guess. */
-function registrarChange(seg, parts = [], k = -1) {
+function registrarChange(seg, parts = [], k = -1, vars = new Map()) {
   if (!/^curl\s/.test(seg)) return false;
   const list = operandsOf(words(seg).slice(1));
   const methods = [];
@@ -1446,10 +1473,10 @@ function registrarChange(seg, parts = [], k = -1) {
   }
   let text = seg;
   const config = configFromInput ? fedInput(parts, k) : null;
-  if (config !== null) {
-    text += `\n${config}`;
-    methods.push(...configMethods(config));
-    if (/^\s*-?-?(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|form(?:-string)?)\b/m.test(config)) data = true;
+  for (const reading of config === null ? [] : readingsOfText(config, vars)) {
+    text += `\n${reading}`;
+    methods.push(...configMethods(reading));
+    if (/^\s*-?-?(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|form(?:-string)?)\b/m.test(reading)) data = true;
   }
   const registrar = REGISTRAR_APIS.find(({ host }) => new RegExp(`https?://${host.replace(/\./g, "\\.")}(?=[/:?"'\\s]|$)`, "i").test(text));
   if (!registrar) return false;
@@ -2060,9 +2087,10 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //     3.2.5: a Vercel project and a Cloudflare DNS record went unasked). Reads (GET) and
     //     creations (POST) pass.
     //     An address the command line put in a variable is read through it: the call is judged as
-    //     typed AND as the shell will run it (outside review of the 3.4.11).
+    //     typed AND as the shell will run it (outside review of the 3.4.11), the config the line
+    //     feeds curl on its standard input included (outside review of the 3.4.13).
     const apiReadings = /^curl\s/.test(seg) ? [seg, ...(wordsThroughVariables(seg, vars) ?? [])] : [seg];
-    if (apiReadings.some((s) => destructiveApiCall(s, parts, index))) {
+    if (apiReadings.some((s) => destructiveApiCall(s, parts, index, vars))) {
       keep(
         ASK,
         "This call deletes or rewrites something at a provider the plugin manages (a project, a database and its data, a DNS record, a key in service). Say exactly what is targeted, by name, and confirm with the user. Prefer the plugin's scripts, which check the provider's answers.",
@@ -2074,7 +2102,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //     for it. The whole domain moves with it, its site and its mail, and a rewrite at
     //     Cloudflare already asked (5b) while this, heavier, passed (outside review, 3.4.10).
     //     Reads pass, as each registrar says them (REGISTRAR_APIS).
-    if (apiReadings.some((s) => registrarChange(s, parts, index))) {
+    if (apiReadings.some((s) => registrarChange(s, parts, index, vars))) {
       keep(
         ASK,
         "This call changes a domain at its registrar (its nameservers, or the records the registrar keeps for it): the whole domain moves with it, its site and its mail. Say which domain and what changes, and confirm with the user.",

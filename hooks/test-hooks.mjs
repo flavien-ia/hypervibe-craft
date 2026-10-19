@@ -1199,6 +1199,42 @@ expect("CF=\"https://api.cloudflare.com/client/v4\"; curl -s -X POST \"$CF/zones
 expect('PB="https://api.porkbun.com/api/json/v3"; curl -s -X POST "$PB/ping" --data @-', "pass");
 expect('X="https://api.exemple.fr"; curl -s -X DELETE "$X/v1/choses/3"', "pass");
 
+console.log("\n── Une fonction ecrite sur une ligne, une configuration de curl batie sur une variable (revue externe de la 3.4.13) ──");
+// Le corps d'une fonction ecrite sur une ligne passait toutes les regles : son en-tete (`f()`,
+// `function f`) etait lu comme la commande. Il est lu desormais comme un bloc, appelee ou non,
+// comme l'etait deja celui d'une fonction ecrite sur plusieurs lignes, dont les lignes sont des
+// segments a part.
+expect("f() { git push --force origin main; }; f", "ask");
+expect("function f { git push --force origin main; }; f", "ask");
+expect("function f() { git push --force origin main; }; f", "ask");
+expect("f() ( git push --force origin main ); f", "ask");
+expect("f() { git push --force origin main && true; } && f", "ask");
+expect("f () { git push --force origin main; }", "ask");
+expect("f(){ git push --force origin main;}; f", "ask");
+expect("f() while git push --force origin main; do :; done", "ask");
+expect("() { git push --force origin main; }", "ask");
+expect("function { git push --force origin main; }", "ask");
+expect("f() {\n  git push --force origin main\n}\nf", "ask");
+expect("f() { git add -A; }; f", "deny");
+expect("function f { git add -A; }", "deny");
+expect('f() { curl -s -X DELETE "https://api.cloudflare.com/client/v4/zones/z1/dns_records/r1"; }; f', "ask");
+// Ce qui y ressemble sans en etre passe toujours.
+expect("f() { git status; }; f", "pass");
+expect("function f { echo ok; }; f", "pass");
+expect("functions_list --all", "pass");
+expect("arr=(a b); echo ${arr[0]}", "pass");
+expect("echo 'f() { git push; }'", "pass");
+// L'adresse batie sur une variable dans la configuration que curl lit sur son entree standard :
+// le shell remplace la variable dans les guillemets de l'echo, les arguments du printf et le corps
+// d'un heredoc avant que curl lise la configuration.
+expect('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones/z/dns_records/r\\"" | curl -s -X DELETE -K -', "ask");
+expect(`CF="https://api.cloudflare.com/client/v4"; printf 'url = "%s/zones/z/dns_records/r"\\n' "$CF" | curl -s -X DELETE --config -`, "ask");
+expect('CF=https://api.cloudflare.com/client/v4\ncurl -s -K - <<EOF\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF', "ask");
+expect('PB="https://api.porkbun.com/api/json/v3"; echo "url = \\"$PB/domain/updateNs/example.fr\\"" | curl -s -X POST -K - --data @-', "ask");
+// Une lecture passe toujours, et une variable sans rapport ne change rien.
+expect('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones?name=example.fr\\"" | curl -s -K -', "pass");
+expect('X=https://api.exemple.fr; echo "url = \\"$X/v1/choses/3\\"" | curl -s -X DELETE -K -', "pass");
+
 console.log("\n── Les deux gardes SQL lisent la meme chose, chaines comprises (revue externe, 3.2.5) ──");
 // La regle lit desormais la garde de run-sql.mjs dans le meme fichier : un mot-cle cite dans une
 // chaine ne refuse plus rien, et un refus n'enseigne plus le drapeau --destructif pour rien.

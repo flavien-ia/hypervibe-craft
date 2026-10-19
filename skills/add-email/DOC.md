@@ -42,7 +42,7 @@ The skill **handles both providers** and chooses automatically, without asking, 
 
 6. **Sending address (optional)**: for Resend, you start on `onboarding@resend.dev` (test address) and Hypervibe offers to configure your domain (add DNS records in Cloudflare, automatic Resend verification). For Brevo, you provide your sender from the start, and Hypervibe creates it at Brevo through its API when your account does not have it yet, then checks that it is active.
 
-7. **Contact page (optional)**: at the end, Hypervibe offers to create a working `/contact` page (Name, Email, Message form + react-hook-form + zod, responsive). It asks where the messages should arrive: a real inbox, never an address your domain only forwards elsewhere (that relay can send them to spam).
+7. **Contact page (optional)**: at the end, Hypervibe offers to create a working `/contact` page (Name, Email, Message form + react-hook-form + zod, responsive). It asks where the messages should arrive, preferably a real inbox rather than an address your domain only forwards elsewhere (that relay can send them to spam): if you insist on such an address, it says so once more, then keeps it.
 
 ## What it creates for you
 

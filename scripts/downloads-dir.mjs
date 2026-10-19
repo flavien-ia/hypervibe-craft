@@ -7,7 +7,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { posix, win32 } from "node:path";
 
 /** The known folder of downloads, under the key Windows keeps the user's folders in. */
 const KNOWN_FOLDER = "{374DE290-123F-4565-9164-39C4925E467B}";
@@ -33,6 +33,9 @@ export function downloadsDir({ platform = process.platform, env = process.env, h
     const dir = String(r?.stdout ?? "").trim();
     if (r?.status === 0 && dir && dir !== home) candidates.push(dir);
   }
-  candidates.push(join(home, "Downloads"));
+  // Joined the way the system in question joins a path, not the way the machine running this does:
+  // a Windows played on a Mac (a recette) must still get its own separators (outside review of the
+  // 3.4.13: the recette was red on macOS).
+  candidates.push((platform === "win32" ? win32 : posix).join(home, "Downloads"));
   return candidates.find((d) => exists(d)) ?? home;
 }

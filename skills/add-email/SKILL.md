@@ -231,7 +231,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 - `env-vars`:
   - `- \`RESEND_API_KEY\` - Resend API key`
   - `- \`RESEND_FROM_EMAIL\` - default sender email`
-  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`RESEND_FROM_EMAIL\`); a real inbox, never an address relayed by Email Routing`
+  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`RESEND_FROM_EMAIL\`); preferably a real inbox: an address relayed by Email Routing can send the messages to spam`
 - `conventions`:
   - `- Email: always use \`escapeHtml()\` from \`~/server/mail\` on user data before injecting it into an email's HTML.`
 
@@ -242,7 +242,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
   - `- \`BREVO_API_KEY\` - Brevo transactional API key`
   - `- \`BREVO_SENDER_EMAIL\` - default sender email`
   - `- \`BREVO_SENDER_NAME\` - default sender name`
-  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`); a real inbox, never an address relayed by Email Routing`
+  - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`); preferably a real inbox: an address relayed by Email Routing can send the messages to spam`
 - `conventions`:
   - `- Email: always pipe user data through \`escapeForBrevo()\` (from \`~/server/mail\`) before inserting into \`htmlContent\`. NEVER let a raw \`{{\` (user input, stack trace, JSON) through into \`htmlContent\` or \`textContent\` - Brevo does a silent Mustache-style templating pass that drops the email with no visible error.`
 

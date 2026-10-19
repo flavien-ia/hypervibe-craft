@@ -1,6 +1,6 @@
 ---
 name: _hash-password
-description: Internal helper to hash a password with Node's native scrypt (NOT bcrypt - bcrypt hashes contain $ characters that break shell and env var handling). Delegates to the bundled scripts/hash-password.mjs. Can hash a provided password or generate + hash a random one. Output format is `salt:hash` (hex:hex), shell-safe. Used by add-auth for admin credentials. Never writes secrets to files. Not meant to be invoked directly by users.
+description: Internal helper to hash a password with Node's native scrypt (NOT bcrypt - bcrypt hashes contain $ characters that break shell and env var handling). Delegates to the bundled scripts/hash-password.mjs. Can hash a provided password or generate + hash a random one. Output format is `salt:hash` (hex:hex), shell-safe. Used by add-auth for admin credentials. Writes nothing itself; the admin's production password goes, through admin-password.mjs, to a file of the user's downloads folder for them alone, never into the conversation. Not meant to be invoked directly by users.
 user-invocable: false
 allowed-tools: Bash
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; most workflows also use pnpm, git, and project CLIs (vercel, gh)."

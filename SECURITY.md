@@ -91,7 +91,10 @@ its API. The rules never see the
 raw head of a command: `sudo`, `command`, `env`, `time`, a launcher (`npx`,
 `pnpm dlx`), a version pin, an absolute path, a subshell or a `sh -c` payload
 are stripped or unfolded first, so a shape the rules did not foresee does not
-hide what they forbid. `xargs` is unfolded too, with the line it rebuilds from
+hide what they forbid. A function's body is read like a block, whether the
+function is written over several lines or on one (`f() { git push; }; f`,
+`function f { ... }`), called or not (outside review, 3.4.13). `xargs` is
+unfolded too, with the line it rebuilds from
 its input when that input is on the command line, and so are `find -exec`,
 `timeout`, `stdbuf`, `caffeinate`, and macOS's `arch`, `xcrun`, `taskpolicy`,
 `sandbox-exec` and `script`. A launcher's options are read the way the tool
@@ -106,7 +109,9 @@ itself sets that variable (`X=".../register.mjs"`, then `node "$X" --kind ping`)
 the rules on the plugin's scripts see the script that runs, under every value
 the line gave the variable. An API's address kept in a variable is read through it
 the same way (`CF="https://api.cloudflare.com/client/v4"`, then
-`curl -X DELETE "$CF/zones/..."`), on one line or two (outside review, 3.4.11).
+`curl -X DELETE "$CF/zones/..."`), on one line or two (outside review, 3.4.11),
+and inside a config curl reads from its standard input too
+(`echo "url = \"$CF/zones/...\"" | curl -K -`, outside review, 3.4.13).
 A flag that spares a question (a dry run)
 spares it only when the command reads it as that flag: a word of its own, not
 inside a quoted value, not taken as the value of the option before it, not

@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.4.14 (19 octobre 2026)
+
+### Améliorations
+- **Le garde-fou lit le corps d'une fonction écrite sur une ligne** : `f() { git push; }; f` passait sans question, alors que la même fonction écrite sur trois lignes demandait. Son corps est lu désormais comme n'importe quel bloc, que la fonction soit appelée ou non (relecture de Bastien Detraz).
+- **Une adresse d'API bâtie sur une variable, jusque dans la configuration que reçoit curl** : quand l'adresse arrive à curl par son entrée standard, le garde-fou la lit à travers les variables de la ligne, comme il le faisait déjà sur la ligne elle-même.
+- **La recette passe de nouveau sur Mac** : le contrôle du dossier de téléchargements assemblait un chemin Windows à la manière de la machine qui le testait.
+- **Trois textes remis à jour** : l'installation de l'espace d'administration ne renvoie plus à des valeurs « visibles dans les journaux », qui n'y sont plus ; l'aide au mot de passe dit où va vraiment celui de la production ; et `/add-email` dit ce que fait la page de contact d'une adresse relayée : il te la déconseille, te le redit une fois, puis respecte ton choix.
+
+### Coulisses
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision.
+
 ## v3.4.13 (16 octobre 2026)
 
 ### Améliorations

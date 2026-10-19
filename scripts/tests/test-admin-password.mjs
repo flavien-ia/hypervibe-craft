@@ -44,6 +44,12 @@ console.log("── Le vrai dossier de téléchargements ──");
   check("Linux : le dossier que donne xdg-user-dir", linux === "/home/lea/Téléchargements", linux);
   const rien = downloadsDir({ platform: "darwin", env: {}, home: "/Users/lea", run: () => ({ status: 1 }), exists: () => false });
   check("aucun dossier de téléchargements : le dossier personnel", rien === "/Users/lea", rien);
+  // Le chemin s'assemble comme sur le système visé, quelle que soit la machine de la recette : un
+  // Windows joué sur un Mac recevait une barre oblique, et la recette était rouge sur macOS (revue
+  // externe de la 3.4.13). Chacun des deux cas échoue sur l'une des deux familles de machines.
+  check("... et Windows sans réponse du registre, le chemin assemblé comme sur Windows", sansRegistre === "C:\\Users\\lea\\Downloads", sansRegistre);
+  const mac = downloadsDir({ platform: "darwin", env: {}, home: "/Users/lea", run: () => ({ status: 1 }), exists: exists(["/Users/lea/Downloads"]) });
+  check("macOS : ~/Downloads, le chemin assemblé comme sur un Mac", mac === "/Users/lea/Downloads", mac);
 }
 
 console.log("\n── Le fichier, jamais la conversation ──");
@@ -91,6 +97,15 @@ check("... et écrit le fichier avant de pousser quoi que ce soit", setup.indexO
 const skill = read("skills/_setup-auth-admin/SKILL.md");
 check("_setup-auth-admin ne fait plus afficher le mot de passe", !/PROD_PASSWORD|prodPassword|display it ONCE/i.test(skill) && /credentialsFile/.test(skill));
 check("... ni générer par --generate, qui l'imprime", !/hash-password\.mjs" --generate/.test(skill) && /admin-password\.mjs" rotate/.test(skill));
+check("... ni chercher dans une sortie des valeurs qui n'y sont pas (revue externe de la 3.4.13)", !/visible in the logs|visibles dans les logs/i.test(skill) && /without showing them|sans les afficher/.test(skill));
+{
+  const description = /^description: (.*)$/m.exec(read("skills/_hash-password/SKILL.md"))?.[1] ?? "";
+  check(
+    "_hash-password ne dit plus qu'aucun secret ne finit dans un fichier : il nomme celui du mot de passe d'administration (revue externe de la 3.4.13)",
+    !/Never writes secrets to files/i.test(description) && /downloads folder/.test(description) && /admin-password\.mjs/.test(description),
+    description.slice(0, 300),
+  );
+}
 const addAuth = read("skills/add-auth/SKILL.md");
 check("/add-auth (un admin ajouté à des comptes) passe par le même fichier", /admin-password\.mjs" rotate/.test(addAuth) && !/show the PROD password ONCE/.test(addAuth));
 {
