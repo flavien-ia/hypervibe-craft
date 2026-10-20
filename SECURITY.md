@@ -112,6 +112,11 @@ the same way (`CF="https://api.cloudflare.com/client/v4"`, then
 `curl -X DELETE "$CF/zones/..."`), on one line or two (outside review, 3.4.11),
 and inside a config curl reads from its standard input too
 (`echo "url = \"$CF/zones/...\"" | curl -K -`, outside review, 3.4.13).
+A command's own words kept in a variable the line sets are read as the shell
+spells them out: `G=git; $G push --force origin main` is a push, and
+`A=-A; git add $A` is `git add -A` (outside review, 3.4.14).
+The body of a heredoc whose delimiter is quoted (`<<'EOF'`) is read as written,
+as the shell hands it over: it replaces no variable there (outside review, 3.4.14).
 A flag that spares a question (a dry run)
 spares it only when the command reads it as that flag: a word of its own, not
 inside a quoted value, not taken as the value of the option before it, not
@@ -142,8 +147,9 @@ Two properties matter here:
 
 One frontier is chosen, not missed: the hook judges what a command line shows,
 substitutions included, not what they will print. `bash <<< "$(...)"`, a variable
-expanded as a command, a downloaded script run as it arrives: these commands only
-exist at run time, and the scripts' own checks are what hold there.
+expanded as a command when the line does not set it, a downloaded script run as
+it arrives: these commands only exist at run time, and the scripts' own checks
+are what hold there.
 
 Both directions are tested (`node hooks/test-hooks.mjs`): that a forbidden
 command is refused, **and** that a legitimate one goes through. A guardrail that

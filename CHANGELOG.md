@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.4.15 (20 octobre 2026)
+
+### Améliorations
+- **Le garde-fou lit une commande rangée dans une variable** : `G=git; $G push --force origin main` ou `A=-A; git add $A` passaient sans question, parce que le garde-fou lisait la ligne telle qu'elle était tapée. Quand la ligne pose elle-même la variable, il lit maintenant la commande que le shell va vraiment lancer (relecture de Bastien Detraz).
+- **Plus d'angle mort après un long mot** : quand un long mot bâti sur une variable précédait l'adresse d'une API passée à curl par son entrée standard, cette adresse pouvait échapper au garde-fou. Chaque lecture repart désormais du début (relecture de Bastien Detraz).
+- **Une question de moins sur un heredoc protégé** : le texte d'un `<<'EOF'` n'est plus lu à travers les variables de la ligne, puisque le shell n'y remplace rien.
+- **Le relevé d'avant la bascule interroge tous les résolveurs** : `/add-domain` recopie les enregistrements existants avant de changer les serveurs de noms. Un seul résolveur qui croyait encore absent un nom créé quelques minutes plus tôt suffisait à le faire oublier. Un enregistrement n'est plus tenu pour absent que si tous les résolveurs le disent.
+
+### Coulisses
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision.
+
 ## v3.4.14 (19 octobre 2026)
 
 ### Améliorations

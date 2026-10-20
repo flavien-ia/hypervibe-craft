@@ -93,32 +93,55 @@ export function keyOf(r) {
   return `${r.type} ${fqdn(r.name)} ${r.type === "MX" ? `${Number(r.priority)} ` : ""}${content}`;
 }
 
-/** One public DNS question: {ok, records} (records of the name asked, a CNAME at that name kept as
- *  the CNAME), or {ok: false} when no resolver answered. NXDOMAIN is an answer: no records. */
+/** One question to ONE resolver: {ok, records} (records of the name asked, a CNAME at that name
+ *  kept as the CNAME), or {ok: false} when it did not answer. NXDOMAIN is an answer: no records. */
+async function askAt(base, name, type) {
+  try {
+    const res = await fetch(`${base}?name=${encodeURIComponent(name)}&type=${type}`, { headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return { ok: false };
+    const json = await res.json();
+    if (json.Status !== 0 && json.Status !== 3) return { ok: false };
+    const answers = (json.Answer ?? []).filter((a) => fqdn(a.name) === fqdn(name));
+    const cname = answers.find((a) => a.type === 5);
+    const pick = cname ? [cname] : answers.filter((a) => TYPES[a.type] === type);
+    return {
+      ok: true,
+      records: pick.map((a) => {
+        const t = TYPES[a.type];
+        if (t === "MX") {
+          const [priority, ...target] = String(a.data).trim().split(/\s+/);
+          return { name: fqdn(name), type: t, priority: Number(priority), content: fqdn(target.join(" ")), ttl: a.TTL };
+        }
+        return { name: fqdn(name), type: t, content: t === "TXT" ? txtText(a.data) : t === "CNAME" ? fqdn(a.data) : String(a.data).trim(), ttl: a.TTL };
+      }),
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** One public DNS question, to the first resolver that answers: {ok, records}, or {ok: false} when
+ *  none did. */
 async function ask(resolverList, name, type) {
   for (const base of resolverList) {
-    try {
-      const res = await fetch(`${base}?name=${encodeURIComponent(name)}&type=${type}`, { headers: { accept: "application/dns-json" }, signal: AbortSignal.timeout(15000) });
-      if (!res.ok) continue;
-      const json = await res.json();
-      if (json.Status !== 0 && json.Status !== 3) continue;
-      const answers = (json.Answer ?? []).filter((a) => fqdn(a.name) === fqdn(name));
-      const cname = answers.find((a) => a.type === 5);
-      const pick = cname ? [cname] : answers.filter((a) => TYPES[a.type] === type);
-      return {
-        ok: true,
-        records: pick.map((a) => {
-          const t = TYPES[a.type];
-          if (t === "MX") {
-            const [priority, ...target] = String(a.data).trim().split(/\s+/);
-            return { name: fqdn(name), type: t, priority: Number(priority), content: fqdn(target.join(" ")), ttl: a.TTL };
-          }
-          return { name: fqdn(name), type: t, content: t === "TXT" ? txtText(a.data) : t === "CNAME" ? fqdn(a.data) : String(a.data).trim(), ttl: a.TTL };
-        }),
-      };
-    } catch {}
+    const r = await askAt(base, name, type);
+    if (r.ok) return r;
   }
   return { ok: false };
+}
+
+/** The same question to EVERY resolver, where an absence counts only once all of them say it: a
+ *  record any of them answers is the name's. A resolver may keep a name's absence in its cache for
+ *  the zone's negative TTL after the name was made: on 20/10/2026, one of Google's caches answered
+ *  NXDOMAIN, survey after survey, for a record its other caches and another resolver already
+ *  served, and what the survey misses, the switch loses (3.4.15). */
+async function askEverywhere(resolverList, name, type) {
+  const answers = await Promise.all(resolverList.map((base) => askAt(base, name, type)));
+  const read = answers.filter((a) => a.ok);
+  if (!read.length) return { ok: false };
+  const found = read.filter((a) => a.records.length);
+  if (!found.length) return read[0];
+  return { ok: true, records: [...new Map(found.flatMap((a) => a.records).map((r) => [keyOf(r), r])).values()] };
 }
 
 /** `fn` over `items`, `limit` at a time, the results in the items' order. */
@@ -142,8 +165,9 @@ export async function survey(domain, env = process.env) {
   const unread = [];
   const mail = [];
   const names = [];
+  // Every resolver for each question: one resolver's absence is not the name's (3.4.15).
   const asked = async ([name, type]) => {
-    const r = await ask(rs, name, type);
+    const r = await askEverywhere(rs, name, type);
     if (!r.ok) unread.push(`${type} ${name}`);
     return r.ok ? r.records.filter((x) => x.content !== "") : null;
   };

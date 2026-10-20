@@ -652,6 +652,8 @@ check(
       "l'adresse batie sur une variable dans la configuration que curl lit sur son entree standard est lue a travers elle (revue externe de la 3.4.13)",
       says(/inside a config curl reads from its standard input/, /jusque dans la configuration que curl lit sur son entrée standard/) &&
         said('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones/z/dns_records/r\\"" | curl -s -X DELETE -K -') === "ask" &&
+        // A long word read through the same variable earlier on the line no longer hides it (3.4.15).
+        said(`CF=https://api.cloudflare.com/client/v4; L="${"x".repeat(40)}$CF"; echo "url = \\"$CF/zones/z/dns_records/r\\"" | curl -s -X DELETE -K -`) === "ask" &&
         said('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones?name=example.fr\\"" | curl -s -K -') === "pass",
     );
     check(
@@ -662,6 +664,22 @@ check(
         said("f() ( git push --force origin main ); f") === "ask" &&
         said("f() { git add -A; }") === "deny" &&
         said("f() { git status; }; f") === "pass",
+    );
+    check(
+      "les mots d'une commande ranges dans une variable que la ligne pose sont lus comme le shell les ecrit (revue externe de la 3.4.14)",
+      says(/A command's own words kept in a variable the line sets/, /Les mots d'une commande rangés dans une variable que la ligne pose/) &&
+        said("G=git; $G push --force origin main") === "ask" &&
+        said("X=push; git $X --force origin main") === "ask" &&
+        said('C="git push --force origin main"; $C') === "ask" &&
+        said("A=-A; git add $A") === "deny" &&
+        said('C="add -A"; git $C') === "deny" &&
+        said("G=git; $G status") === "pass",
+    );
+    check(
+      "le corps d'un heredoc au delimiteur entre guillemets est lu tel qu'il est ecrit, sans les variables de la ligne (revue externe de la 3.4.14)",
+      says(/The body of a heredoc whose delimiter is quoted \(`<<'EOF'`\) is read as written/, /Le corps d'un heredoc dont le délimiteur est entre guillemets \(`<<'EOF'`\) est lu tel qu'il est écrit/) &&
+        said('CF=https://api.cloudflare.com/client/v4\ncurl -s -K - <<\'EOF\'\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF') === "pass" &&
+        said('CF=https://api.cloudflare.com/client/v4\ncurl -s -K - <<EOF\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF') === "ask",
     );
     check(
       "un drapeau qui epargne une question ne l'epargne que si la commande le lit comme ce drapeau",

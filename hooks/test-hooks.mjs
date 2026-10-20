@@ -1234,6 +1234,57 @@ expect('PB="https://api.porkbun.com/api/json/v3"; echo "url = \\"$PB/domain/upda
 // Une lecture passe toujours, et une variable sans rapport ne change rien.
 expect('CF=https://api.cloudflare.com/client/v4; echo "url = \\"$CF/zones?name=example.fr\\"" | curl -s -K -', "pass");
 expect('X=https://api.exemple.fr; echo "url = \\"$X/v1/choses/3\\"" | curl -s -X DELETE -K -', "pass");
+// La position d'une expression partagee ne passe plus d'une lecture a l'autre : un long mot lu plus
+// tot sur la ligne a travers la meme variable faisait sauter le $CF de la configuration (revue
+// externe de la 3.4.14), chez Cloudflare, pour updateNs chez Porkbun et sous la forme heredoc.
+expect(`CF=https://api.cloudflare.com/client/v4; L="${"x".repeat(40)}$CF"; echo "url = \\"$CF/zones/z/dns_records/r\\"" | curl -s -X DELETE -K -`, "ask");
+expect(`PB="https://api.porkbun.com/api/json/v3"; L="${"x".repeat(40)}$PB"; echo "url = \\"$PB/domain/updateNs/example.fr\\"" | curl -s -X POST -K - --data @-`, "ask");
+expect(`CF=https://api.cloudflare.com/client/v4; L="${"x".repeat(40)}$CF"\ncurl -s -K - <<EOF\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF`, "ask");
+{
+  // Dans un meme processus, comme la recette enchaine ses cas : un jugement ne laisse rien au suivant,
+  // qu'il ait lu un long mot bati sur une variable ou une here-string (la forme de la revue externe
+  // de la 3.4.14 : apres une seule here-string, le Porkbun ci-dessous passait).
+  const { decide } = await import(pathToFileURL(join(dirname(HOOK), "rules.mjs")).href);
+  const avants = [
+    [`X=abc; Y="${"a".repeat(40)}$X"`, "un long mot"],
+    [`L=${"y".repeat(60)}; grep -c x <<< "$L"`, "une here-string"],
+  ];
+  for (const [avant, quoi] of avants) {
+    decide(avant);
+    const apres = decide('PB="https://api.porkbun.com/api/json/v3"; echo "url = \\"$PB/domain/updateNs/example.fr\\"" | curl -s -X POST -K - --data @-');
+    checks += 1;
+    const ok = apres?.decision === "ask";
+    if (!ok) failures += 1;
+    console.log(`${ok ? "OK  " : "FAIL"} ask  un jugement ne laisse rien au suivant dans le meme processus, apres ${quoi} (revue externe de la 3.4.14)${ok ? "" : `   (obtenu: ${apres?.decision ?? "pass"})`}`);
+  }
+}
+// Un mot de commande pose dans une variable de la ligne est lu comme le shell l'ecrit : la
+// sous-commande, la commande, la ligne entiere (decoupee en mots), une option (revue externe de la
+// 3.4.14). Une commande sans danger passe toujours.
+expect("X=push; git $X --force origin main", "ask");
+expect("G=git; $G push --force origin main", "ask");
+expect('C="git push --force origin main"; $C', "ask");
+expect("A=-A; git add $A", "deny");
+expect('A="-A"; git add "$A"', "deny");
+// Une variable seule et sans guillemets est decoupee en mots, comme le fait le shell : sa valeur
+// peut porter la sous-commande et ses options a la fois.
+expect('C="add -A"; git $C', "deny");
+expect('P="push --force"; git $P origin main', "ask");
+expect("X=status; git $X", "pass");
+expect("G=git; $G status", "pass");
+expect('F=README.md; git add "$F"', "pass");
+// Un heredoc au delimiteur protege n'est pas developpe par le shell : son corps n'est plus lu a
+// travers les variables de la ligne (une question de trop, revue externe de la 3.4.14). Le meme
+// heredoc non protege demande toujours.
+expect('CF=https://api.cloudflare.com/client/v4\ncurl -s -K - <<\'EOF\'\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF', "pass");
+expect('CF=https://api.cloudflare.com/client/v4\ncurl -s -K - <<"EOF"\nrequest = "DELETE"\nurl = "$CF/zones/z/dns_records/r"\nEOF', "pass");
+// La regle des registraires lit de meme une configuration nourrie par un heredoc : protege, rien
+// n'y est lu a travers les variables ; non protege, le shell y ecrit $PB et la question tombe.
+expect('PB="https://api.porkbun.com/api/json/v3"\ncurl -s -X POST -K - <<\'EOF\'\nurl = "$PB/domain/updateNs/example.fr"\nEOF', "pass");
+expect('PB="https://api.porkbun.com/api/json/v3"\ncurl -s -X POST -K - <<EOF\nurl = "$PB/domain/updateNs/example.fr"\nEOF', "ask");
+// Une here-string est developpee par le shell : la configuration qu'elle porte est lue a travers
+// les variables de la ligne.
+expect('CF=https://api.cloudflare.com/client/v4; curl -s -X DELETE -K - <<< "url = \\"$CF/zones/z/dns_records/r\\""', "ask");
 
 console.log("\n── Les deux gardes SQL lisent la meme chose, chaines comprises (revue externe, 3.2.5) ──");
 // La regle lit desormais la garde de run-sql.mjs dans le meme fichier : un mot-cle cite dans une

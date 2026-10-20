@@ -238,6 +238,8 @@ function scanShell(src, start, closer) {
   let text = "";
   let inner = [];
   let stdin = [];
+  // Per input of `stdin`: whether the shell reads nothing into it (a heredoc with a quoted delimiter).
+  let literal = [];
   let procIn = [];
   let piped = false;
   let pending = [];
@@ -247,10 +249,11 @@ function scanShell(src, start, closer) {
   const cut = (feeds = false) => {
     const runs = inner.map((x) => x.trim()).filter(Boolean);
     const pushed = Boolean(text.trim() || runs.length || stdin.length || procIn.length);
-    if (pushed) parts.push({ text: text.trim(), inner: runs, stdin, procIn, piped });
+    if (pushed) parts.push({ text: text.trim(), inner: runs, stdin, literal, procIn, piped });
     text = "";
     inner = [];
     stdin = [];
+    literal = [];
     procIn = [];
     // A pipe followed by a newline still feeds the command on the next line.
     piped = pushed ? feeds : piped || feeds;
@@ -296,6 +299,7 @@ function scanShell(src, start, closer) {
       text += `<<<${word.text}`;
       inner.push(...word.inner);
       stdin.push(word.value);
+      literal.push(false);
       i = word.end;
     } else if (c === "<" && next === "<") {
       const operator = readHeredocOperator(src, i);
@@ -315,8 +319,9 @@ function scanShell(src, start, closer) {
         if (owner) {
           owner.inner.push(...runs);
           owner.stdin.push(body.text);
+          owner.literal.push(operator.quoted);
         } else if (runs.length) {
-          parts.push({ text: "", inner: runs, stdin: [body.text], procIn: [], piped: false });
+          parts.push({ text: "", inner: runs, stdin: [body.text], literal: [operator.quoted], procIn: [], piped: false });
         }
         i = body.end;
       }
@@ -1333,6 +1338,14 @@ function printfFilled(args) {
   return escapesOf(out);
 }
 
+/** Whether all segment `k` reads on its standard input is the body of heredocs whose delimiter is
+ *  quoted (`<<'EOF'`): the shell reads nothing into such a body, nor does the guard (outside review
+ *  of the 3.4.14: it was read through the line's variables, a question too many). */
+function fedLiterally(parts, k) {
+  const part = parts[k];
+  return Boolean(part?.stdin.length) && part.literal?.length === part.stdin.length && part.literal.every(Boolean);
+}
+
 /** What segment `k` reads on its standard input, when the command line says it: a heredoc,
  *  a here-string, or what the segment piped into it prints (a printf read both filled and as
  *  written). null otherwise: a file or a program is not read. */
@@ -1359,7 +1372,7 @@ function readingsOfText(text, vars) {
   if (!vars.size || !text.includes("$")) return [text];
   let acc = [""];
   let last = 0;
-  for (const m of text.matchAll(VARIABLE)) {
+  for (const m of text.matchAll(variables())) {
     const name = m[1] ?? m[2];
     if (!vars.has(name)) continue;
     const before = text.slice(last, m.index);
@@ -1417,7 +1430,7 @@ function destructiveApiCall(seg, parts = [], k = -1, vars = new Map()) {
   let text = seg;
   const config = configFromInput ? fedInput(parts, k) : null;
   // The config as printed, then as the shell prints it, through the variables the line set.
-  for (const reading of config === null ? [] : readingsOfText(config, vars)) {
+  for (const reading of config === null ? [] : readingsOfText(config, fedLiterally(parts, k) ? new Map() : vars)) {
     text += `\n${reading}`;
     methods.push(...configMethods(reading));
   }
@@ -1473,7 +1486,7 @@ function registrarChange(seg, parts = [], k = -1, vars = new Map()) {
   }
   let text = seg;
   const config = configFromInput ? fedInput(parts, k) : null;
-  for (const reading of config === null ? [] : readingsOfText(config, vars)) {
+  for (const reading of config === null ? [] : readingsOfText(config, fedLiterally(parts, k) ? new Map() : vars)) {
     text += `\n${reading}`;
     methods.push(...configMethods(reading));
     if (/^\s*-?-?(?:data(?:-raw|-binary|-ascii|-urlencode)?|json|form(?:-string)?)\b/m.test(reading)) data = true;
@@ -1520,6 +1533,11 @@ const ASK = "ask";
 const DECLARING = /^(?:export|readonly|local|declare|typeset)$/;
 const RUNTIMES = /^(?:node|bun|deno|tsx)$/;
 const VARIABLE = /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g;
+/** A fresh expression for each reading, never VARIABLE itself: a shared /g expression keeps its
+ *  position (lastIndex) from one reading to the next, and matchAll() starts from it. A long word
+ *  read earlier on the line made the `$CF` of a config fed to curl skipped, and a DELETE at
+ *  Cloudflare passed (outside review of the 3.4.14). */
+const variables = () => new RegExp(VARIABLE.source, "g");
 /** How many readings of one script word are judged: past it, the first ones. */
 const READINGS = 16;
 
@@ -1552,9 +1570,10 @@ function valuesOf(raw, vars) {
     acc = acc.map((a) => a + text);
   };
   // A `$name` or `${name}` at `i`, replaced when the line set it: the index after it.
+  const at = variables();
   const variable = (i) => {
-    VARIABLE.lastIndex = i;
-    const m = VARIABLE.exec(raw);
+    at.lastIndex = i;
+    const m = at.exec(raw);
     if (!m || m.index !== i) return null;
     const name = m[1] ?? m[2];
     if (vars.has(name)) {
@@ -1605,6 +1624,8 @@ function valuesOf(raw, vars) {
 /** A value as one word no shell reads anything into: between single quotes, or, when it holds
  *  one, between double quotes with what they would read escaped. */
 const asWord = (value) => (value.includes("'") ? `"${value.replace(/[\\"$`]/g, "\\$&")}"` : `'${value}'`);
+/** An unquoted variable alone in its word (`$C`, `${C}`): the shell splits its value into words. */
+const BARE_VARIABLE = /^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$/;
 
 /** A segment read through the variables the command line set, EVERY word of it: its readings
  *  (READINGS at most, each word written out as one word no shell reads anything into), or null
@@ -1619,7 +1640,10 @@ function wordsThroughVariables(seg, vars) {
   for (const w of words(seg)) {
     const r = valuesOf(w.raw, vars);
     if (r.read) read = true;
-    const forms = r.read ? r.values.map(asWord) : [w.raw];
+    // An unquoted variable alone in its word becomes the words its value splits into, as the shell
+    // splits it (`C="git push --force origin main"; $C`).
+    const split = BARE_VARIABLE.test(w.raw);
+    const forms = r.read ? r.values.map((v) => (split ? v.split(/\s+/).filter(Boolean).map(asWord).join(" ") : asWord(v))) : [w.raw];
     const next = [];
     for (const acc of readings) for (const form of forms) if (next.length < READINGS) next.push([...acc, form]);
     readings = next;
@@ -1868,6 +1892,18 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       }
       continue;
     }
+    // Any other segment whose words the command line put in variables: judged also as the line the
+    // shell runs, every reading of it, on its own. `X=push; git $X --force`, `G=git; $G push`,
+    // `C="git push --force origin main"; $C` and `A=-A; git add $A` walked past every rule on the
+    // words, which read the segment as typed (outside review of the 3.4.14). The segment is then
+    // read as typed, as before: reading more can only ask more.
+    const spelled = wordsThroughVariables(seg, vars);
+    if (spelled) {
+      for (const line of spelled) {
+        const verdict = decide(line, env, undefined, substituted);
+        if (verdict) keep(verdict.decision, verdict.reason);
+      }
+    }
 
     // `xargs` runs the command that follows its options, with what its input brings:
     // `echo main | xargs git push origin` is a push, and `echo 'git push' | xargs -I{} bash
@@ -1921,8 +1957,8 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     // That frontier is chosen, not missed: `bash <<< "$(echo git push)"` runs what the
     // substitution PRINTS. The substitution itself is judged (an echo, nothing to say), its
     // output is not, because it only exists at run time, like a variable expanded as a
-    // command or a downloaded script. The scripts' own checks hold beyond it (outside
-    // review, 3.2.6).
+    // command when the line does not set it (3.4.15), or a downloaded script. The scripts'
+    // own checks hold beyond it (outside review, 3.2.6).
     const scripts = scriptsOf(parts, index, seg);
     if (scripts !== null) {
       for (const script of scripts) {

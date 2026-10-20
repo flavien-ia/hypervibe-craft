@@ -212,6 +212,29 @@ try {
     r = await run(args);
     check(`${label}: exit 5, nothing asked at Cloudflare`, r.code === EXIT.USAGE && cfState.auth.length === 0, r.out);
   }
+  // ── One resolver's absence is not the name's (3.4.15) ─────────────────────────────────────
+  // The two real resolvers, answered by a stand-in of fetch: nothing reaches the network.
+  {
+    const { survey } = await import(pathToFileURL(SCRIPT).href);
+    const real = globalThis.fetch;
+    const hosts = [];
+    globalThis.fetch = async (url) => {
+      const u = new URL(String(url));
+      hosts.push(u.host);
+      const served = u.host === "cloudflare-dns.com" && u.searchParams.get("name") === "blog.example.fr" && u.searchParams.get("type") === "A";
+      const body = served ? { Status: 0, Answer: [{ name: "blog.example.fr.", type: 1, TTL: 300, data: "192.0.2.10" }] } : { Status: 3 };
+      return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/dns-json" } });
+    };
+    try {
+      const open = { ...process.env };
+      delete open.HYPERVIBE_DOH_URL;
+      const s = await survey("example.fr", open);
+      check("a record one resolver serves while the other still says the name absent: found, so carried before the switch (3.4.15: a cache answered NXDOMAIN minutes after the name was made)", s.ok && s.names.some((x) => x.name === "blog.example.fr" && x.content === "192.0.2.10") && hosts.includes("dns.google") && hosts.includes("cloudflare-dns.com"), JSON.stringify(s.names));
+      check("... and an absence both resolvers say is an absence: nothing else found", s.mail.length === 0 && s.names.length === 1);
+    } finally {
+      globalThis.fetch = real;
+    }
+  }
 } finally {
   doh.close();
   cf.close();
