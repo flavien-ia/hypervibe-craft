@@ -35,7 +35,7 @@ Ajoute une **base de données** à votre projet pour y stocker des informations 
 ## Astuces
 
 {{callout:tip|Plan gratuit Neon}}
-Neon offre un plan gratuit très généreux : 100 projets max, 0,5 Go de stockage par projet, 100 heures de calcul par mois. La base se met en pause automatiquement quand personne ne l'utilise (zero cost when idle). Largement suffisant pour la grande majorité des projets.
+Neon offre un plan gratuit très généreux : 100 projets max, 1 Go de stockage par projet (20 Go pour l'ensemble des projets), 100 heures de calcul par mois. La base se met en pause automatiquement quand personne ne l'utilise (zero cost when idle). Largement suffisant pour la grande majorité des projets.
 {{/callout}}
 
 {{callout:info|Les sauvegardes, c'est offert}}

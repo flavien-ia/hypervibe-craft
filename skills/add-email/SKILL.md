@@ -8,7 +8,9 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 
 Adds transactional email support to the current project. **Supports two providers** (Resend and Brevo) with a single unified flow: the skill decides which one to install based on the user's existing API keys, without asking when the choice is unambiguous.
 
-The deterministic core (SDK install, `mail.ts` + contact tRPC router scaffolding, `root.ts` patching, env var push) is handled by `scripts/setup-email.mjs --provider <resend|brevo>`. This SKILL takes care of: provider selection, prereqs validation, re-config detection, post-install steps (domain config, contact page, RGPD update), and the final summary.
+The deterministic core (SDK install, `mail.ts` + contact tRPC router scaffolding, `root.ts` patching, env var push) is handled by `scripts/setup-email.mjs --provider <resend|brevo>`. This SKILL takes care of: provider selection, prereqs validation, re-config detection, the project's own sending key (`scripts/email-key.mjs`), post-install steps (domain config, contact page, RGPD update), and the final summary.
+
+**A project never holds the account's key** (3.4.16). The key of the whole email account (Resend or Brevo) stays in the vault, for the harness's gestures on the account itself: a sending domain and its records, the senders, the quotas, and at Resend the projects' keys. Each project gets a sending key of its own (Step 2b): one `.env` seen on a screen (a filmed training), one repository or hosting that leaks, and only that project's sending is exposed, never the whole account (its domains, its contacts, every other project).
 
 ## Communication
 - Detect the user's language from the conversation (the user's own messages, anywhere in the session - not just this invocation: a bare slash command like `/bootstrap` carries no language signal by itself). If nothing in the conversation gives a signal, fall back to the OS locale (`node -e "console.log(Intl.DateTimeFormat().resolvedOptions().locale)"`) before defaulting to English. ALWAYS reply in that language for every user-facing message: questions, progress, confirmations, summaries, errors - including any example text quoted in this skill, which is illustrative and must be translated, never sent verbatim.
@@ -30,7 +32,7 @@ This skill pulls content in from outside (documentation, an API response, a web 
 
 ## Preflight - vault unlocked
 
-This skill reads the email key (Resend/Brevo) from the vault, so first make sure it is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then if `locked`/`expired`, run `launch.mjs unlock` (window, once a day); if the vault does not exist yet, delegate to `_add-keyring`.
+This skill reads the email key (Resend/Brevo) from the vault, so first make sure it is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then if `locked`/`expired`, run `launch.mjs unlock` (window; the vault then stays open 6 hours, and locks itself again); if the vault does not exist yet, delegate to `_add-keyring`.
 
 ---
 
@@ -47,6 +49,20 @@ email_provider=$(echo "$result" | node -e "console.log(JSON.parse(require('fs').
 ### If `email_ok = true` then silent re-configuration mode (Resend or Brevo)
 
 The project already has a provider installed (`$email_provider` is in {`resend`, `brevo`}). **Stay on that provider** (no question, no automatic switch). Do NOT run `setup-email.mjs` (the script refuses to overwrite existing `mail.ts` + `contact.ts`).
+
+**First, which key the project holds.** The script compares, in its own process, the project's key with the account's key in the vault, and never prints a key (exit 2/3: open the vault first, then run it again):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" status --project-dir "<WEB_DIR>"
+```
+
+- `holds: "own"` → the project holds its own key: nothing to do on it, go to the menu.
+- `holds: "account"` → the project holds the key of the WHOLE email account (projects set up before 3.4.16): anyone who sees its `.env` (a screen share, a filmed training), a repository or a hosting that leaks, opens the whole account. Say it plainly, and propose before the menu to give the project its own key (recommended):
+  - Resend: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --replace`. The project's key, limited to sending, replaces the account's in `.env` and at the hosting; the site uses it from its next deployment (offer to deploy), and keeps sending with the account's key until then;
+  - Brevo: the key made by hand of Step 2b (Brevo), its window, then `record`.
+  Then say it once: *"Once each of your projects holds its own key (re-run `/add-email` in each one), renew the account's key at <Resend: API Keys / Brevo: SMTP & API, API keys>, then store the new one in your vault (`launch.mjs add --name <RESEND|BREVO>`), and have `/quotas` register its alert again (the shared clock keeps a copy of the account's key to send it): the old copies of the account's key (in `.env` files, at the hosting, in recordings) then stop working."* Renewing it is the user's gesture at the provider, never done for them.
+- `holds: "other"` → the project holds a key this harness did not make (made by hand, or an account key renewed since). Say so, and offer the same replacement (`--replace`, or Brevo's manual key): the user decides.
+- `holds: "none"` → a provider is installed but the project holds no key: Step 2b, then back here.
 
 Show a menu tailored to the provider:
 
@@ -69,7 +85,7 @@ Wait for the answer.
 | 1 (change sender) | Jump to **Step 6** (domain config via `_dns-resend`). | Ask for the new `BREVO_SENDER_EMAIL`. If custom domain, invoke `_dns-brevo`. Then `_push-env-vars BREVO_SENDER_EMAIL=<email>` (and `BREVO_SENDER_NAME` if changed). Reminder: the sender must be verified in the Brevo dashboard (Settings then Senders & IPs). |
 | 2 (change recipient) | Invoke `_create-contact-page` in "update recipient only" mode - run just its Step 2 (`CONTACT_RECIPIENT_EMAIL`) and skip creation if it already exists. |
 | 3 (create contact page) | Invoke `_create-contact-page` directly. |
-| 4 (start over) | For Resend: delete `RESEND_API_KEY` from `.env` + prompt to revoke it in the Resend dashboard. For Brevo: delete `BREVO_API_KEY` from `.env`. In both cases: delete `src/server/mail.ts` + `src/server/api/routers/contact.ts`. Then go back to the normal **Step 1**. |
+| 4 (start over) | For Resend: revoke the project's own key (`node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <its id, from status>`, a confirmation is asked) and delete `RESEND_API_KEY` from `.env`. For Brevo: delete `BREVO_API_KEY` from `.env`, and have the user delete the key named after the project in Brevo's console (SMTP & API, API keys). In both cases: delete `src/server/mail.ts` + `src/server/api/routers/contact.ts`. Then go back to the normal **Step 1**. |
 | 5 (other) | Ask for clarification. Do not run the install flow by default. |
 
 **At the end**, jump straight to **Step 9** (summary).
@@ -123,7 +139,7 @@ node "$VAULT" get RESEND api_key >/dev/null 2>&1; RC=$?
 - `RC=0` then key present, move on to Step 3.
 - `RC=2/3` (vault locked/expired) then warn the user, `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking), retry.
 - `RC=4` (key missing) then have it created + stored in the vault:
-  > To send emails, I need a Resend key (just once - I store it in your vault).
+  > To send emails, I need your Resend account's key (just once - I store it in your vault). It stays there: with it, I make each project a key of its own, limited to sending, and I set up your sending domains.
   > 1. Go to **https://resend.com/api-keys** then **Create API Key** then **Full Access** and copy it.
   > 2. A window will open: paste it in (masked input).
   ```bash
@@ -131,7 +147,7 @@ node "$VAULT" get RESEND api_key >/dev/null 2>&1; RC=$?
   ```
   Then retry the `get`.
 
-⚠️ The script `setup-email.mjs --provider resend` then reads `RESEND.api_key` from the vault (non-interactive), which is why the key must be there BEFORE calling it.
+⚠️ This is the ACCOUNT's key: it never goes into the project. `scripts/email-key.mjs mint` reads it from the vault in its own process to make the project's key (Step 2b), which is why it must be there BEFORE.
 
 ### If `CHOSEN_PROVIDER = brevo`
 
@@ -144,7 +160,7 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
 - `RC=0` then key present, move on to Step 3.
 - `RC=2/3` (vault locked/expired) then warn the user, `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking), retry.
 - `RC=4` (key missing) then have it created + stored in the vault:
-  > To use Brevo, I need an API key (just once - I store it in your vault).
+  > To use Brevo, I need your Brevo account's key (just once - I store it in your vault). It stays there, for your senders and your sending domain; each project gets a key of its own (next step).
   > 1. Go to **https://app.brevo.com/settings/keys/api** then **Generate a new API key** (name `claude-code`) and copy it (`xkeysib-...`).
   > 2. A window will open: paste it in (masked input).
   ```bash
@@ -152,7 +168,7 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
   ```
   Then retry the `get`.
 
-⚠️ The script `setup-email.mjs --provider brevo` then reads `BREVO.api_key` from the vault (non-interactive), so the key must be there BEFORE calling it.
+⚠️ This is the ACCOUNT's key: it never goes into the project. The scripts read it from the vault for the senders (Step 6) and to make sure the project's key is not it (Step 2b).
 
 ### Decide on the sender (Brevo only)
 
@@ -163,6 +179,43 @@ For Brevo, the script needs `--brevo-sender <email>`. By default, **ask the user
 The script writes a contact form's back-end (the `contact.send` procedure) unless told otherwise. When the email is wanted for something else (the user or the calling skill said so: password resets, notifications, a newsletter), it is added for nothing: pass `--no-contact-router` at Step 3, and do not propose the contact page at Step 7. It can be added later: the contact page puts it in place itself.
 
 For Resend, no need - by default the script writes `RESEND_FROM_EMAIL=onboarding@resend.dev` (test sender) and we ask at Step 6 whether the user wants a custom domain.
+
+---
+
+## Step 2b - The project's own sending key
+
+Never the account's key in a project (see the top of this skill). The project gets a key of its own, in its `.env` and at its hosting only, and recorded in its manifest (kind `email-key`), where `/rotate-secret` and `/delete-project` find it.
+
+### If `CHOSEN_PROVIDER = resend`
+
+Made by Resend's API, with the account's key read in the script's own process (never shown), limited to sending, and to the project's sender domain once Resend has verified it:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>"
+```
+
+- Exit 0 → one JSON line: `key.id`, `key.domain` (null on Resend's test sender: the key can then send from the account's verified domains; Step 6 limits it to the project's domain), `hosting` (`written`, or `local only` before the project is linked to its hosting). Never a key.
+- Exit 5 → the project holds a key already: read `holds` and follow Step 0 (`own`: keep it; `account` or `other`: the replacement).
+- Exit 2/3 → open the vault (`launch.mjs unlock`), retry. Exit 4 → the account's key is missing: Step 2.
+
+### If `CHOSEN_PROVIDER = brevo`
+
+Brevo's API makes no key for an ordinary account: the user makes it, once per project, guided:
+
+> This project needs a Brevo key of its own (never your account's, which stays in your vault).
+> 1. On the page I am opening, click **Generate a new API key**.
+> 2. Name it **`<PROJECT_NAME>`**: it is how you will find it the day the project goes.
+> 3. Copy it, then paste it in the small window that opens (masked input): it goes into this project only, never into our conversation.
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" collect-env --lang <LANG> \
+  --keys "BREVO_API_KEY:secret" --project-dir "<WEB_DIR>" --url "https://app.brevo.com/settings/keys/api"
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" record --project-dir "<WEB_DIR>" --provider brevo --key-name "<PROJECT_NAME>"
+```
+
+- `collect-env` non-zero → the user cancelled: stop there, say so.
+- `record` exit 5 with `holds: "account"` → the user pasted the ACCOUNT's key: say so plainly, and redo the window with a key made for the project (it is already in `.env`: the window replaces it).
+- `record` exit 0 → recorded in the project's manifest by its name (Brevo gives it no identifier the harness can read).
 
 ---
 
@@ -190,7 +243,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/setup-email.mjs" \
 
 Add `--no-contact-router` to either command when the need is not a contact form (Step 2).
 
-The script chains 7 sub-steps: preflight, get/read API key, install SDK, write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push env vars. The two contact router steps are skipped with `--no-contact-router`, and also when the project's tRPC has no `rateLimitedProcedure` (the router needs it: written anyway, it would break the build). The script then says so in a warning, and its last line carries `contactRouter: "skipped:no-rate-limit"`: say it in the summary, and do not propose the contact page before the security setup of `/bootstrap` is in place.
+The script chains 7 sub-steps: preflight, the project's own key (read in its `.env`; the account's key is refused there, compared in the script's process), install SDK, write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push the sender's env vars (never the key: it reached `.env` and the hosting at Step 2b). The two contact router steps are skipped with `--no-contact-router`, and also when the project's tRPC has no `rateLimitedProcedure` (the router needs it: written anyway, it would break the build). The script then says so in a warning, and its last line carries `contactRouter: "skipped:no-rate-limit"`: say it in the summary, and do not propose the contact page before the security setup of `/bootstrap` is in place.
 
 ### During execution
 
@@ -200,8 +253,8 @@ The script prints live:
 - `⚠️ <warning>` for non-blocking warnings (rateLimitedProcedure missing, etc.)
 - At the end, a structured **handoff banner**
 - On the last line on success, a parseable JSON object:
-  - Resend: `{"success":true,"provider":"resend","envVars":["RESEND_API_KEY","RESEND_FROM_EMAIL"]}`
-  - Brevo: `{"success":true,"provider":"brevo","envVars":["BREVO_API_KEY","BREVO_SENDER_EMAIL","BREVO_SENDER_NAME"],"contactRouter":"written"}`
+  - Resend: `{"success":true,"provider":"resend","envVars":["RESEND_FROM_EMAIL"]}`
+  - Brevo: `{"success":true,"provider":"brevo","envVars":["BREVO_SENDER_EMAIL","BREVO_SENDER_NAME"],"contactRouter":"written"}`
   - `contactRouter`: `written`, `skipped:asked` (`--no-contact-router`), `skipped:no-rate-limit` or `skipped:no-trpc`
 
 Let the output through live (no `> /tmp/...`, no capture).
@@ -212,7 +265,7 @@ Let the output through live (no `> /tmp/...`, no capture).
 2. **Identify the failed step** in the banner (`❌ Failed at: <step>`). The name maps 1:1 to a function in the script - open `setup-email.mjs` and read the function to understand.
 3. **Diagnose**:
    - `preflight` then usually an already existing file (`mail.ts` or `contact.ts`) or no Next.js / no tRPC. Handle specifically.
-   - `getApiKey` Resend/Brevo then the key is not in the vault (or the vault is locked). Store the key: `node scripts/vault/launch.mjs add --name RESEND --service Resend --fields "api_key:secret"` (or `--name BREVO --service Brevo`), after a `launch.mjs unlock` if needed. Then re-run.
+   - `getApiKey` Resend/Brevo then the project holds no key of its own, or holds the account's: Step 2b (and Step 0's replacement for the account's key). A locked vault: `launch.mjs unlock`, then re-run.
    - `installSdk` then a pnpm error (network, registry). Retry by hand: `cd <WEB_DIR> && pnpm add <pkg>`.
    - `writeMailTs` / `writeContactRouter` then FS permission (rare).
    - `registerRouter` then T3 may have reorganized `root.ts`. Patch manually: add `import { contactRouter } from "~/server/api/routers/contact";` + `contact: contactRouter,` in the `createTRPCRouter({...})`.
@@ -229,7 +282,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 
 - `stack`: `- **Email**: Resend (transactional emails via \`sendMail()\` in \`<WEB_DIR>/src/server/mail.ts\`)`
 - `env-vars`:
-  - `- \`RESEND_API_KEY\` - Resend API key`
+  - `- \`RESEND_API_KEY\` - the project's own Resend key (sending only; the account's key stays in the vault)`
   - `- \`RESEND_FROM_EMAIL\` - default sender email`
   - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`RESEND_FROM_EMAIL\`); preferably a real inbox: an address relayed by Email Routing can send the messages to spam`
 - `conventions`:
@@ -239,7 +292,7 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 
 - `stack`: `- **Email**: Brevo SDK v5 (\`BrevoClient\`) - transactional emails via \`sendMail()\` in \`<WEB_DIR>/src/server/mail.ts\``
 - `env-vars`:
-  - `- \`BREVO_API_KEY\` - Brevo transactional API key`
+  - `- \`BREVO_API_KEY\` - the project's own Brevo key, made in Brevo's console under the project's name (the account's key stays in the vault)`
   - `- \`BREVO_SENDER_EMAIL\` - default sender email`
   - `- \`BREVO_SENDER_NAME\` - default sender name`
   - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`); preferably a real inbox: an address relayed by Email Routing can send the messages to spam`
@@ -332,6 +385,17 @@ If `cf_ok = false` then propose `/start` to configure Cloudflare, or to leave th
 
 Invoke `_push-env-vars` with `RESEND_FROM_EMAIL=<email>`.
 
+#### The project's key, limited to its domain (Cases 2 and 3)
+
+The key made at Step 2b was not limited to a domain while the sender was Resend's test address. Once the sender's domain is verified, make it again, limited to that domain, then revoke the first one:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --rotate
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <each id of toRevoke>
+```
+
+A confirmation is asked before the revocation. Within this same run nothing was deployed with the first key, so it goes at once; if the site has been deployed since it was made, revoke it only after the next deployment (until then, the live site sends with it).
+
 ### If Brevo (sender already defined at Step 2)
 
 The Brevo sender was passed to the script at Step 3 and is already in place. If the user wants to **change** it now:
@@ -398,6 +462,7 @@ Adapt depending on the provider and the situation:
 
 ### In all cases, add:
 
+- *The project holds its own sending key* (Resend: limited to sending, and to `<domain>` when it is set; Brevo: the key `<PROJECT_NAME>` made in its console). *Your account's key stays in your vault: none of your projects holds it.*
 - *The sending engine is ready (the `contact.send` tRPC procedure, with honeypot + escape + rate limiting)*
 - If the contact page was created: *Your `/contact` page is ready, you can test it right away*
 - Otherwise: *When you want a contact page, tell me "create me a contact page"*

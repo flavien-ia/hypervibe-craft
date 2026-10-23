@@ -13,6 +13,11 @@
 // Sur une machine où une clé de fournisseur est lisible hors du coffre, les lancements sont
 // sautés (et dits) : un script qui trouverait une clé irait jusqu'au fournisseur.
 //
+// Depuis la 3.4.16, la première lecture qui trouve la session expirée la verrouille pour de vrai
+// (`bw lock`, puis son fichier retiré, scripts/vault/session.mjs) : la suivante trouve un coffre
+// verrouillé, d'où le code 2 ou 3 selon l'ordre des lectures. `bw` y est joué par un faux
+// (HYPERVIBE_BW_STANDIN) : une recette ne lance jamais l'outil du coffre.
+//
 //   node scripts/tests/test-delete-vault.mjs
 
 import { spawn, spawnSync } from "node:child_process";
@@ -74,14 +79,28 @@ function maison(coffre) {
   return dir;
 }
 
+// Le faux `bw` : il note ce qu'il reçoit (la session de recette dans son environnement, ou non).
+const FAUX_BW = join(racine, "faux-bw.mjs");
+writeFileSync(
+  FAUX_BW,
+  'import { appendFileSync } from "node:fs";\n' +
+    "appendFileSync(process.env.FAKE_BW_LOG, JSON.stringify({ argv: process.argv.slice(2), session: process.env.BW_SESSION === 'session-de-recette' }) + '\\n');\n" +
+    "process.stdout.write('Your vault is locked.\\n');\n",
+);
+const appelsBw = (dossier) => {
+  const log = join(dossier, "faux-bw.log");
+  return existsSync(log) ? readFileSync(log, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : [];
+};
+
 function environnement(dossier) {
-  const env = { ...process.env, HOME: dossier, USERPROFILE: dossier, APPDATA: join(dossier, "appdata"), XDG_DATA_HOME: join(dossier, "appdata"), VERCEL_TOKEN: GOOD_TOKEN, HYPERVIBE_VERCEL_API: API };
+  const env = { ...process.env, HOME: dossier, USERPROFILE: dossier, APPDATA: join(dossier, "appdata"), XDG_DATA_HOME: join(dossier, "appdata"), VERCEL_TOKEN: GOOD_TOKEN, HYPERVIBE_VERCEL_API: API, HYPERVIBE_BW_STANDIN: FAUX_BW, FAKE_BW_LOG: join(dossier, "faux-bw.log") };
   for (const k of CLES) delete env[k];
   return env;
 }
 
 function lancer(script, args, coffre) {
-  const env = environnement(maison(coffre));
+  const dossier = maison(coffre);
+  const env = environnement(dossier);
   return new Promise((fini) => {
     const p = spawn(process.execPath, [script, ...args], { env, cwd: racine });
     let stdout = "";
@@ -95,7 +114,7 @@ function lancer(script, args, coffre) {
       } catch {
         /* dit par les contrôles */
       }
-      fini({ code, stdout, stderr, rapport });
+      fini({ code, stdout, stderr, rapport, dossier });
     });
   });
 }
@@ -132,7 +151,9 @@ try {
     check("... et aucun compte rendu n'est écrit (rien n'a tourné)", r.stdout.trim() === "", r.stdout.slice(0, 200));
 
     r = await executer({ project: "recette-coffre", vercel: site, neon: base }, ["vercel", "neon"], "expire");
-    check("coffre expiré : refus, code 3, le site intact", r.code === 3 && /expire/.test(r.stderr) && siteLa() && suppressions() === 0, dit(r));
+    check("coffre expiré : refus (code 3, ou 2 une fois la session verrouillée par la première lecture), le site intact", (r.code === 3 || r.code === 2) && /expire|verrouille/.test(r.stderr) && siteLa() && suppressions() === 0, dit(r));
+    const verrou = appelsBw(r.dossier);
+    check("... et la session expirée a été verrouillée pour de vrai : bw lock, sa session dans l'environnement, son fichier retiré", verrou.length >= 1 && verrou.every((c) => c.argv.join(" ") === "lock" && c.session) && !existsSync(join(r.dossier, ".hypervibe", "bw-session")), JSON.stringify(verrou));
 
     r = await executer({ project: "recette-coffre", vercel: site, neon: base }, ["all"], "verrouille");
     check("périmètre « tout » : même refus", r.code === 2 && siteLa(), dit(r));
@@ -149,7 +170,8 @@ try {
     r = await lancer(DISCOVER, ["--project", "recette-coffre", "--project-dir", projet], "verrouille");
     check("coffre verrouillé, aucune clé ailleurs : refus d'entrée, code 2, rien sur la sortie standard", r.code === 2 && r.stdout.trim() === "" && /vault is locked/.test(r.stderr), dit(r));
     r = await lancer(DISCOVER, ["--project", "recette-coffre", "--project-dir", projet], "expire");
-    check("coffre expiré : code 3", r.code === 3 && r.stdout.trim() === "" && /vault is expired/.test(r.stderr), dit(r));
+    check("coffre expiré : refus d'entrée (code 3, ou 2 une fois la session verrouillée par la première lecture), rien sur la sortie standard", (r.code === 3 || r.code === 2) && r.stdout.trim() === "" && /vault is (?:expired|locked)/.test(r.stderr), dit(r));
+    check("... et la session expirée a été verrouillée pour de vrai, son fichier retiré", appelsBw(r.dossier).some((c) => c.argv.join(" ") === "lock" && c.session) && !existsSync(join(r.dossier, ".hypervibe", "bw-session")), JSON.stringify(appelsBw(r.dossier)));
 
     console.log("\n── La mémoire : ce qui est gardé n'est pas dit supprimé ──");
     const memoire = mkdtempSync(join(racine, "memoire-"));

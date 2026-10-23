@@ -96,6 +96,80 @@ async function fetchJson(url, options = {}, timeoutMs = 10000) {
   }
 }
 
+// ─── The month's cost (3.4.16 / 2.4.15) ──────────────────────────────
+// Only what is read or computed for sure: Vercel's own billing on a paid plan, R2's storage
+// beyond its free 10 GB at its published price, Neon's free plan. Nothing is guessed, and what is
+// not counted is said (cost.notCounted). The skill shows it only when the person asks about cost.
+const R2_STANDARD_USD_PER_GB_MONTH = 0.015; // developers.cloudflare.com/r2/pricing, read on 23/10/2026
+const MONTH_FRACTION = (NOW - MONTH_START) / (MONTH_END - MONTH_START);
+
+/** A JSONL answer, one JSON object per line (Vercel's FOCUS billing charges). */
+async function fetchJsonLines(url, options = {}, timeoutMs = 20000) {
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: ac.signal });
+    const text = await res.text();
+    if (!res.ok) return { ok: false, status: res.status, lines: [] };
+    const lines = [];
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      try {
+        lines.push(JSON.parse(line));
+      } catch {
+        return { ok: false, status: res.status, lines: [], unreadable: true };
+      }
+    }
+    return { ok: true, status: res.status, lines };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+/** The month's Vercel charges (GET /v1/billing/charges, FOCUS 1.3, from the 1st of the month to
+ *  now): what is billed so far, and the month at this pace. Usage charges are projected over the
+ *  month; the rest (the plan's seats, taxes, credits) counts once, never multiplied. */
+async function vercelMonthCost(token, teamId) {
+  const url = `https://api.vercel.com/v1/billing/charges?from=${encodeURIComponent(MONTH_START.toISOString())}&to=${encodeURIComponent(NOW.toISOString())}${teamId ? `&teamId=${encodeURIComponent(teamId)}` : ""}`;
+  const r = await fetchJsonLines(url, { headers: { Authorization: `Bearer ${token}` } }).catch(() => ({ ok: false, status: 0, lines: [] }));
+  if (!r.ok) {
+    return {
+      service: "vercel",
+      label: "Vercel",
+      status: "unavailable",
+      note: r.status === 403
+        ? "Vercel refuse de lire la facturation avec cette clé (il faut un rôle qui voit la facturation de l'équipe)."
+        : `Facturation Vercel illisible (${r.unreadable ? "réponse illisible" : `HTTP ${r.status || "sans réponse"}`}).`,
+    };
+  }
+  let usage = 0;
+  let other = 0;
+  const currencies = new Set();
+  for (const c of r.lines) {
+    const billed = Number(c?.BilledCost);
+    if (!Number.isFinite(billed)) continue;
+    if (c.BillingCurrency) currencies.add(String(c.BillingCurrency));
+    if (c.ChargeCategory === "Usage") usage += billed;
+    else other += billed;
+  }
+  const currency = currencies.size === 1 ? [...currencies][0] : currencies.size === 0 ? "USD" : null;
+  const round = (n) => Math.round(n * 100) / 100;
+  const early = MONTH_FRACTION < 1 / 31;
+  return {
+    service: "vercel",
+    label: "Vercel",
+    status: currency ? "measured" : "unavailable",
+    currency,
+    monthToDate: round(usage + other),
+    projected: currency && !early ? round(other + usage / MONTH_FRACTION) : null,
+    note: !currency
+      ? "Facturation Vercel en plusieurs devises : non additionnée."
+      : early
+        ? "Mois commencé depuis moins d'un jour : pas encore de projection."
+        : "Facturé depuis le 1er du mois ; l'usage est projeté au rythme actuel, le forfait compté une fois.",
+  };
+}
+
 function asMetric(name, used, limit, unit, scope = "account-month") {
   return {
     name,
@@ -211,14 +285,42 @@ async function fetchNeon() {
     details.push(...chunk);
   }
 
+  // The size of each project, read where Neon computes the free plan's cap: the sum of the
+  // logical_size of its branches ("The Free plan caps storage per project based on logical_size
+  // across branches", "Sum across branches to get total project storage": Neon's usage and cost
+  // calculations, read on 23/10/2026). The project's own figure (synthetic_storage_size) is a
+  // legacy counter: 0 on a usage-based plan (312 MB of a Launch account shown as 0 GB, Bastien
+  // Detraz, 22/10/2026), and 0 on the 17 projects of a free account on 16/10/2026, full databases
+  // included, behind a green 0 %. It is only a fallback now, when the branches do not answer.
+  // A size read nowhere is said, never shown as 0 GB.
+  const sizes = [];
+  for (let i = 0; i < details.length; i += CHUNK) {
+    const chunk = await Promise.all(
+      details.slice(i, i + CHUNK).map(async (p) => {
+        const b = await fetchJson(`https://console.neon.tech/api/v2/projects/${p.id}/branches`, {
+          headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json" },
+        }, 15000).catch(() => null);
+        if (b?.ok && Array.isArray(b.json?.branches)) {
+          return { bytes: b.json.branches.reduce((n, br) => n + (Number(br.logical_size) || 0), 0), from: "branches" };
+        }
+        const own = Number(p.synthetic_storage_size) || 0;
+        return own > 0 ? { bytes: own, from: "project" } : { bytes: 0, from: "unread" };
+      }),
+    );
+    sizes.push(...chunk);
+  }
+  const sizeUnread = details.filter((_, i) => sizes[i].from === "unread").map((p) => p.name);
+  const sizeFromProject = details.filter((_, i) => sizes[i].from === "project").map((p) => p.name);
+
   // Build per-project view. On Free, storage, compute AND egress are all capped
   // per project. Egress was long treated here as pooled across the account;
   // Neon's plans page states otherwise ("5 GB per project per month", "the
   // network transfer allowance is per project", checked 2026-09-18), so a sum
   // of small projects no longer reads as an alarm: only the heaviest one counts.
-  const projectsView = details.map((p) => ({
+  const projectsView = details.map((p, i) => ({
     name: p.name,
-    storageGB: (p.synthetic_storage_size || 0) / 1073741824,
+    sizeFrom: sizes[i].from,
+    storageGB: sizes[i].bytes / 1073741824,
     computeH: (p.compute_time_seconds || 0) / 3600,
     egressGB: (p.data_transfer_bytes || 0) / 1073741824,
   }));
@@ -241,14 +343,43 @@ async function fetchNeon() {
   // free orgs; paid orgs see consumption without a limit bar.
   const isFree = plan === "free";
 
+  // Never a green 0 % on a size nobody read: no project's size could be read, or every project
+  // weighs 0 while some of them compute or send data (an empty project still weighs a few
+  // megabytes). The storage is then "unavailable", with its reason.
+  const storageBlind =
+    projectsView.length > 0 &&
+    (sizeUnread.length === projectsView.length ||
+      (projectsView.every((p) => p.storageGB === 0) && projectsView.some((p) => p.computeH > 0 || p.egressGB > 0)));
+  const storageBlindReason = !storageBlind
+    ? null
+    : sizeUnread.length === projectsView.length
+      ? "Neon n'a donné la taille d'aucun projet (ni par ses branches, ni par le projet lui-même)."
+      : "Neon donne 0 octet pour chaque projet alors que du calcul ou du trafic sortant est compté : la taille n'est pas lisible ici.";
+  const totalStorageGB = projectsView.reduce((n, p) => n + p.storageGB, 0);
+
   const metrics = [
-    asMetric(
-      `Storage projet le + gros (${heaviestStorage.name})`,
-      heaviestStorage.storageGB,
-      isFree ? L.storageGBPerProject : null,
-      "GB",
-      "per-project-month",
-    ),
+    storageBlind
+      ? {
+          name: "Storage projet le + gros",
+          used: null,
+          limit: isFree ? L.storageGBPerProject : null,
+          unit: "GB",
+          pctUsed: null,
+          scope: "per-project-month",
+          unavailable: `${storageBlindReason} À vérifier dans la console Neon (onglet Storage de chaque projet).`,
+        }
+      : asMetric(
+          `Storage projet le + gros (${heaviestStorage.name})`,
+          heaviestStorage.storageGB,
+          isFree ? L.storageGBPerProject : null,
+          "GB",
+          "per-project-month",
+        ),
+    // The free plan caps the total too, independently of the per-project cap (Neon's plans page,
+    // read on 23/10/2026: 1 GB per project, 20 GB across all projects).
+    ...(isFree && L.storageGBTotal && !storageBlind
+      ? [asMetric(`Storage total (${projectsView.length} projets)`, totalStorageGB, L.storageGBTotal, "GB", "account")]
+      : []),
     asMetric(
       `Compute projet le + actif (${heaviestCompute.name})`,
       heaviestCompute.computeH,
@@ -271,13 +402,18 @@ async function fetchNeon() {
   if (overComputeLimit.length) overParts.push(`compute > ${L.computeHoursPerProject} h sur ${overComputeLimit.length} projet(s) : ${overComputeLimit.map(p => p.name).join(", ")}`);
   if (overEgressLimit.length) overParts.push(`egress > ${L.egressGBPerProjectPerMonth} GB sur ${overEgressLimit.length} projet(s) : ${overEgressLimit.map(p => p.name).join(", ")}`);
 
-  const note = isFree
-    ? `Plan Free détecté. Limites par projet : ${L.storageGBPerProject} GB storage · ${L.computeHoursPerProject} h compute · ${L.egressGBPerProjectPerMonth} GB egress par mois. Account : ${L.projectsMax} projets max. Vérifié le ${LIMITS.neon.lastChecked}.${overParts.length ? ` ⚠️ ${overParts.join(" · ")}` : ""}`
-    : `Plan ${plan} détecté. Pas de plafond dur (facturation à l'usage). Les chiffres ci-dessus reflètent ta consommation ce mois.`;
+  const sizeNote = storageBlind
+    ? ` ⚠️ Stockage indisponible : ${storageBlindReason}`
+    : (sizeFromProject.length ? ` Taille de ${sizeFromProject.length} projet(s) (${sizeFromProject.join(", ")}) lue sur le chiffre du projet : ses branches n'ont pas répondu.` : "") +
+      (sizeUnread.length ? ` ⚠️ Taille illisible pour ${sizeUnread.length} projet(s) (${sizeUnread.join(", ")}) : comptée 0, à vérifier dans la console Neon.` : "");
+  const note = (isFree
+    ? `Plan Free détecté. Limites par projet : ${L.storageGBPerProject} GB storage${L.storageGBTotal ? ` (${L.storageGBTotal} GB au total sur tous les projets)` : ""} · ${L.computeHoursPerProject} h compute · ${L.egressGBPerProjectPerMonth} GB egress par mois. Account : ${L.projectsMax} projets max. Vérifié le ${LIMITS.neon.lastChecked}.${overParts.length ? ` ⚠️ ${overParts.join(" · ")}` : ""}`
+    : `Plan ${plan} détecté. Pas de plafond dur (facturation à l'usage). Les chiffres ci-dessus reflètent ta consommation ce mois.`) + sizeNote;
 
   const breakdown = projects.length > 1 ? projectsByStorage.map((p) => ({
     label: p.name,
     storageGB: Math.round(p.storageGB * 1000) / 1000,
+    ...(p.sizeFrom === "unread" || storageBlind ? { storageUnread: true } : {}),
     computeH: Math.round(p.computeH * 100) / 100,
     egressGB: Math.round(p.egressGB * 1000) / 1000,
     overStorage: p.storageGB > L.storageGBPerProject,
@@ -285,7 +421,11 @@ async function fetchNeon() {
     overEgress: p.egressGB > L.egressGBPerProjectPerMonth,
   })) : null;
 
-  return svc("neon", "Neon (Postgres)", true, metrics, note, breakdown);
+  const cost = isFree
+    ? { service: "neon", label: "Neon", status: "free", currency: "USD", monthToDate: 0, projected: 0, note: "Plan gratuit : 0 $." }
+    : { service: "neon", label: "Neon", status: "not-estimated", note: `Plan ${plan} : facturé à l'usage, la facture se lit dans la console Neon (Billing) ; elle n'est pas estimée ici.` };
+
+  return svc("neon", "Neon (Postgres)", true, metrics, note, breakdown, { cost });
 }
 
 // ─── Service: Cloudflare (R2 + Workers) ──────────────────────────────
@@ -386,12 +526,17 @@ async function fetchR2(token, accountId) {
   });
 
   let storageBytes = null;
+  let perBucket = [];
   let classAOps = null;
   let classBOps = null;
   if (gql.ok && gql.json?.data?.viewer?.accounts?.[0]) {
     const acc = gql.json.data.viewer.accounts[0];
     const storageRows = acc.r2StorageAdaptiveGroups || [];
-    if (storageRows.length > 0) storageBytes = sumLatestBucketStorage(storageRows).bytes;
+    if (storageRows.length > 0) {
+      const latest = sumLatestBucketStorage(storageRows);
+      storageBytes = latest.bytes;
+      perBucket = latest.perBucket;
+    }
     const opsBuckets = acc.r2OperationsAdaptiveGroups || [];
     classAOps = 0;
     classBOps = 0;
@@ -415,9 +560,47 @@ async function fetchR2(token, accountId) {
   if (classBOps !== null) metrics.push(asMetric("Opérations classe B (reads)", classBOps, R2.classBOpsPerMonth, "ops", "account-month"));
   metrics.push(asMetric("Buckets", bucketList.length, null, "buckets", "account"));
 
-  const breakdown = bucketList.length > 0
-    ? bucketList.map((b) => ({ label: `${b.name}${b.jurisdiction === "eu" ? " (EU)" : ""}`, creationDate: b.creation_date }))
+  // Each bucket with its size and its number of objects, the largest first, like Neon's projects
+  // (3.4.16): the account's sum said that storage was filling up, never which bucket. The size
+  // comes from the analytics, which name a bucket without its jurisdiction: a name that exists
+  // in both jurisdictions gets the size the analytics give that name. A bucket the analytics do
+  // not measure yet (created in the last hours) has no size, rather than 0. Read only: nothing
+  // here deletes anything.
+  const sizeOf = new Map(perBucket.map((b) => [b.name, b]));
+  const listed = new Set(bucketList.map((b) => b.name));
+  const rows = [
+    ...bucketList.map((b) => ({ name: b.name, jurisdiction: b.jurisdiction, creationDate: b.creation_date ?? null, measured: sizeOf.get(b.name) ?? null })),
+    // Measured but not listed: the EU list failed, or the bucket went in the last three hours.
+    ...perBucket.filter((b) => !listed.has(b.name)).map((b) => ({ name: b.name, jurisdiction: null, creationDate: null, measured: b })),
+  ];
+  const breakdown = rows.length > 0
+    ? rows
+        .map((b) => ({
+          label: `${b.name}${b.jurisdiction === "eu" ? " (EU)" : ""}`,
+          bucket: b.name,
+          jurisdiction: b.jurisdiction,
+          storageGB: b.measured ? Math.round((b.measured.bytes / 1073741824) * 1000) / 1000 : null,
+          objects: b.measured ? b.measured.objects : null,
+          creationDate: b.creationDate,
+        }))
+        .sort((a, b) => (b.storageGB ?? -1) - (a.storageGB ?? -1))
     : null;
+
+  // The storage beyond the free 10 GB, at Standard storage's published price, if the size stays
+  // the same all month (R2 bills GB-months). Operations are not counted here.
+  const overGB = storageBytes === null ? null : Math.max(0, storageBytes / 1073741824 - R2.storageGBPerMonth);
+  const cost = overGB === null
+    ? { service: "cloudflareR2", label: "Cloudflare R2", status: "unavailable", note: "Taille R2 non mesurée : pas d'estimation." }
+    : {
+        service: "cloudflareR2",
+        label: "Cloudflare R2",
+        status: "estimated",
+        currency: "USD",
+        projected: Math.round(overGB * R2_STANDARD_USD_PER_GB_MONTH * 100) / 100,
+        note: overGB > 0
+          ? `${(Math.round(overGB * 100) / 100).toLocaleString("fr-FR")} GB au-delà des ${R2.storageGBPerMonth} GB gratuits, à ${R2_STANDARD_USD_PER_GB_MONTH} $ le GB-mois, si la taille reste la même tout le mois (opérations non comptées).`
+          : `Sous les ${R2.storageGBPerMonth} GB gratuits : 0 $ pour le stockage (opérations non comptées).`,
+      };
 
   return svc(
     "cloudflareR2",
@@ -426,6 +609,7 @@ async function fetchR2(token, accountId) {
     metrics,
     storageBytes === null ? "Analytics R2 non disponibles (compte trop récent ou trop peu d'usage)" : null,
     breakdown,
+    { cost },
   );
 }
 
@@ -435,6 +619,7 @@ async function fetchR2(token, accountId) {
 // 8.5 GB reported for 10.2 GB actually stored (2026-09-13). A bucket whose latest
 // sample lags the account's newest sample by more than 3 hours has been deleted:
 // it no longer counts.
+// perBucket: each bucket counted, {name, bytes, objects}, the largest first (3.4.16).
 function sumLatestBucketStorage(rows) {
   const latest = new Map();
   for (const r of rows || []) {
@@ -454,13 +639,16 @@ function sumLatestBucketStorage(rows) {
   let bytes = 0;
   let objects = 0;
   let buckets = 0;
-  for (const v of latest.values()) {
+  const perBucket = [];
+  for (const [name, v] of latest) {
     if (newest - v.at > 3 * 3600 * 1000) continue;
     bytes += v.bytes;
     objects += v.objects;
     buckets++;
+    perBucket.push({ name, bytes: v.bytes, objects: v.objects });
   }
-  return { bytes, objects, buckets };
+  perBucket.sort((a, b) => b.bytes - a.bytes);
+  return { bytes, objects, buckets, perBucket };
 }
 
 async function fetchWorkers(token, accountId) {
@@ -731,6 +919,11 @@ async function fetchVercel() {
       ? `Plan ${planFr} détecté. Inclus : 1 TB bandwidth + 1000 GB-h function-time + 24k min build par mois (dépassement facturé à l'usage). Les chiffres détaillés ne sont pas exposés en API - voir ${dashboardUrl}.`
       : `Plan ${planFr} détecté. Quotas définis par contrat. Voir ${dashboardUrl}.`;
 
+  // The month's cost, from Vercel's own billing on a paid plan (3.4.16).
+  const cost = plan === "hobby"
+    ? { service: "vercel", label: "Vercel", status: "free", currency: "USD", monthToDate: 0, projected: 0, note: "Plan Hobby : gratuit." }
+    : await vercelMonthCost(token, teamId);
+
   return svc(
     "vercel",
     "Vercel (hébergement)",
@@ -740,6 +933,8 @@ async function fetchVercel() {
       ...(projectCount !== null ? [asMetric("Projets", projectCount, null, "projets", "account")] : []),
     ],
     planNote,
+    null,
+    { cost },
   );
 }
 
@@ -777,10 +972,29 @@ async function main() {
     }
   }
 
+  // The month's cost, gathered from the services that could say it (they carry it as `cost`).
+  const items = [];
+  for (const s of services) {
+    if (s.cost) items.push(s.cost);
+    delete s.cost;
+  }
+  const counted = items.filter((c) => typeof c.projected === "number" && c.currency === "USD");
+  const cost = {
+    currency: "USD",
+    items,
+    projectedTotal: Math.round(counted.reduce((n, c) => n + c.projected, 0) * 100) / 100,
+    complete: items.length > 0 && items.every((c) => counted.includes(c)),
+    notCounted: [
+      "Cloudflare : l'abonnement (Workers payant, autres produits) n'est pas lu, la clé Cloudflare du harnais n'a pas le droit de lire la facturation.",
+      "Brevo, Resend : leur forfait n'est pas compté ici.",
+    ],
+  };
+
   const out = {
     fetchedAt: NOW.toISOString(),
     billingCycle,
     services,
+    cost,
     selfHealing: { resendKeyJustCreated },
   };
 

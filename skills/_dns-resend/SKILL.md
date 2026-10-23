@@ -120,8 +120,9 @@ printf 'header = "Authorization: Bearer %s"\n' "$RTOK" | curl -s --config - "htt
 ## Step 5 - Update the project
 
 1. `_push-env-vars` with `RESEND_FROM_EMAIL=contact@<domain>` (updates the local `.env` AND Vercel, idempotent).
-2. Update CLAUDE.md if the sending email is mentioned there.
-3. Inform:
+2. When the domain is verified and the project holds its own sending key not yet limited to a domain (`node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" status --project-dir "<WEB_DIR>"`: its `recorded` entry has no `domain`), offer to make it again limited to this domain: `email-key.mjs mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --rotate`, then, once the site has been deployed with the new key, `email-key.mjs revoke --project-dir "<WEB_DIR>" --id <each id of toRevoke>` (a confirmation is asked). Called by `/add-email` within its own run, the first key can go at once: nothing was deployed with it.
+3. Update CLAUDE.md if the sending email is mentioned there.
+4. Inform:
 
 > ✅ **Domain connected to Resend!** Your emails will be sent from `contact@<domain>` instead of `onboarding@resend.dev`.
 >

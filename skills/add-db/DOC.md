@@ -35,7 +35,7 @@ Adds a **database** to your project so you can store information that persists o
 ## Tips
 
 {{callout:tip|Neon free plan}}
-Neon offers a very generous free plan: 100 projects max, 0.5 GB of storage per project, 100 compute hours per month. The database pauses automatically when nobody is using it (zero cost when idle). More than enough for the vast majority of projects.
+Neon offers a very generous free plan: 100 projects max, 1 GB of storage per project (20 GB across all projects), 100 compute hours per month. The database pauses automatically when nobody is using it (zero cost when idle). More than enough for the vast majority of projects.
 {{/callout}}
 
 {{callout:info|Backups come for free}}

@@ -80,7 +80,7 @@ expect('git commit -am "wip"', "deny");
 expect('git commit --all -m "wip"', "deny");
 expect("git commit -a -m wip", "deny");
 expect("cd src && git add -A && git commit -m ok", "deny");
-expect('git -C "C:/DEV/hypervibe-harness" add -A', "deny");
+expect('git -C "C:/DEV/hypervibe-craft" add -A', "deny");
 expect("git -C src add .", "deny");
 expect("git --no-pager -c user.name=x add -A", "deny");
 expect('node scripts/neon/run-sql.mjs "DROP TABLE clients"', "deny");
@@ -179,7 +179,7 @@ expect("gh release list", "pass");
 expect("gh release create v1.0 --notes x", "pass");
 expect("grep -rn 'gh pr merge' skills/", "pass");
 expect('echo "gh repo delete acme/site"', "pass");
-expect('git -C "C:/DEV/hypervibe-harness" push origin main --follow-tags', "ask");
+expect('git -C "C:/DEV/hypervibe-craft" push origin main --follow-tags', "ask");
 expect("git --no-pager -C x push", "ask");
 expect("vercel --prod", "ask");
 expect("vercel deploy --prod", "ask");
@@ -786,6 +786,16 @@ console.log("\n── La table OpenCode : pas plus large que le garde-fou, la ou
   checks += 1;
   if (plus.length) failures += 1;
   console.log(`${plus.length ? "FAIL" : "OK  "} chez OpenCode, une lecture chez un registraire demande aussi, ou le garde-fou la laisse passer${plus.length ? ` : ${plus.join(" | ")}` : ""}`);
+  // La cle d'envoi d'un projet (3.4.16) : OpenCode demande pour tout appel du script, plus que le
+  // garde-fou (qui laisse passer status, mint, record), jamais moins (revoke).
+  const cles = [
+    [`node "C:/p/scripts/email-key.mjs" revoke --project-dir "C:/p/site" --id k-1`, "ask"],
+    [`node "C:/p/scripts/email-key.mjs" status --project-dir "C:/p/site"`, "allow"],
+  ];
+  const clesEcarts = cles.filter(([command, hook]) => openCodeSays(command) !== "ask" || hookSays(command) !== hook);
+  checks += 1;
+  if (clesEcarts.length) failures += 1;
+  console.log(`${clesEcarts.length ? "FAIL" : "OK  "} la table OpenCode demande avant la revocation d'une cle d'envoi, comme le garde-fou${clesEcarts.length ? ` : ${clesEcarts.map(([c]) => c).join(" | ")}` : ""}`);
 
   // Une adresse d'API posee dans une variable plus tot sur la ligne (revue externe de la 3.4.11) :
   // l'hote vient alors AVANT curl dans le texte. La table le dit par des motifs dans cet ordre-la,
@@ -1124,6 +1134,17 @@ console.log("\n── Un changement chez un registraire demande, comme une reecr
   expect(`curl -s -G "https://api.gandi.net/v5/domain/domains" -d "per_page=100"`, "pass");
   expect(`node "$PLUGIN_DIR/scripts/registrar-ovh.mjs" check`, "pass");
   expect(`node scripts/registrar-ovh.mjs nameservers example.fr`, "pass");
+  // Le script de la cle d'envoi du plugin (3.4.16) appelle Resend dans son propre processus :
+  // revoke met fin a une cle en service (un site qui envoie encore avec elle cesse d'envoyer), un
+  // verbe que la ligne ne montre pas demande ; status, mint, record et compare lisent ou creent.
+  expect(`node "$PLUGIN_DIR/scripts/email-key.mjs" revoke --project-dir "C:/p/site" --id k-1`, "ask");
+  expect(`node scripts/email-key.mjs "$VERB" --project-dir .`, "ask");
+  expect(`node scripts/email-key.mjs`, "ask");
+  expect(`E="/p/scripts/email-key.mjs"\nnode "$E" revoke --project-dir . --id k-1`, "ask");
+  expect(`node "$PLUGIN_DIR/scripts/email-key.mjs" status --project-dir "C:/p/site"`, "pass");
+  expect(`node "$PLUGIN_DIR/scripts/email-key.mjs" mint --project-dir "C:/p/site" --name site --rotate`, "pass");
+  expect(`node scripts/email-key.mjs record --project-dir . --provider brevo --key-name site`, "pass");
+  expect(`node scripts/email-key.mjs compare --item BREVO_SITE`, "pass");
   expect(`curl -s -X PUT "https://api.lws.net.example.com/x"`, "pass");
 }
 {
@@ -1424,6 +1445,80 @@ expect("sandbox-exec -n no-network pnpm test", "pass");
 expect("for i in {1..5000}; do echo $i; done", "pass");
 expect(`echo ${"{a,b}".repeat(3)}`, "pass");
 expect("cp a.{js,ts} dir/", "pass");
+
+console.log("\n── La question d'un push nomme les commits qui partent (3.4.16 / 2.4.15) ──");
+{
+  // Le 21/10/2026, un « oui, pousse » donné pour un commit a aussi emporté deux commits d'une autre
+  // session du même dépôt. Un vrai dépôt temporaire, deux commits en avance sur sa branche amont
+  // (un dépôt nu local, rien ne sort de la machine) ; la décision reste « ask » partout.
+  const racine = mkdtempSync(join(tmpdir(), "hv-push-liste-"));
+  const sansCrochets = join(racine, "sans-crochets");
+  const g = (cwd, ...args) =>
+    execFileSync("git", ["-c", `core.hooksPath=${sansCrochets}`, "-c", "commit.gpgsign=false", "-c", "user.name=Recette", "-c", "user.email=recette@example.com", ...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  const travail = join(racine, "travail");
+  const seul = join(racine, "seul");
+  let pret = true;
+  try {
+    for (const depot of [travail, seul]) {
+      g(racine, "init", "-q", depot);
+      g(depot, "symbolic-ref", "HEAD", "refs/heads/main");
+      writeFileSync(join(depot, "a.txt"), "a\n");
+      g(depot, "add", "a.txt");
+      g(depot, "commit", "-q", "--no-verify", "-m", "Premier commit, deja publie");
+    }
+    g(racine, "clone", "-q", "--bare", travail, join(racine, "distant.git"));
+    g(travail, "remote", "add", "origin", join(racine, "distant.git"));
+    g(travail, "fetch", "-q", "origin");
+    g(travail, "branch", "-q", "--set-upstream-to=origin/main", "main");
+    for (const [fichier, message] of [["b.txt", "Commit de cette session"], ["c.txt", "Commit d'une autre session"]]) {
+      writeFileSync(join(travail, fichier), `${fichier}\n`);
+      g(travail, "add", fichier);
+      g(travail, "commit", "-q", "--no-verify", "-m", message);
+    }
+  } catch (e) {
+    pret = false;
+    checks += 1;
+    failures += 1;
+    console.log(`FAIL le dépôt temporaire n'a pas pu être préparé : ${String(e?.message ?? e).split("\n")[0]}`);
+  }
+  if (pret) {
+    const pousse = (command, cwd) => call({ tool_name: "Bash", tool_input: { command }, hook_event_name: "PreToolUse", ...(cwd ? { cwd } : {}) });
+    const liste = (r) => /2 commits leave with it/.test(r?.permissionDecisionReason ?? "") && /Commit de cette session/.test(r.permissionDecisionReason) && /Commit d'une autre session/.test(r.permissionDecisionReason) && !/Premier commit/.test(r.permissionDecisionReason);
+    const muet = (r) => r?.permissionDecision === "ask" && !/leave with it/.test(r.permissionDecisionReason ?? "");
+    const cas = [
+      ["git -C <dépôt> push : les deux commits nommés, pas celui déjà publié", () => { const r = pousse(`git -C "${travail}" push`); return r?.permissionDecision === "ask" && liste(r); }],
+      ["git push dans le dossier de la session (cwd du crochet) : la même liste", () => { const r = pousse("git push", travail); return r?.permissionDecision === "ask" && liste(r); }],
+      ["git push origin, le distant de la branche amont : la même liste", () => liste(pousse(`git -C "${travail}" push origin`))],
+      ["git push -u : la même liste", () => liste(pousse(`git -C "${travail}" push -u`))],
+      ["git push origin main, la forme la plus courante : la même liste, lue sur origin/main..main", () => { const r = pousse(`git -C "${travail}" push origin main`); return liste(r) && /git log origin\/main\.\.main/.test(r.permissionDecisionReason); }],
+      ["un autre refspec (origin HEAD:main) : la question d'avant, sans liste", () => muet(pousse(`git -C "${travail}" push origin HEAD:main`))],
+      ["un autre distant que celui de la branche amont : sans liste", () => muet(pousse(`git -C "${travail}" push autre`))],
+      ["--tags (ce qui part n'est plus la liste) : sans liste", () => muet(pousse(`git -C "${travail}" push --tags`))],
+      ["une ligne composée (cd puis push) : sans liste", () => muet(pousse(`cd "${travail}" && git push`))],
+      ["un dépôt sans branche amont : sans liste, sans bruit", () => muet(pousse(`git -C "${seul}" push`))],
+      ["hors de tout dépôt : sans liste", () => muet(pousse("git push", racine))],
+      // En dernier : ceux-ci changent de branche dans le dépôt d'essai.
+      ["une branche que le distant n'a pas encore : sans liste", () => { g(travail, "branch", "nouvelle"); return muet(pousse(`git -C "${travail}" push origin nouvelle`)); }],
+      ["la branche poussée n'est pas celle où l'on est : la liste est celle de la branche poussée", () => { g(travail, "checkout", "-q", "-b", "autre", "origin/main"); const r = pousse(`git -C "${travail}" push origin main`); return liste(r) && /origin\/main\.\.main/.test(r.permissionDecisionReason); }],
+    ];
+    for (const [nom, essai] of cas) {
+      checks += 1;
+      let ok = false;
+      try {
+        ok = essai();
+      } catch {
+        ok = false;
+      }
+      if (!ok) failures += 1;
+      console.log(`${ok ? "OK  " : "FAIL"} ${nom}`);
+    }
+  }
+  rmSync(racine, { recursive: true, force: true });
+}
 
 console.log("\n── Un dossier hooks/ recopie seul garde ses regles (revue externe, 3.2.6) ──");
 {

@@ -33,10 +33,12 @@
 //   --contact-router-only         write the contact router and register it, nothing else
 //
 // Prerequisites assumed by the script:
-//   - The API key is in the Bitwarden vault (item RESEND / BREVO, field "api_key") and the
-//     vault is unlocked (Claude ensures both in SKILL Step 1 via the _get-secret pattern).
-//     No provider CLI is involved: everything goes through the vault + the REST API / SDK.
-//     A legacy RESEND_API_KEY / BREVO_API_KEY env var is still accepted as a fallback.
+//   - The project's OWN sending key is in its .env and at its host (3.4.16): made by
+//     email-key.mjs mint for Resend, typed in the masked window then recorded for Brevo (Step 2 of
+//     the skill). This script reads it there, refuses the ACCOUNT's key (compared in this process
+//     with the vault's item RESEND / BREVO, never shown), and never pushes it: the account's key
+//     stays in the vault, for the gestures on the account itself (domains, senders, quotas, and at
+//     Resend the projects' keys). No provider CLI is involved.
 //   - The project has a working T3 scaffold (Next.js + tRPC + setup-security from /bootstrap,
 //     because the contact router uses rateLimitedProcedure). Without rateLimitedProcedure, the
 //     contact router is skipped with a warning (3.4.13): written anyway, it broke the build.
@@ -59,8 +61,7 @@ import { fileURLToPath } from "node:url";
 import { render } from "./_render.mjs";
 import { envValue } from "./env-value.mjs";
 import { contactRouterPlan, senderPlan } from "./email-sender.mjs";
-import { readUserEnv } from "./_read-user-env.mjs";
-import { getSecret } from "./vault/vault.mjs";
+import { accountKey } from "./email-key.mjs";
 
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 
@@ -299,54 +300,50 @@ async function preflight() {
   ok(`Web dir OK: ${WEB_DIR}`);
 }
 
-// ─── Step 2: get API key ──────────────────────────────────────────────
+// ─── Step 2: the project's own key ────────────────────────────────────
 async function getApiKey() {
-  // Source of truth = the Bitwarden vault. Item RESEND / BREVO, field "api_key".
-  // The SKILL (add-email) ensures the vault is unlocked AND the key present (via the
-  // _get-secret pattern: auto-unlock + auto-add) BEFORE calling this script - so a
-  // non-interactive read here normally succeeds. Legacy env var kept as a fallback
-  // during the migration period.
+  // The project's OWN sending key (3.4.16), already in its .env and at its host: made by
+  // email-key.mjs mint (Resend) or typed in the masked window then recorded (Brevo), at Step 2 of
+  // the skill. Never the account's key: until 3.4.15 this step read the account's key in the vault
+  // and pushed it into every project, which opened the whole account to anyone who saw one .env.
   const item = provider === "resend" ? "RESEND" : "BREVO";
   const service = provider === "resend" ? "Resend" : "Brevo";
   const envVar = provider === "resend" ? "RESEND_API_KEY" : "BREVO_API_KEY";
-  const dashboard = provider === "resend"
-    ? "https://resend.com/api-keys"
-    : "https://app.brevo.com/settings/keys/api";
 
-  // 1. Vault (canonical).
-  log(`Reading ${item}.api_key from the vault`);
+  log(`Reading the project's own ${envVar}`);
+  const value = envValue(WEB_DIR, envVar);
+  if (!value) {
+    fail(
+      provider === "resend"
+        ? "The project holds no RESEND_API_KEY of its own yet. Make it first (Step 2 of the skill):\n" +
+            "  node scripts/email-key.mjs mint --project-dir <web dir> --name <project>\n" +
+            "then re-run this script."
+        : "The project holds no BREVO_API_KEY of its own yet (Step 2 of the skill): make it in Brevo's console, named\n" +
+            "after the project, type it in the masked window (launch.mjs collect-env), record it\n" +
+            "(node scripts/email-key.mjs record), then re-run this script.",
+    );
+  }
+  // Compared with the account's key (the vault's item RESEND / BREVO) in this process, never shown.
+  let account = null;
   try {
-    state.apiKey = getSecret(item, "api_key");
-    ok(`${item} API key read from vault`);
-    return;
+    account = accountKey(provider);
   } catch (e) {
     if (e.code === 2 || e.code === 3) {
       fail(
-        `Vault locked / session expired. The skill must unlock it first:\n` +
-          `  node scripts/vault/launch.mjs unlock\n` +
-          `then re-run this script.`,
+        `Vault locked / session expired: the project's key cannot be checked against the ${service} account's (item ${item}).\n` +
+          `The skill unlocks it first: node scripts/vault/launch.mjs unlock, then re-run this script.`,
       );
     }
-    // code 4 (item not in vault) or other → try the legacy env fallback below.
+    // 4: no account key in the vault, nothing to compare with.
   }
-
-  // 2. Legacy env-var fallback (migration period).
-  const envKey = readUserEnv(envVar);
-  if (envKey) {
-    state.apiKey = envKey;
-    warn(`${envVar} found in env (legacy) - consider migrating it to the vault (item ${item}).`);
-    ok(`${envVar} found in env`);
-    return;
+  if (account && value === account) {
+    fail(
+      `This project holds the ${service} ACCOUNT's key: a project never holds it (it opens the whole account).\n` +
+        `Give the project its own key first (Step 2 of the skill), then re-run this script.`,
+    );
   }
-
-  // 3. Nothing → instruct to add the key to the vault.
-  fail(
-    `No ${service} API key available.\n` +
-      `  1. Create a Full-Access key at ${dashboard}\n` +
-      `  2. Store it in the vault (the value is typed in a separate window, never via Claude):\n` +
-      `     node scripts/vault/launch.mjs add --name ${item} --service ${service} --fields "api_key:secret"\n` +
-      `  3. Re-run this script.`,
-  );
+  state.apiKey = value;
+  ok(`The project's own ${envVar} is in place`);
 }
 
 // ─── Step 3: install SDK ──────────────────────────────────────────────
@@ -429,10 +426,13 @@ async function pushEnvVars() {
   if (!existsSync(helper)) fail(`Sibling script missing: ${helper}`);
 
   const { kept, pushed } = senderPairs();
-  const kvs = [`${provider === "resend" ? "RESEND_API_KEY" : "BREVO_API_KEY"}=${state.apiKey}`, ...pushed];
+  // The key itself is not pushed here: the project's own key reached .env and the hosting when it
+  // was made (Step 2 of the skill). Only the sender's variables the project lacks.
+  const kvs = pushed;
   state.envVarsPushed = kvs.map((kv) => kv.slice(0, kv.indexOf("=")));
   state.senderKept = kept;
   if (kept.length) ok(`Sender already set for the project, kept: ${kept.join(", ")}`);
+  if (!kvs.length) return;
 
   // On the helper's standard input, never as arguments: an argument can be read in the process
   // list by anything running on the machine (3.3.4). The helper writes .env first, so a push that

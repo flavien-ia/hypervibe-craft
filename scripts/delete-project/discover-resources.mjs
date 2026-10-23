@@ -27,7 +27,7 @@ import { spawnSpec } from "../_spawn.mjs";
 import { indexLinesFor } from "./_memory-index.mjs";
 import { excludeShared, sharedIgnoredReason } from "./_shared-exclusion.mjs";
 import { keepRules } from "./_keep-rules.mjs";
-import { isSystemVar, isStripeVar, settleStripeWithoutKey } from "./_inventory-rules.mjs";
+import { isSystemVar, isStripeVar, localGitState, settleStripeWithoutKey } from "./_inventory-rules.mjs";
 import { resolveNeonOrg, withOrg } from "../neon-org.mjs";
 import { readLinkedProject, teamIdFromOrgId } from "../_vercel-auth.mjs";
 import { vercelContext, listAllProjects, getProject, pickTargets } from "../_vercel-projects.mjs";
@@ -648,7 +648,14 @@ function scanLocalDir() {
       ];
     } catch {}
   }
-  return { exists: true, path, dependencies: deps };
+  // Where its code stands in git: what a deletion of the folder would take with it (3.4.16).
+  let git;
+  try {
+    git = localGitState(path, spawnSync);
+  } catch (e) {
+    git = { repo: null, error: String(e?.message ?? e) };
+  }
+  return { exists: true, path, dependencies: deps, git };
 }
 
 // ─── 13. Memory files (Claude project memory) ──────────────────────────────

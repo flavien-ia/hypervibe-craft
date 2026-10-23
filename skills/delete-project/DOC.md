@@ -8,6 +8,7 @@ Cleanly and permanently deletes a Hypervibe project and all of its associated cl
 - You want to **avoid paying** for services that stayed active (Render, Stripe live, Neon beyond the free tier, etc.)
 - You want to **free up quotas** on your free plans (Cloudflare R2, Neon, Vercel) for your next projects
 - You want to **decommission** an app that will no longer be used (end of a mission, a client leaving, a complete redesign)
+- You want to clear away an old folder or a mock-up **without any cloud infrastructure**: nothing is deleted for you, but Hypervibe tells you whether its code would be lost (never committed, never pushed, no repository at all) or whether it can go without loss, offers a backup first, finds the notes and skills that still name it, and gives you the folder to delete
 
 ## How it works
 
@@ -54,7 +55,7 @@ Hypervibe presents you with a clear recap in 4 sections:
 - **🔵 Hypervibe infrastructure** that the skill can delete automatically
 - **🟠 Detected third-party services** for you to delete yourself (Hypervibe gives you the exact URL and the click-by-click steps for each one)
 - **🟡 Mandatory manual actions** (deletion of the local folder, of a GitHub repo `/bootstrap` did not create, the Google/GitHub OAuth clients) that the skill cannot do for you
-- **⚪ Deliberately left untouched** (shared Brevo/Resend, parent Cloudflare zones, Stripe products)
+- **⚪ Deliberately left untouched** (your Brevo/Resend account, parent Cloudflare zones, Stripe products; the project's own sending key, on the other hand, is revoked)
 
 You choose: delete everything, or keep certain pieces (the database, the DNS, the code repository). The skill launches nothing until this choice is validated.
 
@@ -62,7 +63,7 @@ You choose: delete everything, or keep certain pieces (the database, the DNS, th
 
 Hypervibe chains the deletions in parallel where possible (Vercel, R2, Workers, DNS, Stripe webhooks, Render, Upstash, Email Routing) then serially where there are dependencies (Neon, then removal of the project from the shared `db-backup` worker, then its scheduled tasks on the shared worker, then Claude memory, and the GitHub repo last).
 
-If your vault has closed in the meantime (its session lasts twelve hours, and confirming can take an evening), nothing is deleted at all, the site included: Hypervibe asks you to open the vault again, then resumes with the same inventory. A project is never left half deleted for a key that could not be read.
+If your vault has closed in the meantime (its session lasts six hours, and confirming can take an evening), nothing is deleted at all, the site included: Hypervibe asks you to open the vault again, then resumes with the same inventory. A project is never left half deleted for a key that could not be read.
 
 At the end, a report shows you:
 - ✅ What was deleted automatically
@@ -74,7 +75,7 @@ At the end, a report shows you:
 - Deletes **all the automatable Hypervibe infrastructure** of the project in a single pass
 - **Proactively detects the third-party services** you plugged in along the way and that could keep billing
 - Gives you, for each remaining action, **the exact URL and the click-by-click instructions**
-- Preserves **shared services** (Brevo, Resend, parent Cloudflare zones, automatic backups of other projects) without touching anything on them
+- Preserves **shared services** (Brevo, Resend, parent Cloudflare zones, automatic backups of other projects) without touching anything on them, except the project's own sending key, revoked with it
 - Guarantees that **no orphaned resource is left lying around** in your cloud accounts
 
 ## Prerequisites

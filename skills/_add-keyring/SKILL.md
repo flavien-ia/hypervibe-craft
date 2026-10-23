@@ -118,7 +118,7 @@ The command **blocks until the window is closed and now returns the real exit co
 
 ## Step 5 - First unlock (dedicated window)
 
-> Last step: we open the vault for the day. A window will open - type your **master password**. The vault stays open for 12h, so you only retype it once a day.
+> Last step: we open the vault. A window will open - type your **master password**. The vault stays open for 6h, then it locks itself for real: after that, a window asks for it again at the first need.
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>
@@ -136,7 +136,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status
 
 > ✅ **Your vault is ready!**
 >
-> From now on, your important access keys (Cloudflare, database, email...) will be stored there securely. When I need them, I read them directly - you have nothing to copy over. Just one thing: **each day, I will ask you once for your master password** to open the vault (a small window will open).
+> From now on, your important access keys (Cloudflare, database, email...) will be stored there securely. When I need them, I read them directly - you have nothing to copy over. Just one thing: **when the vault is closed, I will ask you for your master password** (a small window will open). It stays open six hours, then it locks itself again, for your safety.
 
 If `_add-keyring` was called by `/start`, hand control back to `/start`. Otherwise, it is done.
 
@@ -147,4 +147,4 @@ If `_add-keyring` was called by `/start`, hand control back to `/start`. Otherwi
 - The vault stores **only the global keys** (reused across projects). The secrets specific to ONE project (`DATABASE_URL`, `AUTH_SECRET`...) stay in the `.env` + Vercel - do not put them here.
 - To READ a key afterwards: follow the pattern of the `_get-secret` skill (read into a shell variable + auto-unlock, never display the value).
 - To ADD a key: `node "$LAUNCH" add --name <ITEM> --service <S> --fields "f1:secret,f2:text"` (entry in the window, never via Claude).
-- Per-user session: `~/.hypervibe/bw-session` (outside the plugin folder, survives updates).
+- Per-user session: `~/.hypervibe/bw-session` (outside the plugin folder, survives updates). It lasts 6 hours, then the vault is really locked (`bw lock`, the file removed): by a lock scheduled at the unlock, by the first read after the end, and at the start of a Claude Code session (`scripts/vault/session.mjs`).

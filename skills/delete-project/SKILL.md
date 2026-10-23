@@ -196,7 +196,30 @@ The resulting JSON has the form:
 
 Any section may also carry an **`excluded`** array: resources whose name matched but that were re-attributed to a **more specific sibling project** (`street-cool` when deleting `street`), or recognized as **shared Hypervibe infrastructure** (the `hypervibe-jobs` worker), or **declared shared in the project's manifest**, whatever their kind (a database, a bucket, a DNS zone, an email route, a scheduled task, a Vercel project, a repository...). The two sections that hold a single resource say it by their flag: a shared backup target sets `dbBackup.isTarget` to false, a shared repository sets `github.exists` to false, and the resource moves into their `excluded` array. They are NEVER deleted; surface them in section 2.4 with their `excludedReason`.
 
-The block prints the inventory JSON directly (and echoes its absolute path as `INVENTORY_FILE=…`). Read the JSON from that output. **Keep the `INVENTORY_FILE=…` path**: Phase 3 is given that exact path, pasted as is. The run folder has a unique name, so it cannot be rebuilt by hand, and no other deletion running at the same time can write into it. Move on to Phase 2.
+The block prints the inventory JSON directly (and echoes its absolute path as `INVENTORY_FILE=…`). Read the JSON from that output. **Keep the `INVENTORY_FILE=…` path**: Phase 3 is given that exact path, pasted as is. The run folder has a unique name, so it cannot be rebuilt by hand, and no other deletion running at the same time can write into it. Move on to Phase 2, unless the inventory is empty in the cloud (section 1.1).
+
+### 1.1 An empty cloud inventory: a folder without infrastructure
+
+An old project, a mock-up, a folder copied from somewhere: it may have nothing in the cloud at all. The inventory is **empty in the cloud** when every cloud section found nothing (`vercel`, `neon`, `workers`, `r2`, `dns`, `emailRouting`, `cronJobs`, `render`, `upstash` with `found: false`, `dbBackup.isTarget` false, no Stripe webhook nor product, `github.exists` false, no AI key nor sending key in the manifest) **and** no section carries an `error`. A scan that failed is not a scan that found nothing: with an `error`, stay in the normal path (section 2.3b says what could not be checked).
+
+Then there is nothing to delete automatically, and the only thing at stake is the folder itself, which the person deletes by hand. The question becomes: **would the code be lost?** Skip Phases 2 and 3, and answer it:
+
+1. **Say it plainly**: nothing of `<PROJECT_NAME>` lives in the cloud (no site, no database, no stored files, no scheduled task, no repository on GitHub), so nothing will be deleted for them.
+2. **Where the code stands**, read in `localDir.git`:
+   - `repo: false`: the folder is not a git repository, its code exists only here. Unless the person keeps another copy, **code lost if deleted**.
+   - `insideLarger: true`: the folder is only part of the repository at `root`. Deleting it is a change in that repository (to commit there), and the figures below are that repository's.
+   - `uncommitted` above 0: that many files modified or new, never committed. **Code lost if deleted**, for those.
+   - `unpushed` above 0: that many commits that no remote has, all local branches counted. **Code lost if deleted**.
+   - `remotes` empty: no remote at all, every commit exists only here. **Code lost if deleted**.
+   - `uncommitted` and `unpushed` at 0, and a remote: **deletable without loss**, the code is on `upstream` (or on its remote).
+   - A figure at `null` (git did not answer, `repo: null` with an `error`): nothing is proven. Say what could not be checked, and give no "without loss" verdict.
+   - An `.env` in the folder is never in git: its keys go with the folder. They still exist at their services; only a key kept nowhere else would be lost, say so if there is one.
+3. **The references to the project**, so that nothing keeps pointing to a folder that no longer exists: the memory files of the inventory (`memory.files`, each with its path), and the skills that name the project or its folder: search `~/.claude/skills` (and the project's own `.claude/skills`, if any) for `<PROJECT_NAME>` and for the folder's path, with the Grep tool. List what you find; the person decides what to change in it, never you.
+4. **The verdict, in one line**: *"Deletable without loss: the code is on `<remote>`, nothing else lives only here."* or *"Code lost if deleted: <the reasons above, plainly>."*
+5. **Offer a backup first**, always when the code would be lost. For a git repository, `/save-project`: its zip keeps the whole history, the uncommitted changes and the files git does not track yet. For a folder that is not a repository, `/save-project` would not keep the code (it saves the code through git): say so, and offer the simplest copy instead, the folder zipped from the Explorer (right-click, Send to, Compressed folder) or the Finder (Compress), kept outside the folder. Wait for the answer.
+6. **The folder to delete by hand**: its path (`localDir.path`), to delete from Windows Explorer (right-click, Delete) or the Finder. Never delete the folder yourself, not even here: deleting a project's folder is the person's gesture.
+
+Then end with section 4.5's closing note. Nothing was deleted, so no report of deletions.
 
 ---
 
@@ -261,6 +284,18 @@ exactly those, never "the keys whose name looks like the project".
 An entry with `mode: "direct"` has no key of ours to revoke: the project calls a
 provider on the user's own account. Say so in section 2.2, so they can revoke it
 themselves if they want to.
+
+### 2.1c bis The project's sending key
+
+A `kind: "email-key"` entry in the manifest is the project's own sending key (since 3.4.16 a project never holds the email account's key). Like the AI keys, the inventory script does not delete it: revoke it explicitly, in the execution phase, once the user has validated the scope, and only that one, by the identifier the entry carries:
+
+- `provider: "resend"` → revoked at Resend with the account's key from the vault (the command asks for a confirmation; it refuses an identifier the project's manifest does not record):
+  ```bash
+  node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<project dir>" --id <id>
+  ```
+- `provider: "brevo"` → made by hand, it goes by hand: section 2.2, *"delete the key `<name>` in Brevo's console (SMTP & API, API keys)"*.
+
+No entry, while the project's `.env` holds a `RESEND_API_KEY` or `BREVO_API_KEY`: a project set up before 3.4.16 may hold the ACCOUNT's key itself. Nothing to revoke for the project then (the account stays, the other projects may use it): say it in 4.3, and advise renewing the account's key at the provider once no project holds it any more.
 
 ### 2.1d The code repository (GitHub)
 
@@ -340,7 +375,7 @@ How the question is asked depends on what is left:
 
 ## Phase 3 - Execution (1 script call)
 
-**Open the vault again first**: invoke `_ensure-vault` before the execution. Confirmations can take an evening, or a night: the vault's session lasts twelve hours, and it may have closed since the inventory.
+**Open the vault again first**: invoke `_ensure-vault` before the execution. Confirmations can take an evening, or a night: the vault's session lasts six hours, and it may have closed since the inventory.
 
 Build the `scope` JSON array from the Phase 2.5 choices. Possible categories:
 
@@ -437,7 +472,7 @@ Ordered list with click-by-click instructions:
    - Precise instructions (from `instructions`)
 
 ### 4.3 "ℹ️ Deliberately left untouched"
-- Brevo / Resend: shared
+- Brevo / Resend accounts: shared (only the project's own sending key goes, section 2.1c bis)
 - Parent Cloudflare zones: shared
 - Stripe products (if found): risk of being used by other projects
 - **The memory files kept for review**: every result `kept` of the memory step (under `deleted.memory.results`, or under `skipped.memory.results` when nothing was deleted at all: its `reason` then says how many). Name each file and say why it stayed: it mentions the project without being the project's own. The user decides what to do with it.
@@ -534,4 +569,4 @@ Matching is word-boundary based, not substring based: deleting `art` does not ma
 The Phase 1 script temporarily creates a `.env.delete-check` file to parse the var names (NOT the values). It deletes it systematically at the end, even on error. Check in the report that it does not exist in the local project after the run.
 
 ### Brevo / Resend
-Shared by default (a single `BREVO_API_KEY` shared across all projects). The script does not touch anything on them. If the sender configured in the project's vars (`BREVO_SENDER_EMAIL` / `RESEND_SENDER_EMAIL`) is **different** from the standard address, flag it in Phase 4.2 - a dedicated sender may have been validated on Brevo/Resend.
+The email ACCOUNT is shared by every project: the script does not touch anything on it. What belongs to the project is its own sending key, revoked in section 2.1c bis (a project set up before 3.4.16 may hold the account's key instead: nothing to revoke then). If the sender configured in the project's vars (`BREVO_SENDER_EMAIL` / `RESEND_FROM_EMAIL`) is **different** from the standard address, flag it in Phase 4.2 - a dedicated sender may have been validated on Brevo/Resend.

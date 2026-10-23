@@ -64,7 +64,7 @@ The script returns JSON on stdout, typical duration 2-5 seconds (the 6 fetchers 
       "label": "Neon (Postgres)",
       "available": true,
       "metrics": [
-        {"name": "Storage", "used": 0.247, "limit": 0.5, "unit": "GB", "pctUsed": 49.5, "scope": "account-month"},
+        {"name": "Storage", "used": 0.247, "limit": 1, "unit": "GB", "pctUsed": 24.7, "scope": "account-month"},
         ...
       ],
       "note": null,
@@ -72,6 +72,17 @@ The script returns JSON on stdout, typical duration 2-5 seconds (the 6 fetchers 
     },
     ...
   ],
+  "cost": {
+    "currency": "USD",
+    "items": [
+      {"service": "vercel", "label": "Vercel", "status": "measured", "currency": "USD", "monthToDate": 23.1, "projected": 26.4, "note": "..."},
+      {"service": "cloudflareR2", "label": "Cloudflare R2", "status": "estimated", "currency": "USD", "projected": 0.05, "note": "..."},
+      {"service": "neon", "label": "Neon", "status": "free", "currency": "USD", "monthToDate": 0, "projected": 0, "note": "Plan gratuit : 0 $."}
+    ],
+    "projectedTotal": 26.45,
+    "complete": true,
+    "notCounted": ["Cloudflare : ...", "Brevo, Resend : ..."]
+  },
   "selfHealing": { "resendKeyJustCreated": true }
 }
 ```
@@ -119,7 +130,7 @@ JSON output on stdout: `{ ok, status: "created" | "already_present", dir, worker
 node "${CLAUDE_SKILL_DIR}/../../scripts/shared-worker/register.mjs" --list
 ```
 
-If the returned `jobs` array contains a job named `quota-monitor` → **say nothing**, the watch is in place. (To adjust the threshold or the recipient later, re-run the registration command below with the new values: same job name = update in place.)
+If the returned `jobs` array contains a job named `quota-monitor` → **say nothing**, the watch is in place. (To adjust the threshold or the recipient later, re-run the registration command below with the new values: same job name = update in place.) One exception: when the person has just renewed the email account's key (the advice of `/add-email`, `/rotate-secret` or `/delete-project`), re-run the registration command below with the same values: `--put-secrets` hands the clock the new key, of which it keeps a copy for these alerts. Without it, the alerts go out with the old key, and fail.
 
 If it does not, register it:
 
@@ -182,6 +193,8 @@ For each metric with `limit !== null` and `used !== null`:
 
 For metrics without a `limit` (e.g. number of buckets, Vercel deployments) → emoji ℹ️ (informational).
 
+A metric that carries `unavailable` (its `used` and `pctUsed` are `null`): the figure could not be read, which is not a figure of 0. Show `-` for the usage and the percentage, the verdict ❓, and its `unavailable` text right under the table; **never ✅**. In the global verdict (Step 4), name it among what is worth watching. Neon's storage is the case today: Neon gave 0 for every project of an account while their databases were full (16/10/2026), and a green 0 % hid the free plan's cap.
+
 ### Table format
 
 One table per service, or a global table with a "Service" column. Prefer **a global table**:
@@ -189,7 +202,7 @@ One table per service, or a global table with a "Service" column. Prefer **a glo
 ```
 | Service | Metric | Used | Cap | % | Verdict |
 |---|---|---|---|---|---|
-| Neon | Storage | 0,247 GB | 0,5 GB | 49,5 % | ✅ |
+| Neon | Storage | 0,247 GB | 1 GB | 24,7 % | ✅ |
 | Neon | Compute | 12,1 h | 100 h | 12,1 % | ✅ |
 | Neon | Active projects | 7 | 1 | - | 🚨 (paid account required) |
 | Cloudflare R2 | Storage | 0,079 GB | 10 GB | 0,8 % | ✅ |
@@ -211,6 +224,15 @@ If a service has a non-null `breakdown` **AND** the cap is more than 70% used: s
 > - ...
 
 If nothing is in the ⚠️ or 🔴 zone, do not show the breakdown (useless info).
+
+**Cloudflare R2: the three largest buckets.** R2's `breakdown` lists every bucket with its size and its number of objects, the largest first (`storageGB` and `objects` are `null` for a bucket the analytics do not measure yet, created in the last hours: say "not measured yet", never 0). When R2's storage is ⚠️ or worse, show its three largest buckets right after the table, e.g.:
+
+> R2's three largest buckets:
+> - cool-trattoria-assets (EU): 6,8 GB · 41 203 objects
+> - atelier-photos: 2,1 GB · 3 980 objects
+> - demo-assets: 0,4 GB · 112 objects
+
+Read only: never propose deleting a bucket or emptying it from here. What a bucket holds belongs to its project (user files, backups): the person decides, in the project, and `/delete-project` is what removes a project's buckets.
 
 ### Trajectory (if relevant)
 
@@ -248,12 +270,23 @@ Under the table, a short **summary line**:
 If relevant, **propose a concrete action** tied to a Hypervibe addon. Name the project the Neon metric points at (it is in the metric label):
 - Neon egress or compute close to the cap → *"Run `/optimize` in the `<project>` folder: it measures what the app reads and how often, then fixes the worst offenders (unbounded queries, polling that never stops, missing cache)."* Egress is the cap that bites first, and a project that reaches it is suspended until the next month: treat it as the most urgent line of the table.
 - Neon storage cap close → *"Run `/optimize` in the `<project>` folder: files or large blobs kept in the database are the usual cause, and it moves them to file storage. Otherwise, move that project to a paid Neon plan."*
-- R2 storage cap close → *"No skill sorts the bucket for you: ask me to list the largest and oldest files in your R2 bucket, then decide what to delete. Beyond the 10 GB, Cloudflare bills a few cents per extra GB."*
+- R2 storage cap close → *"Your three largest buckets are listed above. No skill sorts a bucket for you: ask me to list the largest and oldest files of one of them, then decide what to delete, in its project. Beyond the free 10 GB, Cloudflare bills 0.015 $ per GB and per month."*
 - Resend monthly cap close → *"Resend Pro at $20/month (50k emails/month) - or Brevo free up to 9k emails/month"*
 
 **Never send a quota problem to `/clean`**: it removes what the project no longer uses (dead code, orphan tables, unused dependencies), it neither looks inside the R2 bucket nor reduces what the app consumes. Never invent an addon that does not exist. If there is nothing to propose, just give the info.
 
 ---
+
+## Step 4 bis - The month's cost (only when asked)
+
+Render this step **only when the person talks about cost, a bill, a budget or what they pay** ("how much does it cost me?", "what will I pay this month?"). Otherwise, say nothing about it.
+
+The script's `cost` holds only what it reads or computes for sure:
+- **Vercel**, on a paid plan: Vercel's own billing for the month so far (`monthToDate`), and the month at this pace (`projected`: usage charges projected, the plan's seats counted once). Hobby is free.
+- **Cloudflare R2**: the storage beyond the free 10 GB, at 0.015 $ per GB and per month, if the size stays the same all month (operations not counted).
+- **Neon**: 0 $ on the free plan; on a paid plan, not estimated (its console's Billing page says it).
+
+Show a short table (service, so far this month, end of month, note), then the total of what is known (`projectedTotal`, in dollars) and, when `complete` is false, say that it is incomplete and why (the items whose `status` is `unavailable` or `not-estimated`, with their note). Always end with the lines of `cost.notCounted`: Cloudflare's subscription is not read (the harness's Cloudflare key has no right to read billing), nor are the email providers' plans. Call it an estimate, never the bill: the bill is the provider's.
 
 ## Step 5 - Response format
 
@@ -266,7 +299,7 @@ Recommended structure:
 
 | Service | Metric | Used | Cap | % | Verdict |
 |---|---|---|---|---|---|
-| Neon | Storage | 0,247 GB | 0,5 GB | 49,5 % | ✅ |
+| Neon | Storage | 0,247 GB | 1 GB | 24,7 % | ✅ |
 ↳ *(Brevo note if present)*
 | ... |
 

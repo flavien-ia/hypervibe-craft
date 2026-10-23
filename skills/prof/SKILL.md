@@ -75,7 +75,7 @@ Wait for the user's reply, then explain the requested topic using the content be
 > - **tRPC** - The internal communication system. This is what lets the frontend (what the user sees) talk to the backend (the invisible logic).
 > - **GitHub** - The vault for your code. Everything is saved there, with a complete history. You can always go back.
 > - **Vercel** - The host. It's the company that puts your app online and makes it accessible to the whole world. Every time you update your code, Vercel updates your app automatically.
-> - **Bitwarden (the key vault)** - Where your access keys to services (Cloudflare, database, email...) are stored **encrypted**, never in plain text on your computer. You type a single master password once a day, and Claude fetches the right keys on its own whenever it needs them. `/start` sets it up for you at the very beginning (free account). This is what lets you never have to handle or copy your keys by hand.
+> - **Bitwarden (the key vault)** - Where your access keys to services (Cloudflare, database, email...) are stored **encrypted**, never in plain text on your computer. You type a single master password, the vault stays open six hours and then locks itself again, and in between Claude fetches the right keys on its own whenever it needs them. `/start` sets it up for you at the very beginning (free account). This is what lets you never have to handle or copy your keys by hand.
 >
 > 💡 **European hosting by default**: Hypervibe configures your app so that its functions run in **Frankfurt** (region `fra1` at Vercel) and your database in the same datacenter (`aws-eu-central-1` at Neon). Ultra-low latency between the code and the DB, and your data stays in Europe - better for GDPR.
 >

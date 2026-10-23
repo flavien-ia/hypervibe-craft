@@ -1,6 +1,18 @@
 {
-  "description": "Hypervibe guardrails: an irreversible or outward-facing shell command (Bash, or Monitor, which runs a shell too) is confirmed by the user, or refused with the correct alternative. Fail-open by design.",
+  "description": "Hypervibe guardrails: an irreversible or outward-facing shell command (Bash, or Monitor, which runs a shell too) is confirmed by the user, or refused with the correct alternative. Fail-open by design. At the start of a session, a vault session older than its 6 hours is locked for real, in the background.",
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/vault/session.mjs\" sweep",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Bash|Monitor",

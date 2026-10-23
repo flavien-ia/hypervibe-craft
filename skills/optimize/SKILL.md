@@ -161,7 +161,7 @@ Also worth knowing, and worth explaining to the user: a tab left open on a secon
 
 ### 2c - Caching and rendering
 
-Look for `force-dynamic` or `revalidate` below 600 on a page or route that reads the database. The database suspends after 5 minutes without a query; anything more frequent keeps it awake around the clock and burns the monthly compute hours.
+Look for a page or route that reads the database without caching the read itself (`unstable_cache`, or `'use cache'` with `cacheTag` in Next 16, an hour at least, tagged and invalidated by the mutations that change the answer): `force-dynamic`, a `revalidate` below 3600, and above all a page whose tree reads the request (the session, hence the cookies; a CSP nonce per request), which is rendered at every visit whatever its `revalidate`. The database suspends after 5 minutes without a query; anything more frequent keeps it awake (the monthly compute hours on the free plan, the bill on a paid one), and 600 s is not enough: a regular automated visitor wakes it at each expiry (measured on a real account: 7 h awake a day before such a visitor, 17 to 19 h after).
 
 Legitimate exceptions, not to be reported: cron and webhook routes (rare, authenticated), admin pages, and pages whose database reads sit behind a tagged `unstable_cache`.
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## v3.4.16 (23 octobre 2026)
+
+### Sécurité
+- **Une clé d'envoi d'emails par projet** : jusqu'ici, `/add-email` copiait dans chaque projet la clé de votre compte Resend ou Brevo entier. Il suffisait d'un `.env` vu sur un écran partagé, d'une formation filmée ou d'un hébergeur qui fuit pour ouvrir tout le compte : ses domaines, ses contacts, l'envoi de tous vos projets. Chaque projet reçoit maintenant une clé à lui. Chez Resend, Hypervibe la fabrique : elle ne sert qu'à envoyer, et seulement depuis votre domaine une fois celui-ci vérifié. Chez Brevo, dont le service ne fabrique pas de clé à la demande, Hypervibe vous guide pour la créer au nom du projet. La clé du compte reste dans votre coffre-fort, pour les gestes sur le compte lui-même (signalé par Jérôme Carfantan).
+- **Vos projets existants** : relancez `/add-email` dans chacun. Il repère un projet qui tient encore la clé du compte et propose de lui donner la sienne. Une fois chaque projet passé à sa propre clé, renouvelez la clé de votre compte chez Resend ou Brevo, rangez la nouvelle dans votre coffre et faites réenregistrer l'alerte de `/quotas` : les anciennes copies (dans des `.env`, chez l'hébergeur, dans des enregistrements de formation) cessent alors de marcher.
+- **Le coffre se referme pour de bon, au bout de six heures** : la session durait douze heures, et à son terme le fichier de session restait sur le disque, toujours capable d'ouvrir le coffre. Elle dure maintenant six heures, puis le coffre est réellement verrouillé : la fermeture est programmée dès l'ouverture (ordinateur éteint, elle se fait à la session suivante), et revérifiée à chaque démarrage. Hors Windows, le fichier de session n'est plus lisible que par son propriétaire. Pour les participants, une protection de plus : un ordinateur resté ouvert ne laisse plus leurs clés à portée toute la nuit.
+- **Le garde-fou montre les commits qui partent** : quand il demande de confirmer un `git push`, il liste maintenant les commits que ce push va envoyer. Un « oui » donné pour un seul commit avait emporté avec lui deux commits d'une autre session du même dépôt.
+
+### Améliorations
+- **La règle sur les lectures en base, réécrite** (retours de Bastien Detraz) : elle nomme `findFirst` et le `.select()` sans colonnes, même pour vérifier un seul champ (mesuré : 530 Ko par ligne, 2,1 Go en trois semaines), demande de mettre en cache la lecture plutôt que la page, avec les outils de Next 15 et de Next 16, et explique pourquoi un délai de 600 secondes ne suffit pas (un visiteur automatique avait fait passer une base de 7 à 17 heures d'éveil par jour). Elle vaut aussi sur un plan payant, où ce temps d'éveil fait la facture. Vos projets la reçoivent à leur prochaine synchronisation, sauf si vous l'aviez retouchée.
+- **`/quotas` mesure enfin le stockage de vos bases** : Neon répondait 0 pour la taille de chaque projet, sur les plans payants (retour de Bastien Detraz) et depuis peu sur le plan gratuit, et le tableau affichait un 0 % vert devant des bases pleines. La taille se lit maintenant là où Neon calcule son plafond, et un chiffre illisible s'affiche comme tel, jamais comme un 0. Le plafond du plan gratuit est remis à jour : 1 Go par projet, 20 Go en tout.
+- **`/quotas` nomme vos plus gros buckets** : quand le stockage de fichiers approche de son plafond, il affiche les trois plus gros, avec leur taille et leur nombre de fichiers.
+- **`/quotas` estime le coût du mois, si vous le demandez** : la facturation de Vercel sur un plan payant, le stockage au-delà des 10 Go gratuits, le plan gratuit de Neon. Il dit aussi ce qu'il ne compte pas.
+- **`/delete-project` sur un dossier sans infrastructure** : un vieux projet ou une maquette n'a rien dans le cloud, seul son dossier est en jeu. La commande dit si son code serait perdu (jamais commité, jamais poussé, aucun dépôt) ou s'il peut partir sans perte, propose d'abord une sauvegarde, et retrouve les notes et les skills qui le nomment encore.
+
+### Coulisses
+- Chaque point a sa recette, éprouvée en abîmant le code décision par décision.
+
 ## v3.4.15 (20 octobre 2026)
 
 ### Améliorations

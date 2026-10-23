@@ -48,7 +48,8 @@
 // ----------------------------------------------
 //   vercel-project, neon-project, r2-bucket, cf-worker, dns-zone,
 //   render-service, stripe-webhook, upstash-db, cron-job, db-backup,
-//   email-route, github-repo, ai-key
+//   email-route, github-repo, ai-key, email-key (the project's own sending key: its id at
+//   Resend, or the name a Brevo key was made under, never the key; 3.4.16)
 // Unknown kinds are accepted (forward compatibility) but flagged in output.
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
@@ -63,7 +64,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const KNOWN_KINDS = [
   "vercel-project", "neon-project", "r2-bucket", "cf-worker", "dns-zone",
   "render-service", "stripe-webhook", "upstash-db", "cron-job", "db-backup",
-  "email-route", "github-repo", "ai-key",
+  "email-route", "github-repo", "ai-key", "email-key",
 ];
 
 // --- args ------------------------------------------------------------------

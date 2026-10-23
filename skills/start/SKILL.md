@@ -244,7 +244,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" account 2>/dev/null   #
 - `"signedIn": false` (no connected account) → **immediately launch the `_add-keyring` skill by default, WITHOUT asking for confirmation**: the vault is MANDATORY, there is nothing to decide. NEVER ask a question like "do you want to set up your vault now?", do not wait for confirmation: go straight to `_add-keyring`, which guides the creation of the Bitwarden account (free, master password to write down offline, 2FA), the login, and the first unlock. Non-technical language.
 - `locked`/`expired` (account connected but vault closed) → open it: `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking).
 
-> **Your key vault**: an encrypted place where I store your access keys (database, email, hosting, etc.). You type your master password once a day, and after that I use it without you having to copy anything over. ⚠️ This master password cannot be recovered by anyone. Write it down offline.
+> **Your key vault**: an encrypted place where I store your access keys (database, email, hosting, etc.). You type your master password, the vault stays open six hours and then locks itself again, and in between I use it without you having to copy anything over. ⚠️ This master password cannot be recovered by anyone. Write it down offline.
 
 Re-confirm `vault.mjs status` = `unlocked` before continuing.
 
@@ -649,7 +649,7 @@ Confirm:
 
 ## Step 7bis: Email key (Resend or Brevo) in the vault
 
-An email API key is used for sending emails from the apps (`/add-email`, contact page, notifications) AND for the alert emails of the shared clock (quota overage, failed backup, failed scheduled task). Hypervibe supports **two providers, Resend and Brevo**: the user picks ONE, and its key is stored in the vault (item `RESEND` or `BREVO`, field `api_key`), once per machine.
+An email API key is used for sending emails from the apps (`/add-email`, contact page, notifications) AND for the alert emails of the shared clock (quota overage, failed backup, failed scheduled task). It is the key of the whole email ACCOUNT, and it stays in the vault: `/add-email` uses it to give each project a sending key of its own (since 3.4.16 a project never holds the account's key). Hypervibe supports **two providers, Resend and Brevo**: the user picks ONE, and its key is stored in the vault (item `RESEND` or `BREVO`, field `api_key`), once per machine.
 
 ### Check whether a key is already in the vault
 
@@ -697,7 +697,7 @@ RKEY=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get RESEND api_k
 printf 'header = "Authorization: Bearer %s"\n' "$RKEY" | curl -s --config - -o /dev/null -w "%{http_code}" https://api.resend.com/domains | grep -q 200 && echo "VALID" || echo "INVALID"
 ```
 
-> ✅ Your Resend key is in your vault. `/add-email` will use it directly.
+> ✅ Your Resend key is in your vault. It stays there: `/add-email` uses it to give each of your projects a sending key of its own, limited to sending.
 
 ### If the user chose Brevo
 
@@ -726,7 +726,7 @@ BKEY=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get BREVO api_ke
 printf 'header = "api-key: %s"\n' "$BKEY" | curl -s --config - -o /dev/null -w "%{http_code}" https://api.brevo.com/v3/account | grep -q 200 && echo "VALID" || echo "INVALID"
 ```
 
-> ✅ Your Brevo key is in your vault. `/add-email` will use it directly. One last thing for the alert emails: verify your own address as a sender on https://app.brevo.com/senders (one confirmation click in your inbox) - I check it at the shared-clock step and it is not blocking.
+> ✅ Your Brevo key is in your vault. It stays there: each of your projects will get a sending key of its own, which `/add-email` guides you to make. One last thing for the alert emails: verify your own address as a sender on https://app.brevo.com/senders (one confirmation click in your inbox) - I check it at the shared-clock step and it is not blocking.
 >
 > If it offers to **authenticate your domain** (DNS records to add where your domain is registered), leave it for now: your domain is connected later, with `/add-domain` then `/add-email`, which add those records for you (or guide you through them, record by record, where your registrar offers no way to do it automatically). Verifying your address is all that is needed today.
 

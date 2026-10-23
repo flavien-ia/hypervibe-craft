@@ -8,6 +8,7 @@ Supprime proprement et définitivement un projet Hypervibe et toute son infrastr
 - Vous voulez **éviter de payer** pour des services restés actifs (Render, Stripe live, Neon hors free tier, etc.)
 - Vous voulez **libérer des quotas** sur vos plans gratuits (Cloudflare R2, Neon, Vercel) pour vos prochains projets
 - Vous voulez **décommissionner** une app qui ne sera plus utilisée (fin de mission, départ d'un client, refonte complète)
+- Vous voulez débarrasser un vieux dossier ou une maquette **sans aucune infrastructure** dans le cloud : rien n'est supprimé pour vous, mais Hypervibe vous dit si son code serait perdu (jamais commité, jamais poussé, pas de dépôt du tout) ou s'il peut partir sans perte, propose d'abord une sauvegarde, retrouve les notes et les skills qui le nomment encore, et vous donne le dossier à supprimer
 
 ## Comment ça se passe
 
@@ -54,7 +55,7 @@ Hypervibe vous présente un récap clair en 4 sections :
 - **🔵 Infrastructure Hypervibe** que la skill peut supprimer automatiquement
 - **🟠 Services tiers détectés** à supprimer vous-même (Hypervibe vous donne pour chacun l'URL exacte et les étapes clic-par-clic)
 - **🟡 Actions manuelles obligatoires** (suppression du dossier local, d'un repo GitHub que `/bootstrap` n'a pas créé, des clients OAuth Google/GitHub) que la skill ne peut pas faire pour vous
-- **⚪ Volontairement non touché** (Brevo/Resend partagés, zones Cloudflare parentes, produits Stripe)
+- **⚪ Volontairement non touché** (votre compte Brevo/Resend, zones Cloudflare parentes, produits Stripe ; la clé d'envoi propre au projet, elle, est révoquée)
 
 Vous choisissez : tout supprimer, ou garder certaines briques (la base de données, le DNS, le repo de code). La skill ne lance rien tant que ce choix n'est pas validé.
 
@@ -62,7 +63,7 @@ Vous choisissez : tout supprimer, ou garder certaines briques (la base de donné
 
 Hypervibe enchaîne les suppressions en parallèle où c'est possible (Vercel, R2, Workers, DNS, Stripe webhooks, Render, Upstash, Email Routing) puis en série là où il y a des dépendances (Neon, puis retrait du projet dans le worker `db-backup` partagé, puis ses tâches planifiées sur le worker partagé, puis mémoire Claude, et le repo GitHub en dernier).
 
-Si votre coffre-fort s'est refermé entre-temps (sa session dure douze heures, et confirmer peut prendre une soirée), rien n'est supprimé du tout, le site compris : Hypervibe vous demande de rouvrir le coffre, puis reprend avec le même inventaire. Un projet ne reste jamais à moitié supprimé faute d'une clé qui n'a pas pu être lue.
+Si votre coffre-fort s'est refermé entre-temps (sa session dure six heures, et confirmer peut prendre une soirée), rien n'est supprimé du tout, le site compris : Hypervibe vous demande de rouvrir le coffre, puis reprend avec le même inventaire. Un projet ne reste jamais à moitié supprimé faute d'une clé qui n'a pas pu être lue.
 
 À la fin, un rapport vous montre :
 - ✅ Ce qui a été supprimé automatiquement
@@ -74,7 +75,7 @@ Si votre coffre-fort s'est refermé entre-temps (sa session dure douze heures, e
 - Supprime **toute l'infrastructure Hypervibe** automatisable du projet en une seule passe
 - Détecte **proactivement les services tiers** que vous avez branchés en cours de route et qui pourraient continuer à facturer
 - Vous donne pour chaque action restante **l'URL exacte et les instructions clic-par-clic**
-- Préserve **les services partagés** (Brevo, Resend, zones Cloudflare parentes, sauvegardes automatiques des autres projets) sans rien y toucher
+- Préserve **les services partagés** (Brevo, Resend, zones Cloudflare parentes, sauvegardes automatiques des autres projets) sans rien y toucher, sauf la clé d'envoi propre au projet, révoquée avec lui
 - Garantit qu'**aucune ressource orpheline ne traîne** dans vos comptes cloud
 
 ## Prérequis

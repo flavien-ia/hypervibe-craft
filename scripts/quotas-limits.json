@@ -1,12 +1,13 @@
 {
   "_about": "Limites des plans Free des services de la stack Hypervibe. Lu par scripts/quotas-fetch.mjs au runtime. Vérifié manuellement et mis à jour à chaque nouvelle version du plugin si un provider modifie son free tier. Pas d'auto-update - c'est volontaire.",
-  "_lastUpdated": "2026-09-18",
+  "_lastUpdated": "2026-10-23",
   "neon": {
-    "lastChecked": "2026-09-18",
+    "lastChecked": "2026-10-23",
     "pricingUrl": "https://neon.com/pricing",
-    "_note": "Sur le plan Free, stockage, calcul ET trafic sortant sont plafonnés PAR PROJET (neon.com/docs/introduction/plans : « 5 GB per project per month », « the network transfer allowance is per project »). Seul le nombre de projets est une limite de compte.",
+    "_note": "Sur le plan Free, stockage, calcul ET trafic sortant sont plafonnés PAR PROJET (neon.com/docs/introduction/plans : « 5 GB per project per month », « the network transfer allowance is per project »). Le stockage a aussi un plafond de compte, indépendant : 1 GB par projet et 20 GB au total (« The Free plan is limited to 1 GB of Postgres storage per project, and to 20 GB in total across all your projects », relu le 23/10/2026 ; il était de 0,5 GB par projet). La taille d'un projet se lit sur ses branches (somme de leur logical_size), comme Neon calcule ce plafond.",
     "free": {
-      "storageGBPerProject": 0.5,
+      "storageGBPerProject": 1,
+      "storageGBTotal": 20,
       "computeHoursPerProject": 100,
       "projectsMax": 100,
       "branchesPerProject": 10,

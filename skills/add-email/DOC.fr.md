@@ -29,9 +29,9 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 
 2. **Choix automatique du provider** (si install neuf) : règle de décision basée sur vos clés env (voir tableau ci-dessus). Aucune question posée.
 
-3. **Vérification des prérequis** :
-   - Pour Resend : une clé API Resend rangée dans le coffre-fort (item `RESEND`) - créée une fois sur resend.com/api-keys
-   - Pour Brevo : une clé API Brevo (coffre-fort `BREVO`, ou `BREVO_API_KEY` en session)
+3. **Vérification des prérequis** : la clé de votre compte email, rangée une fois dans le coffre-fort (item `RESEND`, créée sur resend.com/api-keys, ou item `BREVO`). Elle y reste, pour les gestes sur le compte lui-même (votre domaine d'envoi, vos expéditeurs, et chez Resend les clés des projets) : aucun projet ne la tient jamais.
+   - **La clé d'envoi propre au projet** : pour Resend, Hypervibe la fait pour vous par l'API de Resend ; elle ne peut qu'envoyer, et une fois votre domaine d'envoi vérifié, seulement depuis ce domaine. Pour Brevo, dont l'API ne fait pas de clé, vous la faites dans la console de Brevo au nom du projet, et la collez dans une fenêtre masquée qui la range dans le projet seulement.
+   - Dans les deux cas, si la clé d'un projet fuit (un `.env` vu à l'écran, un dépôt ou un hébergeur qui fuit), seul l'envoi de ce projet est exposé : jamais tout votre compte, ses domaines et ses contacts, ni vos autres projets.
 
 4. **Installation du SDK + scaffolding** :
    - Le SDK approprié est installé (`resend` ou `@getbrevo/brevo`)
@@ -46,7 +46,7 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 
 ## Ce que ça crée pour vous
 
-- Selon le provider choisi : une **clé API Resend** ou **Brevo**, lue depuis le coffre-fort (item `RESEND` ou `BREVO`)
+- Une **clé d'envoi propre au projet** (Resend : faite par son API, limitée à l'envoi ; Brevo : faite dans sa console au nom du projet), dans `.env` et chez l'hébergeur, inscrite au manifeste du projet : `/rotate-secret` la renouvelle, `/delete-project` la révoque. La clé de votre compte reste au coffre.
 - Le SDK approprié installé (`resend` ou `@getbrevo/brevo` v5+)
 - `src/server/mail.ts` avec `sendMail()` + helper d'échappement (`escapeHtml` ou `escapeForBrevo`)
 - Un router tRPC `contact` (`src/server/api/routers/contact.ts`) pour le formulaire
@@ -58,7 +58,7 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 ## Prérequis
 
 - Le projet doit être en Next.js avec tRPC (typiquement initialisé par `/bootstrap`)
-- Une clé email rangée dans le **coffre-fort** : soit Resend (item `RESEND`, 3000 emails/mois), soit Brevo (item `BREVO`, 300/jour ≈ 9000/mois). `/add-email` la détecte automatiquement et, si elle manque, vous guide pour la créer et la ranger dans le coffre.
+- La clé de votre compte email rangée dans le **coffre-fort** : soit Resend (item `RESEND`, 3000 emails/mois), soit Brevo (item `BREVO`, 300/jour ≈ 9000/mois). `/add-email` la détecte automatiquement et, si elle manque, vous guide pour la créer et la ranger dans le coffre. Elle n'en sort jamais : le projet reçoit une clé à lui.
 - Pour configurer un domaine personnalisé : votre domaine doit être géré par Cloudflare (sinon lancez `/add-domain` d'abord)
 
 ## Astuces
@@ -76,6 +76,10 @@ Côté Brevo, l'adresse d'expédition (`BREVO_SENDER_EMAIL`) doit être un **exp
 - **Brevo** : 300 emails/jour (≈ 9 000/mois)
 
 Largement suffisant pour démarrer dans les deux cas. Brevo est plus généreux sur le volume mensuel, Resend a une DX un peu plus fluide.
+{{/callout}}
+
+{{callout:warning|Les projets montés avant la version 3.4.16}}
+Ils peuvent tenir la clé de votre compte elle-même. Relancez `/add-email` dans chacun : il le remarque et donne au projet sa propre clé. Une fois chaque projet passé à la sienne, renouvelez la clé de votre compte chez le service (Resend : API Keys ; Brevo : SMTP & API, API keys), rangez la nouvelle dans votre coffre, et faites réenregistrer l'alerte de `/quotas` (l'horloge partagée garde une copie de la clé du compte pour l'envoyer) : les anciennes copies de la clé du compte (dans des `.env`, chez l'hébergeur, dans des enregistrements) cessent alors de marcher.
 {{/callout}}
 
 {{callout:info|Comment switcher de provider}}

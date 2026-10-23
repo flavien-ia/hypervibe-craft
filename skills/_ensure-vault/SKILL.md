@@ -15,7 +15,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 
 To run **at the start** of any skill that will read a key from the vault. Goal: open the unlock window **once up-front** rather than letting a key-read silently fail later (notably the case of scripts that go through `readUserEnv`, which returns `null` without flagging "locked").
 
-Since the vault stays open for 12h, this preflight only triggers a window **once per day**, on first need.
+Since the vault stays open for 6h and then locks itself for real, this preflight triggers a window **at most every 6 hours**, on first need.
 
 ## Snippet (run as-is)
 
@@ -29,7 +29,7 @@ Depending on `ST`:
 
 - **`unlocked`** → vault ready, continue the skill normally.
 - **`locked` or `expired`** → notify the user in the chat, then open the unlock window (blocking), then re-check:
-  > "Your key vault is closed - a window will open for your master password (once per day)."
+  > "Your key vault is closed - a window will open for your master password (the vault then stays open 6 hours)."
   ```bash
   node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>
   node "$VAULT" status   # should return "unlocked"

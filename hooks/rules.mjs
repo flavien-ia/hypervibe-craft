@@ -1519,6 +1519,10 @@ function sqlOf(seg) {
 const DENY = "deny";
 const ASK = "ask";
 
+/** The push rule's question, by name: guard-bash.mjs adds the commits that leave to it, and
+ *  only to it (3.4.16). Its text is the decision's; the list is read outside this file. */
+export const PUSH_REASON = "A push publishes. Confirm with the user first (a standing agreement stated in chat counts).";
+
 // ── A script's path kept in a variable ──────────────────────────────────────
 // `X=".../scripts/shared-worker/register.mjs"` on a line of its own, then `node "$X" --kind ping`:
 // the rules on the plugin's scripts name the script a runtime launches, and a path kept in a
@@ -2014,10 +2018,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //    a question").
     if (/^git\s+(-\S+\s+)*push\b/.test(seg) && (substituted || !pushIsDryRun(seg))) {
       if (env.get("HYPERVIBE_GUARD_ALLOW_PUSH") === "1") continue;
-      keep(
-        ASK,
-        "A push publishes. Confirm with the user first (a standing agreement stated in chat counts).",
-      );
+      keep(ASK, PUSH_REASON);
       continue;
     }
 
@@ -2318,6 +2319,23 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
         keep(
           ASK,
           "This changes a domain's nameservers at OVH: the whole domain moves with it, its site and its mail. Say which domain and which nameservers, and confirm with the user.",
+        );
+        continue;
+      }
+    }
+
+    // 9 quater. The plugin's own sending-key script (3.4.16 / 2.4.15), which calls Resend in its
+    //    own process: revoke ends a key in service (a site that still sends with it stops
+    //    sending), like a raw DELETE of rule 5b. status, keys and compare read; mint, record and
+    //    file-brevo make, record or file a project's own key (file-brevo then removes the admin's
+    //    transit copy, once read back in the project's space), push writes it on its site again (a
+    //    creation passes, as at rule 5b). A verb the command line does not show asks.
+    if (launchedBase === "email-key.mjs") {
+      const verb = operandsOf(words(seg.slice(launched[0].length)))[0];
+      if (!verb || /[$`]/.test(verb.raw) || !/^(?:status|keys|mint|push|record|compare|file-brevo)$/.test(verb.value)) {
+        keep(
+          ASK,
+          "This revokes a project's sending key at the email provider: a site that still sends with it stops sending. Say which project and which key (its id), make sure the site already runs with its new key (a deployment followed to its end), and confirm with the user.",
         );
         continue;
       }

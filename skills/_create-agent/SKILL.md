@@ -455,7 +455,7 @@ From the JSON captured in Step 5, display exactly:
 > 3. **Environment variables to fill in on Render**:
 >    - `OPENROUTER_API_KEY` - the agent's own capped key, in `apps/<agent-name>/.env`
 >    - `DATABASE_URL` - copy from your web project's `.env`
->    - `BREVO_API_KEY` + `BREVO_SENDER_EMAIL` + `BREVO_SENDER_NAME` *(or Resend equivalents)*
+>    - `BREVO_API_KEY` + `BREVO_SENDER_EMAIL` + `BREVO_SENDER_NAME` *(or Resend equivalents)* - copy from your web project's `.env`: the project's own sending key, never your email account's
 >    - `ADMIN_EMAIL` - where the agent's error emails arrive
 >    - `AGENT_DAILY_BUDGET_USD=5` *(or what you chose)*
 >    - `AGENT_MONTHLY_BUDGET_USD=50`

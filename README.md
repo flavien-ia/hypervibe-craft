@@ -142,7 +142,7 @@ Projects bootstrapped with this plugin use:
 - **next-intl** for internationalization (when i18n addon is used)
 - **Anthropic** (Claude API) for autonomous AI agents (when the agent addon is used)
 - **Render** for hosting AI agents and long-running automations (when the agent / automation addon routes to Render)
-- **Bitwarden** as a **key vault** - your cross-project access keys (Cloudflare, Neon, email…) are stored **encrypted** in a vault, never in plaintext on disk or in environment variables. `/start` sets it up (free account, EU region); you type one master password once a day and Claude fetches the keys on its own when needed.
+- **Bitwarden** as a **key vault** - your cross-project access keys (Cloudflare, Neon, email…) are stored **encrypted** in a vault, never in plaintext on disk or in environment variables. `/start` sets it up (free account, EU region); you type one master password when the vault is closed, it stays open six hours and then locks itself for real, and in between Claude fetches the keys on its own when needed.
 
 ## What the bootstrap sets up automatically
 
@@ -166,7 +166,7 @@ So the operations that cannot be undone are guarded, not merely discouraged:
 | Command | What happens | Why |
 |---|---|---|
 | `git add -A`, `git add .`, `git add :/`, `git add ':(top)'`, `git add '*'`, `git add -u`, `git commit -a`, `git commit --all` | **refused** | A sweeping stage once swept another session's uncommitted work into a commit. Stage nominatively: `git add <file>`. |
-| `git push` | **confirmation** | Pushing publishes. Consent lives in the conversation, so a human confirms. |
+| `git push` | **confirmation** | Pushing publishes. Consent lives in the conversation, so a human confirms. The question names the commits that leave when the push sends its branch to its upstream (`git log @{u}..HEAD`) or a branch to its remote (`git push origin main`: `origin/main..main`): another session's commits no longer leave unseen. |
 | `gh pr merge`, `gh run rerun` | **confirmation** | A merge into the main branch publishes (the main branch is production), and so does running a deployment again. Read the way gh reads it: with the repository option before the verb (`gh pr -R owner/repo merge`) or through `gh api`, the same question. |
 | `gh repo delete`, `gh secret delete`, `gh variable delete`, `gh api` with `DELETE`, `gh release delete`, `gh repo rename`, a repository created or made public, or transferred | **confirmation** | Deletes, exposes or moves something on the forge: a repository, a release, a secret, an access, a branch, through the command or through `gh api`. A repository created through `gh api` without saying it is private counts as public, as GitHub creates it public. Reads, `gh pr create` and `gh secret set` pass. |
 | `vercel --prod`, `--target production`, `promote`, `rollback` | **confirmation** | Deploys normally go through `git push`. `vercel build --prod` deploys nothing and is not asked. |
@@ -177,6 +177,7 @@ So the operations that cannot be undone are guarded, not merely discouraged:
 | `run-sql.mjs` with `DELETE`/`UPDATE` and no `WHERE` | **confirmation** | Rewrites every row. |
 | `curl -X DELETE` to a management API the plugin operates (Neon, Vercel, Cloudflare, GitHub, Render, Upstash, Stripe, Brevo, Resend, Bitwarden, Google), and `PUT` / `PATCH` where they overwrite (Neon, Vercel, Cloudflare) | **confirmation** | A project, a database branch with its data, a DNS record: the plugin's scripts check the provider's answers, a bare curl does not. Reads and creations pass. Read as curl reads it: grouped options (`-sX DELETE`), the config it takes on its standard input, which is how the skills hand it a key, and an address kept in a variable the line sets. |
 | A change at a domain's registrar (LWS, Hostinger, Gandi, OVH, Porkbun, Namecheap, IONOS, Infomaniak): its nameservers, or the records it keeps | **confirmation** | The whole domain moves with it, its site and its mail. Reads pass, as each registrar says them: Porkbun reads with a POST, Namecheap changes with a GET. |
+| `email-key.mjs revoke` (a project's own sending key, revoked at Resend by the plugin's script) | **confirmation** | A site that still sends with the key stops sending: the old key goes only once the site runs with the new one. The script refuses a key the project's manifest does not record, so the account's key and another project's are never revoked. Reading a project's state and making its key pass, as a creation does. |
 | `git reset --hard`, `git checkout .`, `git clean -f` | **confirmation** | Discards uncommitted work, possibly someone else's. |
 | `git config hypervibe.hooks true`, `ensure-hooks-chain.mjs --trust` | **confirmation** | Trusting a checkout's versioned git hooks runs code that arrived with a clone. A person decides, per checkout. Withdrawing it (`false`, or `--unset`) stays free. |
 | `git config user.email <something that is not an address>` | **refused** | Every commit carries it, and a push publishes it: a password typed there by mistake would reach GitHub. The refusal never repeats the value. |

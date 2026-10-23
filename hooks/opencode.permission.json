@@ -27,6 +27,7 @@
       "*shared-worker*migrate-live.mjs*": "ask",
       "*db-backup-remove-target.mjs*": "ask",
       "*registrar-ovh.mjs*": "ask",
+      "*email-key.mjs*": "ask",
       "*shared-worker*ensure.mjs* --dry-run": "allow",
       "*shared-worker*worker-check.mjs* --dry-run": "allow",
       "*shared-worker*ensure.mjs* --no-deploy": "allow",

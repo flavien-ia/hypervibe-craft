@@ -3,7 +3,9 @@
 //
 // This is the workhorse called by every skill that needs to READ a secret.
 // It never prompts (no interactivity): it reads the session token written by the
-// interactive `unlock` step, checks the 12h TTL, sets BW_SESSION, and shells out to `bw`.
+// interactive `unlock` step, checks its age (6 hours, TTL_SECONDS of session.mjs), sets
+// BW_SESSION, and shells out to `bw`. A session found over is locked for real on the way
+// (`bw lock`, then its file removed): session.mjs.
 //
 // The interactive operations (login / unlock / add) live in launch.mjs +
 // interactive.mjs - because they need a real terminal window for masked input
@@ -23,7 +25,7 @@
 //                                          is an account connected on this machine? (unlocks nothing)
 //
 // EXIT CODES (mirror the perso bw-get convention, relied on by the auto-unlock pattern)
-//   0 ok | 2 vault locked (no session) | 3 session expired (>12h) | 4 item not found
+//   0 ok | 2 vault locked (no session) | 3 session expired (>6h, locked on the way) | 4 item not found
 //   5 field not found | 1 other error
 //
 // MODULE USAGE
@@ -31,13 +33,13 @@
 //   const v = getSecret("CLOUDFLARE", "api_token"); // string  (throws {code} on failure)
 
 import { spawnSync } from "node:child_process";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
 import { useBwHome } from "./bw-home.mjs";
+import { TTL_HOURS, isExpired, lockOutcome, lockSession, readSessionFile, sessionFile } from "./session.mjs";
 
-const TTL_SECONDS = 12 * 60 * 60; // 12h
-const SESSION_FILE = join(homedir(), ".hypervibe", "bw-session");
+const SESSION_FILE = sessionFile();
 
 // `bw` command - resolved by PROBING ABSOLUTE LOCATIONS FIRST, then PATH. This must be
 // PATH-independent: the launched terminal window (and Claude's tool shell) often do NOT have
@@ -93,28 +95,28 @@ function isAuthFailure(res) {
   return /master password|not logged in|vault is locked|mac failed|invalid|unauthorized|session key/.test(s);
 }
 
-/** Read + validate the session file. Returns { token } or throws { code }. */
+/** Read + validate the session file. Returns { token } or throws { code }. A session found over
+ *  is locked for real before the code 3 (session.mjs): a lock that fails is said in the message,
+ *  never thrown. */
 function readSession() {
   if (!existsSync(SESSION_FILE)) {
     const e = new Error("Vault locked (no session). Run unlock.");
     e.code = 2;
     throw e;
   }
-  const lines = readFileSync(SESSION_FILE, "utf8").split(/\r?\n/);
-  const ts = parseInt(lines[0], 10);
-  const token = lines[1];
-  if (!ts || !token) {
+  const session = readSessionFile(SESSION_FILE);
+  if (!session) {
     const e = new Error("Session file malformed. Run unlock.");
     e.code = 2;
     throw e;
   }
-  const ageSeconds = Math.floor(Date.now() / 1000) - ts;
-  if (ageSeconds > TTL_SECONDS) {
-    const e = new Error("Session expired (>12h). Run unlock.");
+  if (isExpired(session.ts)) {
+    const locked = lockSession({ at: session.ts, file: SESSION_FILE });
+    const e = new Error(`Session expired (>${TTL_HOURS}h): ${lockOutcome(locked)}. Run unlock.`);
     e.code = 3;
     throw e;
   }
-  return { token };
+  return { token: session.token };
 }
 
 /**
@@ -268,7 +270,7 @@ export function putItem(name, fields, { service, folder = "Global", allowEmpty =
 
 /** Returns "unlocked" | "locked" | "expired". Probes bw with the stored token so it reflects
  *  whether the vault is ACTUALLY usable, not just the file timestamp (a token can be revoked /
- *  rejected before the 12h TTL). We use `unlock --check`, which validates the token against the
+ *  rejected before its 6 hours are over). We use `unlock --check`, which validates the token against the
  *  unlocked session and returns non-zero ("Vault is locked.") when it is NOT genuinely usable.
  *  Hardened with --nointeraction (+ BW_NOINTERACTION) so a stale token can NEVER make bw hang on
  *  an interactive master-password prompt - it fails fast as "expired" instead.

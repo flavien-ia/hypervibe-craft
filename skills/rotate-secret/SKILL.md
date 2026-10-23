@@ -84,7 +84,7 @@ This script reads `.env`, filters for the known patterns, and shows an organized
 >   2. Stripe - webhook secret (`STRIPE_WEBHOOK_SECRET`)
 >
 > **Email**
->   3. Brevo - API key (`BREVO_API_KEY`)
+>   3. Brevo - the project's sending key (`BREVO_API_KEY`)
 >
 > **Login**
 >   4. Google - OAuth ID and secret (`AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET`)
@@ -117,8 +117,6 @@ Table of known providers:
 |---|---|---|
 | `STRIPE_SECRET_KEY` | https://dashboard.stripe.com/apikeys | "Go to **Developers → API keys**, find the **Secret key** row, click the **Roll key** button (circle-with-arrow icon), confirm in the pop-up. Copy the new value (starts with `sk_live_…` or `sk_test_…`)." |
 | `STRIPE_WEBHOOK_SECRET` | https://dashboard.stripe.com/webhooks | "Go to **Developers → Webhooks**, open the endpoint that matches your site, click **Reveal** next to **Signing secret**, then the regeneration icon on the right. Copy the new value (starts with `whsec_…`)." |
-| `BREVO_API_KEY` | https://app.brevo.com/security/api-keys | "Go to **SMTP & API → API keys**. Find the old key, click the **3 dots** on the right → **Revoke**. Then **Create a new API key**, copy the new value." |
-| `RESEND_API_KEY` | https://resend.com/api-keys | "Find the old key, click **⋯ → Delete**. Then **Create API Key** in the top right, give it a name (e.g. 'production'), copy the new value (starts with `re_…`)." |
 | `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` | https://console.cloud.google.com/apis/credentials | "Go to **APIs & Services → Credentials**. Open your project's OAuth client ID. On the right, click **Reset Secret** and confirm. Copy the new **Client secret** (the ID itself does not change, only the secret is renewed)." |
 | `AUTH_GITHUB_ID` / `AUTH_GITHUB_SECRET` | https://github.com/settings/developers | "Open **OAuth Apps** in the sidebar. Click your project's app. Click **Generate a new client secret**. Copy the new value right away (it will not be shown again afterwards)." |
 | `OPENAI_API_KEY` | https://platform.openai.com/api-keys | "Find the old key, click the **🗑️** icon. Then **+ Create new secret key**, copy the new value (starts with `sk-…`)." |
@@ -134,6 +132,13 @@ Store `PROVIDER_URL` and `PROVIDER_INSTRUCTIONS`.
 
 - `DATABASE_URL` Neon → Strategy = `neon-special`. Renew the Postgres role password via the Neon REST API (key from the vault) or the dashboard. Much rarer and more delicate - see the dedicated Step 4.
 - `CLOUDFLARE_API_TOKEN` → Strategy = `external-rotate` with URL https://dash.cloudflare.com/profile/api-tokens, instructions: "Find the token, click **Roll**, confirm."
+- `RESEND_API_KEY` / `BREVO_API_KEY` → Strategy = `email-project-key`. Since 3.4.16 they are the project's own sending key, never the email account's. First, which key the project holds (compared in the script's process with the account's key from the vault, never printed):
+  ```bash
+  node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" status --project-dir "<WEB_DIR>"
+  ```
+  - `holds: "own"`, Resend → a new key made by Resend's API, written to `.env` and the hosting, recorded: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --rotate`. The older key is NOT revoked yet (the live site still sends with it): after the redeploy of Step 7, `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <each id of toRevoke>` (a confirmation is asked).
+  - `holds: "own"`, Brevo → by hand: a new key in Brevo's console (https://app.brevo.com/settings/keys/api) named `<PROJECT_NAME> <date>`, the masked window (`launch.mjs collect-env --keys "BREVO_API_KEY:secret"`), then `email-key.mjs record --project-dir "<WEB_DIR>" --provider brevo --key-name "<that name>"`. After the redeploy, the user deletes the old key in Brevo's console.
+  - `holds: "account"` → do NOT renew the account's key here: every project and the harness's own gestures use it. Give this project its own key first (`/add-email`, its Step 0: `mint --replace` for Resend, the manual key for Brevo). Then, once every project holds its own, the user renews the account's key at the provider and stores the new one in the vault (`launch.mjs add --name RESEND` or `--name BREVO`), and `/quotas` registers its alert again (the shared clock keeps a copy of the account's key to send it): the old copies stop working.
 - `ADMIN_PASSWORD_HASH_PROD` (the admin's password in production) → Strategy = `admin-password`. A new password, which never goes through the conversation: see Step 3.
 
 
@@ -256,9 +261,9 @@ Read the exit code before continuing: non-zero means the user cancelled, so the 
 
 ## Step 4bis - Update the vault if the key also lives there
 
-Some keys are **global** and have the **vault as the source of truth**: Brevo/Resend (copied into each project by `/add-email`), Cloudflare/Hostinger/Neon-api (read by the tooling). If you renew one of them, update the vault **too** - otherwise it keeps the old value and a future project would copy the stale key.
+Some keys are **global** and have the **vault as the source of truth**: Cloudflare/Hostinger/Neon-api (read by the tooling). If you renew one of them, update the vault **too** - otherwise it keeps the old value and a future project would copy the stale key.
 
-Key → vault item mapping: `BREVO_API_KEY`→`BREVO.api_key` · `RESEND_API_KEY`→`RESEND.api_key` · `CLOUDFLARE_API_TOKEN`/`CF_API_TOKEN`→`CLOUDFLARE.api_token` · `HOSTINGER_API_TOKEN`→`HOSTINGER.api_token` · `NEON_API_KEY`→`NEON.api_key`. (`DATABASE_URL` is **not** concerned - per-project secret, not a global key.)
+Key → vault item mapping: `CLOUDFLARE_API_TOKEN`/`CF_API_TOKEN`→`CLOUDFLARE.api_token` · `HOSTINGER_API_TOKEN`→`HOSTINGER.api_token` · `NEON_API_KEY`→`NEON.api_key`. (`DATABASE_URL` is **not** concerned - per-project secret, not a global key.) `RESEND_API_KEY` and `BREVO_API_KEY` are not concerned either since 3.4.16: a project holds its own sending key, which never goes into the vault; the vault's `RESEND` / `BREVO` item is the account's key, never copied into a project (Category C, `email-project-key`).
 
 If `SECRET_NAME` is in this mapping, write the new value into the vault (the value goes through an env var, never via argv nor displayed):
 
@@ -405,7 +410,7 @@ Load the value first, and stop if it is not there (`NEW_VALUE=$(node "${CLAUDE_S
 
 - `STRIPE_SECRET_KEY`: `printf 'user = "%s:"\n' "$NEW_VALUE" | curl -fsS --config - https://api.stripe.com/v1/balance` (should return 200)
 - `BREVO_API_KEY`: `printf 'header = "api-key: %s"\n' "$NEW_VALUE" | curl -fsS --config - https://api.brevo.com/v3/account`
-- `RESEND_API_KEY`: `printf 'header = "Authorization: Bearer %s"\n' "$NEW_VALUE" | curl -fsS --config - https://api.resend.com/domains`
+- `RESEND_API_KEY`: a project's key can only send, so Resend refuses it everything else, and that refusal is the proof: `printf 'header = "Authorization: Bearer %s"\n' "$NEW_VALUE" | curl -sS --config - https://api.resend.com/api-keys` answers `restricted_api_key` for a valid sending key (`API key is invalid` for a wrong one)
 - `OPENAI_API_KEY`: `printf 'header = "Authorization: Bearer %s"\n' "$NEW_VALUE" | curl -fsS --config - https://api.openai.com/v1/models`
 - `ANTHROPIC_API_KEY`: `printf 'header = "x-api-key: %s"\nheader = "anthropic-version: 2023-06-01"\n' "$NEW_VALUE" | curl -fsS --config - https://api.anthropic.com/v1/models`
 - Auto-generated: no test possible (a secret internal to the project), skip.

@@ -15,7 +15,8 @@
 // stores a PROJECT secret in that project's .env + Vercel. Both keep the value inside
 // this process - it never crosses Claude's tool I/O.
 //
-// Session file (written by unlock, read by vault.mjs): ~/.hypervibe/bw-session  ("<ts>\n<token>")
+// Session file (written by unlock, read by vault.mjs): ~/.hypervibe/bw-session  ("<ts>\n<token>").
+// How long it lasts, and how it ends for real (a lock scheduled at the unlock): session.mjs.
 
 import { spawnSync } from "node:child_process";
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from "node:fs";
@@ -25,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 import { resolveLang, makeT } from "./i18n.mjs";
 import { bwAnswers, useBwHome } from "./bw-home.mjs";
+import { isExpired, lockSession, readSessionFile, scheduleLock, sessionFile, writeSessionFile } from "./session.mjs";
 import { dotenvLine } from "../_env-line.mjs";
 
 const IS_WIN = platform() === "win32";
@@ -36,9 +38,8 @@ const parseJson = (s, fallback) => {
   catch { return fallback; }
 };
 
-const SESSION_DIR = join(homedir(), ".hypervibe");
-const SESSION_FILE = join(SESSION_DIR, "bw-session");
-const TTL = 12 * 60 * 60;
+const SESSION_FILE = sessionFile();
+const SESSION_DIR = dirname(SESSION_FILE);
 // How many times the window re-asks for the master password (sign-in and unlock alike) before
 // giving up. Mistyping it is ordinary; making the user re-launch the whole step for it is not.
 const MAX_ATTEMPTS = 3;
@@ -151,12 +152,14 @@ function bw(args, { input, session, inherit } = {}) {
 }
 
 function readValidSession() {
-  if (!existsSync(SESSION_FILE)) return null;
-  const [tsLine, token] = readFileSync(SESSION_FILE, "utf8").split(/\r?\n/);
-  const ts = parseInt(tsLine, 10);
-  if (!ts || !token) return null;
-  if (Math.floor(Date.now() / 1000) - ts > TTL) return null;
-  return token;
+  const session = readSessionFile(SESSION_FILE);
+  if (!session) return null;
+  if (isExpired(session.ts)) {
+    // Over: locked for real on the way (session.mjs), and the window asks for an unlock.
+    lockSession({ at: session.ts, file: SESSION_FILE });
+    return null;
+  }
+  return session.token;
 }
 
 // ── flags ─────────────────────────────────────────────────────────────
@@ -267,8 +270,14 @@ async function doUnlock() {
     const token = (res.stdout || "").trim();
     if (token) {
       if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true });
-      writeFileSync(SESSION_FILE, `${Math.floor(Date.now() / 1000)}\n${token}`, "utf8");
+      const ts = Math.floor(Date.now() / 1000);
+      writeSessionFile(SESSION_FILE, ts, token);
       console.log(t("unlocked"));
+      // The real end of this session, in the system's scheduler (session.mjs). A schedule that
+      // fails never undoes the unlock: the session is locked at the first read after its end, or
+      // at the next start of Claude Code, and the window says so.
+      const scheduled = scheduleLock({ at: ts });
+      if (!scheduled.ok) console.log(t("lockNotScheduled", { detail: scheduled.detail || "?" }));
       return;
     }
     if (attempt < MAX_ATTEMPTS) console.log(t("unlockWrongPassword", { attempt, total: MAX_ATTEMPTS }));

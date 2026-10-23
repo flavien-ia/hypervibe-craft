@@ -13,23 +13,25 @@ Affiche où en est votre consommation sur chaque service face aux plafonds des p
 1. **Lancement du script** : Hypervibe exécute en parallèle 6 fetchers qui interrogent les API de chaque service. Ça prend 2 à 5 secondes.
 
 2. **Récupération des données** : pour chaque service, Hypervibe lit :
-  - **Neon** : nombre de projets utilisés, storage utilisé (par projet, jusqu’à 0.5 Go chacun), heures de calcul utilisées (jusqu’à 100h / mois / projet)
-  - **Cloudflare R2** : Go stockés, opérations lecture/écriture
+  - **Neon** : nombre de projets utilisés, storage utilisé (par projet, jusqu’à 1 Go chacun et 20 Go en tout, lu sur les branches de chaque projet comme Neon le mesure), heures de calcul utilisées (jusqu’à 100h / mois / projet)
+  - **Cloudflare R2** : Go stockés, opérations lecture/écriture, et la taille de chaque bucket
   - **Cloudflare Workers** : requêtes / jour, slots cron utilisés sur les 5 gratuits
   - **Brevo** : emails envoyés / mois (jusqu’à 300/jour gratuits)
   - **Resend** : emails envoyés / mois (3 000 gratuits) + 100/jour
   - **Vercel** : bandwidth, fonctions, builds, hobby seats
 
 3. **Affichage en tableau** : chaque métrique a :
-  - **Utilisation** vs **plafond** (par ex. *"0.247 Go / 0.5 Go (49,5 %)"*)
-  - **Verdict emoji** : ✅ (sous 70 %), ⚠️ (70-90 %), 🔴 (90 %+)
+  - **Utilisation** vs **plafond** (par ex. *"0.247 Go / 1 Go (24,7 %)"*)
+  - **Verdict emoji** : ✅ (sous 70 %), ⚠️ (70-90 %), 🔴 (90 %+), et ❓ pour un chiffre qui n’a pas pu être lu : jamais un 0 % vert
   - **Projection** quand applicable (par ex. *"Au rythme actuel, vous atteindrez le plafond dans 18 jours"*)
 
-4. **Breakdown détaillé** : pour Neon (qui a des quotas **par projet**), Hypervibe affiche aussi le détail par projet, pour identifier exactement lequel consomme le plus.
+4. **Breakdown détaillé** : pour Neon (qui a des quotas **par projet**), Hypervibe affiche aussi le détail par projet, pour identifier exactement lequel consomme le plus. Pour R2, quand le stockage approche de son plafond, il nomme vos trois plus gros buckets, avec leur taille et leur nombre de fichiers (en lecture seule : rien n’est supprimé).
 
 5. **Conseils** : pour chaque verdict ⚠️ ou 🔴, Hypervibe propose des actions concrètes (alléger le projet, passer au plan supérieur, etc.).
 
-6. **Surveillance quotidienne (vérifiée au passage)** : pendant qu’elle y est, Hypervibe s’assure que votre surveillance quotidienne de quotas est en place : un petit job sur votre **horloge partagée** (le mécanisme mutualisé qui exécute aussi vos tâches planifiées et vos sauvegardes de base) vérifie chaque jour votre stockage Cloudflare R2 et vous envoie un email si vous approchez des 10 Go gratuits (alerte à partir de 9 Go). Aucune machinerie à part, aucune place Cloudflare en plus.
+6. **Le coût du mois, si vous le demandez** : demandez combien ça vous coûte, et Hypervibe ajoute une estimation limitée à ce qu’il lit ou calcule à coup sûr : la facturation de Vercel lui-même sur un plan payant (avec le mois à ce rythme), le stockage R2 au-delà de ses 10 Go gratuits, le plan gratuit de Neon à 0 $. Il dit ce qu’il ne compte pas : l’abonnement Cloudflare (la clé n’a pas le droit de lire la facturation) et les forfaits des services d’email. Une estimation, jamais la facture.
+
+7. **Surveillance quotidienne (vérifiée au passage)** : pendant qu’elle y est, Hypervibe s’assure que votre surveillance quotidienne de quotas est en place : un petit job sur votre **horloge partagée** (le mécanisme mutualisé qui exécute aussi vos tâches planifiées et vos sauvegardes de base) vérifie chaque jour votre stockage Cloudflare R2 et vous envoie un email si vous approchez des 10 Go gratuits (alerte à partir de 9 Go). Aucune machinerie à part, aucune place Cloudflare en plus.
 
 ## Ce que ça crée pour vous
 
@@ -54,5 +56,5 @@ Pour la grande majorité des projets perso ou petit business, vous resterez bien
 {{/callout}}
 
 {{callout:warning|Neon = plafonds par projet}}
-Particularité Neon : les 0.5 Go de storage et 100h de calcul sont **par projet**, pas par compte. Vous pouvez avoir 100 projets, donc 50 Go cumulés. Mais **chaque projet** ne doit pas dépasser 0.5 Go. Hypervibe affiche le breakdown par projet pour identifier celui qui est en train de saturer.
+Particularité Neon : le 1 Go de storage et les 100h de calcul sont **par projet**, pas par compte, et le stockage a aussi un plafond sur tout le compte : 20 Go pour l’ensemble des projets. **Chaque projet** ne doit pas dépasser 1 Go. Hypervibe affiche le breakdown par projet pour identifier celui qui est en train de saturer.
 {{/callout}}

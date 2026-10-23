@@ -69,7 +69,7 @@ export const SHARED_RULES = {
 };
 
 /** The kinds of the manifest that nothing here deletes, so that nothing needs to protect. */
-export const NOT_DELETED_KINDS = ["ai-key"];
+export const NOT_DELETED_KINDS = ["ai-key", "email-key"];
 
 /** Every inventory section a rule reads: discover-resources.mjs hands them all over. */
 export const SHARED_SECTIONS = [...new Set(Object.values(SHARED_RULES).map((rule) => rule.section))];

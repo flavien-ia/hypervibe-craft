@@ -1,6 +1,6 @@
 ---
 name: _get-secret
-description: Internal pattern for reading a secret from the user's Bitwarden vault inside any skill. Defines the canonical Bash idiom (read into a shell variable, never print) plus the auto-unlock orchestration (if the vault is locked or the 12h session expired, open the unlock window, then retry). Referenced by every skill that consumes a global key from the vault (Cloudflare, Neon, Hostinger, Resend/Brevo, registrar tokens, Anthropic). Not meant to be invoked directly by users.
+description: Internal pattern for reading a secret from the user's Bitwarden vault inside any skill. Defines the canonical Bash idiom (read into a shell variable, never print) plus the auto-unlock orchestration (if the vault is locked or the 6h session expired, open the unlock window, then retry). Referenced by every skill that consumes a global key from the vault (Cloudflare, Neon, Hostinger, Resend/Brevo, registrar tokens, Anthropic). Not meant to be invoked directly by users.
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; most workflows also use pnpm, git, and project CLIs (vercel, gh)."
 ---
 
@@ -49,7 +49,7 @@ LAUNCH="${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs"
 |---|---|---|
 | 0 | OK | use the value |
 | 2 | vault locked (no session) | unlock then retry |
-| 3 | session expired (>12h) | unlock then retry |
+| 3 | session expired (>6h; the vault was locked on the way) | unlock then retry |
 | 4 | item missing | offer the user to add it (see below) |
 | 5 | field missing | item exists but not this field - check the field name |
 
@@ -85,7 +85,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>  
 VAL=$(node "$VAULT" get CLOUDFLARE api_token); RC=$?
 ```
 
-The master password is typed **in the window**, never in the chat. The session stays valid for 12h (a single unlock per day).
+The master password is typed **in the window**, never in the chat. The session stays valid for 6h, then the vault is locked for real (`bw lock`): one unlock per half-day of work.
 
 The window asks up to **3 times** before giving up, so a typo is fixed on the spot. If `launch.mjs unlock` still exits non-zero, the three attempts were wrong: say so in the chat and ask before opening another window, rather than looping on the same `get`.
 

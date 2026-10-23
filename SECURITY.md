@@ -81,8 +81,9 @@ runs shell commands), refuses a sweeping `git add -A` and destructive SQL, and
 asks for your confirmation before a push, a direct production deploy, a worker
 deploy (also when one of the plugin's own scripts would do it), a schema push,
 cloud deletions, a change of a domain at its registrar (its nameservers, or the
-records the registrar keeps), a hard reset, or the opt-in that lets a checkout's versioned
-git hooks run. It asks the same on the forge's command line: before a merge
+records the registrar keeps), the revocation of a project's own sending key by
+the plugin's script (`email-key.mjs revoke`), a hard reset, or the opt-in that
+lets a checkout's versioned git hooks run. It asks the same on the forge's command line: before a merge
 into the main branch or a deployment run again (both publish), and before what
 deletes, exposes or moves something there (a repository deleted, renamed, created
 or made public, or transferred, a release or a secret removed, an access deleted), however
@@ -191,6 +192,12 @@ The allowlists come first and the framing second, on purpose: framing
 Global keys live in a Bitwarden vault, and are typed into an OS window that the
 assistant never sees. They are never printed in the chat, never committed, never
 written to a file. Project secrets stay in the project's `.env` and in Vercel.
+The email account's key is a global key that never goes into a project: each
+project holds a sending key of its own (made by Resend's API, limited to
+sending, and to the project's domain once verified; made by hand at Brevo,
+under the project's name), so one `.env` seen or leaked exposes that project's
+sending, never the whole account. Until 3.4.16 `/add-email` copied the
+account's key into every project.
 A secret the plugin writes or sends (a generated key, a key typed into the
 masked window, a connection string, the key an API call carries) goes from
 command to command on the standard input: never on a command line, where
@@ -215,6 +222,19 @@ versioned hooks had reopened that door on every machine set up by `/start`
 that ships hooks is announced on stderr at its first commit or push, never run,
 and `/start`, `/add-test` and `/update-hypervibe` all replace the older block on
 an existing machine.
+
+An unlocked vault stays open six hours, and then it is really locked: `bw lock`
+runs with the session in its environment, never on its command line, and the
+session's file is removed, so a token copied in the meantime stops opening the
+vault. The lock is scheduled at the unlock in the system's own scheduler (a
+one-time task on Windows, caught up at the next sign-in; a launchd agent on
+macOS; systemd-run or at on Linux), the first read after the six hours does it
+too, and so does the start of a Claude Code session, for a computer that was
+off at that time. A lock only ends the session it was made for, never a newer
+one. Outside Windows, the session's file is readable by its owner alone (0600). Until 3.4.16 the session lasted twelve hours and only the plugin's scripts
+refused an older one: nothing ran `bw lock`, and the token kept opening the
+vault to any program of the machine until the next unlock (security audit of
+23/10/2026).
 
 ## Verifying what you installed
 

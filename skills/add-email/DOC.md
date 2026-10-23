@@ -29,9 +29,9 @@ The skill **handles both providers** and chooses automatically, without asking, 
 
 2. **Automatic provider choice** (for a fresh install): a decision rule based on your env keys (see the table above). No question asked.
 
-3. **Prerequisite check**:
-   - For Resend: a Resend API key stored in the vault (item `RESEND`) - created once at resend.com/api-keys
-   - For Brevo: a Brevo API key (vault `BREVO`, or `BREVO_API_KEY` in the session)
+3. **Prerequisite check**: your email account's key, stored once in the vault (item `RESEND`, created at resend.com/api-keys, or item `BREVO`). It stays there, for the gestures on the account itself (your sending domain, your senders, and at Resend the projects' keys): no project ever holds it.
+   - **The project's own sending key**: for Resend, Hypervibe makes it for you through Resend's API; it can only send, and once your sending domain is verified, only from that domain. For Brevo, whose API makes no key, you make it in Brevo's console under the project's name, and paste it in a masked window that puts it in the project only.
+   - Either way, if one project's key leaks (a `.env` seen on a screen, a repository or a hosting that leaks), only that project's sending is exposed: never your whole account, its domains and contacts, nor your other projects.
 
 4. **SDK install + scaffolding**:
    - The appropriate SDK is installed (`resend` or `@getbrevo/brevo`)
@@ -46,7 +46,7 @@ The skill **handles both providers** and chooses automatically, without asking, 
 
 ## What it creates for you
 
-- Depending on the chosen provider: a **Resend** or **Brevo API key**, read from the vault (item `RESEND` or `BREVO`)
+- An **own sending key** for the project (Resend: made through its API, sending only; Brevo: made in its console under the project's name), in `.env` and at the hosting, recorded in the project's manifest: `/rotate-secret` renews it, `/delete-project` revokes it. Your account's key stays in the vault.
 - The appropriate SDK installed (`resend` or `@getbrevo/brevo` v5+)
 - `src/server/mail.ts` with `sendMail()` + escaping helper (`escapeHtml` or `escapeForBrevo`)
 - A `contact` tRPC router (`src/server/api/routers/contact.ts`) for the form
@@ -58,7 +58,7 @@ The skill **handles both providers** and chooses automatically, without asking, 
 ## Prerequisites
 
 - The project must be in Next.js with tRPC (typically initialized by `/bootstrap`)
-- An email key stored in the **vault**: either Resend (item `RESEND`, 3000 emails/month) or Brevo (item `BREVO`, 300/day ≈ 9000/month). `/add-email` detects it automatically and, if it is missing, guides you to create it and store it in the vault.
+- Your email account's key stored in the **vault**: either Resend (item `RESEND`, 3000 emails/month) or Brevo (item `BREVO`, 300/day ≈ 9000/month). `/add-email` detects it automatically and, if it is missing, guides you to create it and store it in the vault. It never leaves it: the project gets a key of its own.
 - To configure a custom domain: your domain must be managed by Cloudflare (otherwise run `/add-domain` first)
 
 ## Tips
@@ -76,6 +76,10 @@ On the Brevo side, the sender email (`BREVO_SENDER_EMAIL`) must be an **active s
 - **Brevo**: 300 emails/day (≈ 9,000/month)
 
 More than enough to get started in both cases. Brevo is more generous on monthly volume, Resend has a slightly smoother DX.
+{{/callout}}
+
+{{callout:warning|Projects set up before version 3.4.16}}
+They may hold your account's key itself. Re-run `/add-email` in each of them: it notices it and gives the project its own key. Once every project has its own, renew your account's key at the provider (Resend: API Keys; Brevo: SMTP & API, API keys), store the new one in your vault, and have `/quotas` register its alert again (the shared clock keeps a copy of the account's key to send it): the old copies of the account's key (in `.env` files, at the hosting, in recordings) then stop working.
 {{/callout}}
 
 {{callout:info|How to switch provider}}

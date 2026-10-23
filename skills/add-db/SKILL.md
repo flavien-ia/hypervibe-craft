@@ -31,7 +31,7 @@ This skill pulls content in from outside (documentation, an API response, a web 
 
 ## Preflight - vault unlocked
 
-This skill reads the Neon key from the vault, so first make sure the vault is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then, if `locked`/`expired`, run `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (window, once a day); if the vault does not exist yet, delegate to `_add-keyring`.
+This skill reads the Neon key from the vault, so first make sure the vault is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then, if `locked`/`expired`, run `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (window; the vault then stays open 6 hours, and locks itself again); if the vault does not exist yet, delegate to `_add-keyring`.
 
 ---
 
@@ -216,7 +216,7 @@ If the banner contains warnings (e.g. `NEON_QUOTA_NEAR_LIMIT`, `NEON_PROJECT_NAM
 
 ## Step 5 - Update CLAUDE.md
 
-First, refresh the managed block of project rules. It carries the database reading doctrine (explicit columns, bounded lists, no polling, `revalidate` >= 600, no binaries in the database) and the Neon rule (REST API, vault key, `run-sql.mjs`), so those are **not** written by hand any more: one source of truth, and a correction shipped by a later plugin version reaches the project instead of being frozen in it.
+First, refresh the managed block of project rules. It carries the database reading doctrine (explicit columns, `findFirst` included, bounded lists, no polling, the read cached for an hour at least rather than the page, no binaries in the database) and the Neon rule (REST API, vault key, `run-sql.mjs`), so those are **not** written by hand any more: one source of truth, and a correction shipped by a later plugin version reaches the project instead of being frozen in it.
 
 ```bash
 PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
@@ -249,7 +249,7 @@ Two real cases, on this very stack, in August 2026:
 
 Neither was a heavy-traffic app. Both were one person working normally.
 
-There is also a compute side: the database suspends after 5 minutes without a query, so anything that queries more often keeps it awake around the clock and burns the 100 monthly compute hours. This is why `revalidate` never goes below 600 and why an idle poll never goes below 30 s.
+There is also a compute side: the database suspends after 5 minutes without a query, so anything that queries more often keeps it awake around the clock and burns the 100 monthly compute hours. This is why a read is cached for an hour at least (600 s are woken at each expiry by a regular automated visitor), why a page's `revalidate` protects nothing once its tree reads the session, and why an idle poll never goes below 30 s. On a paid plan nothing blocks, but the hours awake multiplied by the compute size are the bill.
 
 If the user asks for a snappier screen, the answer is an event (a webhook, a `revalidateTag` in the mutation, a push notification), never a shorter interval.
 
@@ -332,7 +332,7 @@ Tell the user:
 - The schema is pushed and the connection verified
 - `DATABASE_URL` is in the local `.env` and on Vercel (production / preview / development)
 - Commands: `pnpm db:push` to push schema changes, `pnpm db:studio` to browse the data
-- Neon free tier: 0.5 GB storage/project, 100 CU-hours/month, automatic scale-to-zero
+- Neon free tier: 1 GB storage/project (20 GB across all projects), 100 CU-hours/month, automatic scale-to-zero
 - **Backup line** (based on the status captured in Step 6):
   - If active: *"✅ Automatic backups enabled - a new one every 2 weeks, we keep the 2 latest + 3 historical ones spread over the last 9 months."*
   - If not enableable: see the Step 6 table

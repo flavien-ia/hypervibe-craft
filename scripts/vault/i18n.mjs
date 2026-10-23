@@ -12,6 +12,11 @@
 // Adding a language: copy the `en` block, translate the values, keep the {braces}
 // placeholders. Any key missing from a language silently falls back to English,
 // so a partial translation is safe to ship.
+//
+// The session's length is never written here: it comes from session.mjs (TTL_HOURS), the one
+// length every reader of the session uses.
+
+import { TTL_HOURS } from "./session.mjs";
 
 const STRINGS = {
   en: {
@@ -41,7 +46,8 @@ const STRINGS = {
     unlocking: "Unlocking the vault for {email}...",
     unlockWrongPassword: "\nWrong master password (attempt {attempt} of {total}). Try again.\n",
     unlockFailedFinal: "Wrong master password {total} times in a row. Start the operation again to retry.",
-    unlocked: "Vault unlocked. Valid for 12h.",
+    unlocked: `Vault unlocked for ${TTL_HOURS}h: after that, it locks itself again.`,
+    lockNotScheduled: `The automatic lock in ${TTL_HOURS}h could not be scheduled on this computer ({detail}). The vault will still lock itself at the first key read, or at the first start of Claude, after ${TTL_HOURS}h.`,
 
     vaultLocked: "Vault locked or session expired. Unlock it first.",
     itemName: "Item name (e.g. CLOUDFLARE): ",
@@ -107,7 +113,8 @@ const STRINGS = {
     unlocking: "Deverrouillage du coffre pour {email}...",
     unlockWrongPassword: "\nMot de passe maitre incorrect (essai {attempt} sur {total}). Reessaie.\n",
     unlockFailedFinal: "Mot de passe maitre incorrect {total} fois de suite. Relance l'operation pour reessayer.",
-    unlocked: "Le coffre est ouvert. Valable 12h.",
+    unlocked: `Le coffre est ouvert pour ${TTL_HOURS}h : ensuite, il se referme tout seul.`,
+    lockNotScheduled: `La fermeture automatique dans ${TTL_HOURS}h n'a pas pu etre programmee sur cet ordinateur ({detail}). Le coffre se refermera quand meme a la premiere lecture d'une cle, ou au premier lancement de Claude, apres ${TTL_HOURS}h.`,
 
     vaultLocked: "Coffre verrouille ou session expiree. Deverrouille-le d'abord.",
     itemName: "Nom de l'element (ex : CLOUDFLARE) : ",

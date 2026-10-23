@@ -3,7 +3,10 @@
 //
 // HV_RECETTE_NET holds the scenario, in JSON: [[<address prefix>, <answer>], ...]. The first prefix
 // the address starts with wins, so the more specific one comes first. An answer is
-// {status, body} (the body sent back as JSON), or "reseau" for a network that fails.
+// {status, body} (the body sent back as JSON), {status, text} (sent back as written, for an
+// answer that is not one JSON document, like Vercel's billing charges in JSON lines), or "reseau"
+// for a network that fails. A third element, {header, value}, keeps an entry for the requests
+// that carry that header with that value (R2's EU buckets: same address, `cf-r2-jurisdiction: eu`).
 // HV_RECETTE_NET_LOG, when set, receives one JSON line per request: its method and its address,
 // never a header (a key travels in them, even a recette's).
 //
@@ -29,12 +32,15 @@ globalThis.fetch = async (input, init = {}) => {
       // The request is answered all the same; the recette that reads the log will say what is missing.
     }
   }
-  const hit = Array.isArray(scenario) ? scenario.find(([prefix]) => url.startsWith(prefix)) : undefined;
+  const sent = new Headers(init?.headers ?? input?.headers ?? {});
+  const hit = Array.isArray(scenario)
+    ? scenario.find(([prefix, , when]) => url.startsWith(prefix) && (!when || sent.get(when.header) === when.value))
+    : undefined;
   const answer = hit ? hit[1] : "hors-scenario";
   if (answer === "reseau" || answer === "hors-scenario" || typeof answer !== "object" || answer === null) {
     throw new TypeError(`fetch failed (recette: ${answer === "reseau" ? "network down" : "address outside the scenario"})`);
   }
-  return new Response(JSON.stringify(answer.body ?? {}), {
+  return new Response(typeof answer.text === "string" ? answer.text : JSON.stringify(answer.body ?? {}), {
     status: answer.status ?? 200,
     headers: { "Content-Type": "application/json" },
   });
