@@ -609,16 +609,16 @@ The infrastructure and the addons are in place. Now we build the real applicatio
 
 6. **Be generous with features.** If the description says "a restaurant app", build: a landing page with hero + menu sections, a reservation form that saves to DB, an admin dashboard to manage reservations, and a contact section. Go beyond the minimum.
 
-   **⚠️ Admin dashboard - mandatory pattern to avoid the redirect loop**: if you generate an admin with a custom login page (`/admin/signin`), NEVER ADD a gate (`if (!isAdmin) redirect("/admin/signin")`) in `app/admin/layout.tsx`. This layout also wraps `/admin/signin/page.tsx` → infinite loop. Correct pattern:
+   **⚠️ Admin dashboard - mandatory pattern: every page checks for itself, and no redirect loop**: if you generate an admin with a custom login page (`/admin/signin`), NEVER ADD a check (`if (!isAdmin) redirect("/admin/signin")`) in `app/admin/layout.tsx`. This layout also wraps `/admin/signin/page.tsx` → infinite loop. Correct pattern:
    ```
    app/admin/
-     signin/page.tsx          ← outside the gate
+     signin/page.tsx          ← outside the group
      (protected)/
-       layout.tsx             ← gate HERE only
-       page.tsx               ← /admin
-       <other pages>
+       layout.tsx             ← checks too, never on its own
+       page.tsx               ← /admin: await requireAdmin() on its first line
+       <other pages>          ← each one: await requireAdmin() on its first line
    ```
-   The `(protected)` is a route group (parentheses, does not appear in the URL). Simpler alternative if you want to avoid the route group: no layout-gate, gate page-by-page with `if (!await isAdmin()) redirect("/admin/signin")` at the start of each protected `page.tsx`.
+   The `(protected)` is a route group (parentheses, does not appear in the URL). **Every `page.tsx` of the group starts with `await requireAdmin()`** (`~/server/require-admin`, written by `/add-auth`) before reading any data: a check in the layout alone is not enough, since Next.js renders the layout and the page at the same time and the layout's redirect leaves with the page's content (found in production on apps built this way, 2026-10-26). Every `"use server"` action starts with `if (!(await isAdmin())) return;`.
 
 ### For both cases:
 

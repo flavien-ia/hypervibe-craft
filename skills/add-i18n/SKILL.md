@@ -105,6 +105,8 @@ It refuses to run if `src/i18n/` or `src/app/[locale]/` already exist (delete ma
 
 If `src/middleware.ts` already exists (e.g. hostname routing), **merge** the next-intl logic with the existing one rather than overwriting. Otherwise, create the file:
 
+**The admin gate** (a middleware whose first line is `// hypervibe:admin-gate`, written by `/add-auth`; from Next.js 16 it is `src/proxy.ts`): keep it, first. The merged function sends a request for an admin page without a session cookie to the sign-in page, in every locale now (`/admin/...` and `/<locale>/admin/...`, the sign-in page excepted), then hands over to next-intl; next-intl's `matcher` already covers those paths. The admin pages keep their own `requireAdmin()` either way: the middleware is a first barrier, never the only one.
+
 ```typescript
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";

@@ -162,7 +162,8 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, p
    }
    ```
    Add `export async function isAdmin() { return (await auth())?.user?.id === "admin"; }`.
-5. **Update CLAUDE.md** - add the admin section in addition to the users sections.
+4b. **The admin gate**: `node "${CLAUDE_SKILL_DIR}/../../scripts/admin-gate.mjs" --web-dir <WEB_DIR>`. It writes `src/server/require-admin.ts`, the check every admin page calls on its first line, and the middleware in front of `/admin` (`src/middleware.ts`, or `src/proxy.ts` from Next.js 16), never over a middleware the project already has: with `"status":"existing"` in its last line, merge by hand when that is safe or tell the person, as `_setup-auth-admin` says. Every admin page created later starts with `await requireAdmin()`: a check in a layout alone lets the page's content leave with its redirect.
+5. **Update CLAUDE.md** - add the admin section (the conventions of `_setup-auth-admin` Step 2, its "Admin structure" line included) in addition to the users sections.
 6. **`pnpm tsc --noEmit`** - check.
 7. **Summary**: give the path of the file that holds the PROD credentials (open it, save the password in a password manager, delete the file), never the password; explain the coexistence in authorize.
 

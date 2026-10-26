@@ -43,6 +43,13 @@ const SHELL_TOOLS = new Set(["Bash", "Monitor"]);
 // refspec, a missing upstream or remote reference, an error or two seconds of git: the question
 // stays as it was, silent, since a wrong list would be worse than none. The decision itself never
 // depends on this: rules.mjs stays pure, and git runs only on a push's question.
+//
+// A forced push also says what the remote loses (3.4.17 / 2.4.16, Bastien Detraz's report of
+// 25/10/2026): for `git push --force origin main`, the list said what leaves (`origin/main..main`),
+// never the commits the remote branch loses (`main..origin/main`), and the "yes" covered a push that
+// looked ordinary. For `--force`, `-f`, `--force-with-lease` (with or without a value) and a `+`
+// refspec (`git push origin +main`), the same reading in the other direction is added, as this copy
+// last saw the remote. `--force-if-includes` alone forces nothing.
 
 /** Flags of `git push` that leave the commits it sends as they are. */
 const PUSH_FLAGS = new Set([
@@ -89,7 +96,10 @@ function plainWords(line) {
   return words;
 }
 
-/** {dir, remote} of a push read whole, or null. */
+/** The flags that make a push replace what the remote branch holds. */
+const FORCING = new Set(["-f", "--force", "--force-with-lease"]);
+
+/** {dir, remote, branch, forced} of a push read whole, or null. */
 function plainPush(command) {
   const words = plainWords(String(command ?? "").trim());
   if (!words || words[0] !== "git") return null;
@@ -105,17 +115,24 @@ function plainPush(command) {
   }
   if (words[i] !== "push") return null;
   const operands = [];
+  let forced = false;
   for (const w of words.slice(i + 1)) {
     if (w.startsWith("-")) {
       if (!PUSH_FLAGS.has(w.split("=")[0])) return null;
+      if (FORCING.has(w.split("=")[0])) forced = true;
       continue;
     }
     operands.push(w);
   }
   if (operands.length > 2) return null;
-  // `git push <remote> <branch>`, both written plainly; any other refspec keeps the question.
+  // `git push <remote> <branch>` (or `+<branch>`, which forces), both written plainly; any other
+  // refspec keeps the question.
+  if (operands.length === 2 && operands[1].startsWith("+")) {
+    forced = true;
+    operands[1] = operands[1].slice(1);
+  }
   if (operands.length === 2 && !(PLAIN_REMOTE.test(operands[0]) && PLAIN_BRANCH.test(operands[1]))) return null;
-  return { dir, remote: operands[0] ?? null, branch: operands[1] ?? null };
+  return { dir, remote: operands[0] ?? null, branch: operands[1] ?? null, forced };
 }
 
 /** A remote's name and a branch's name, written plainly: no refspec syntax (`:`, `+`, `^`, `~`,
@@ -143,6 +160,8 @@ function outgoingCommits(command, cwd) {
         stdio: ["ignore", "pipe", "ignore"],
       });
     let range;
+    let back;
+    let where;
     if (push.branch) {
       // That branch beyond its copy at the remote, both read as references (a tag of the same name
       // never stands in); a branch the remote does not have yet keeps the question as it was.
@@ -151,21 +170,30 @@ function outgoingCommits(command, cwd) {
       git(["rev-parse", "--verify", "--quiet", theirs]);
       git(["rev-parse", "--verify", "--quiet", ours]);
       range = { arg: `${theirs}..${ours}`, said: `${push.remote}/${push.branch}..${push.branch}` };
+      back = { arg: `${ours}..${theirs}`, said: `${push.branch}..${push.remote}/${push.branch}` };
+      where = `${push.remote}/${push.branch}`;
     } else {
-      if (push.remote) {
-        const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).trim();
-        if (!upstream.startsWith(`${push.remote}/`)) return null;
-      }
+      const upstream = git(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]).trim();
+      if (push.remote && !upstream.startsWith(`${push.remote}/`)) return null;
       range = { arg: "@{u}..HEAD", said: "@{u}..HEAD" };
+      back = { arg: "HEAD..@{u}", said: "HEAD..@{u}" };
+      where = shown(upstream);
     }
-    const lines = git(["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", range.arg])
-      .split(/\r?\n/)
-      .map(shown)
-      .filter(Boolean);
-    if (!lines.length) return null;
-    const more = lines.length > 10 ? `; and ${lines.length - 10} more` : "";
+    const listed = (arg) =>
+      git(["log", "--oneline", "--no-decorate", "--no-color", "--no-show-signature", arg])
+        .split(/\r?\n/)
+        .map(shown)
+        .filter(Boolean);
+    const firstTen = (list) => `${list.slice(0, 10).join("; ")}${list.length > 10 ? `; and ${list.length - 10} more` : ""}`;
+    const lines = listed(range.arg);
+    // What the remote branch loses, for a forced push only: the same reading the other way round.
+    const lost = push.forced ? listed(back.arg) : [];
+    if (!lines.length && !lost.length) return null;
     const count = lines.length === 1 ? "1 commit leaves" : `${lines.length} commits leave`;
-    return `${count} with it (git log ${range.said}, subjects as written in the repository): ${lines.slice(0, 10).join("; ")}${more}.`;
+    const leaving = lines.length ? `${count} with it (git log ${range.said}, subjects as written in the repository): ${firstTen(lines)}.` : "Nothing leaves with it.";
+    if (!lost.length) return leaving;
+    const removed = lost.length === 1 ? "1 commit is removed" : `${lost.length} commits are removed`;
+    return `${leaving} And, the push being forced, ${removed} from ${where} (git log ${back.said}, as this copy last saw the remote): ${firstTen(lost)}.`;
   } catch {
     return null;
   }

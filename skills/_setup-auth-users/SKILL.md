@@ -87,6 +87,7 @@ Invoke `_update-claude-md` with:
 - `stack`: `- **Auth**: NextAuth v5 (users mode - email+pwd accounts hashed with scrypt in DB<{{LIST_OAUTH}}>)` (add `, OAuth: Google` or `, OAuth: GitHub` if applied later via `add-google-auth` / `add-github-auth`; otherwise leave without the suffix)
 - `conventions`:
   - `- Auth users: \`await auth()\` from \`~/server/auth\` for the session. \`protectedProcedure\` in tRPC for routes that require a logged-in user. \`session.user.id\` is guaranteed non-null thanks to the module augmentation in \`auth.ts\`.`
+  - `- **Pages for signed-in users**: a server page that shows a user's data checks the session itself on its first lines, before reading anything, as \`/dashboard\` does (\`const session = await auth(); if (!session?.user) redirect("/signin?callbackUrl=...")\`). A check in a shared \`layout.tsx\` is not enough: Next.js renders the layout and the page at the same time, and the layout's redirect carries the page's content. Every \`"use server"\` action that changes something checks the session first too.`
 - `custom`:
   - heading: `## User authentication`
   - body:

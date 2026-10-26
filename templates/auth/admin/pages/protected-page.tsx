@@ -1,7 +1,12 @@
-import { signOut } from "~/server/auth";
+import { isAdmin, signOut } from "~/server/auth";
+import { requireAdmin } from "~/server/require-admin";
 import { Button } from "~/components/ui/button";
 
-export default function AdminHomePage() {
+// Every page of admin/(protected)/ starts with `await requireAdmin()`, before reading anything: the
+// layout's check is not enough (Next.js renders the layout and the page at the same time, and the
+// layout's redirect leaves with the page's content). Every "use server" action checks for itself.
+export default async function AdminHomePage() {
+  await requireAdmin();
   return (
     <main className="mx-auto max-w-3xl px-4 py-12">
       <div className="flex items-center justify-between">
@@ -9,6 +14,7 @@ export default function AdminHomePage() {
         <form
           action={async () => {
             "use server";
+            if (!(await isAdmin())) return;
             await signOut({ redirectTo: "/admin/signin" });
           }}
         >

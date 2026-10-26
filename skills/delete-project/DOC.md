@@ -8,7 +8,7 @@ Cleanly and permanently deletes a Hypervibe project and all of its associated cl
 - You want to **avoid paying** for services that stayed active (Render, Stripe live, Neon beyond the free tier, etc.)
 - You want to **free up quotas** on your free plans (Cloudflare R2, Neon, Vercel) for your next projects
 - You want to **decommission** an app that will no longer be used (end of a mission, a client leaving, a complete redesign)
-- You want to clear away an old folder or a mock-up **without any cloud infrastructure**: nothing is deleted for you, but Hypervibe tells you whether its code would be lost (never committed, never pushed, no repository at all) or whether it can go without loss, offers a backup first, finds the notes and skills that still name it, and gives you the folder to delete
+- You want to clear away an old folder or a mock-up **without any cloud infrastructure**: nothing is deleted for you, but Hypervibe tells you whether its code would be lost (never committed, never pushed, put aside with git stash, no repository at all), whether it can go without loss (the online repository, asked directly, holds all of it), or that it cannot tell (the online repository no longer answers), offers a backup first, finds the notes and skills that still name it, and gives you the folder to delete
 
 ## How it works
 

@@ -174,7 +174,7 @@ The resulting JSON has the form:
   "cronJobs":     { "found": true, "jobs": [{ "name": "cool-trattoria-rapport-hebdo", "cron": "0 8 * * 1", "url": "https://..." }], "secretName": "CRON_SECRET_COOL_TRATTORIA" },
   "render":       { "found": false },
   "stripe":       { "webhooksFound": true, "webhooks": [...] },
-  "upstash":      { "found": false },
+  "upstash":      { "found": false, "skipped": "no Upstash account on this machine (~/.upstash.json), and nothing in the project points to Upstash" },
   "emailRouting": { "found": true, "rules": [...] },
   "envVars":      {
     "sources": ["vercel-production", "local-.env"],
@@ -200,23 +200,27 @@ The block prints the inventory JSON directly (and echoes its absolute path as `I
 
 ### 1.1 An empty cloud inventory: a folder without infrastructure
 
-An old project, a mock-up, a folder copied from somewhere: it may have nothing in the cloud at all. The inventory is **empty in the cloud** when every cloud section found nothing (`vercel`, `neon`, `workers`, `r2`, `dns`, `emailRouting`, `cronJobs`, `render`, `upstash` with `found: false`, `dbBackup.isTarget` false, no Stripe webhook nor product, `github.exists` false, no AI key nor sending key in the manifest) **and** no section carries an `error`. A scan that failed is not a scan that found nothing: with an `error`, stay in the normal path (section 2.3b says what could not be checked).
+An old project, a mock-up, a folder copied from somewhere: it may have nothing in the cloud at all. The inventory is **empty in the cloud** when every cloud section found nothing (`vercel`, `neon`, `workers`, `r2`, `dns`, `emailRouting`, `cronJobs`, `render`, `upstash` with `found: false`, `dbBackup.isTarget` false, no Stripe webhook nor product, `github.exists` false, no AI key nor sending key in the manifest) **and** no section carries an `error`. A section with `skipped` counts as one that found nothing: this computer has no account at that service, and nothing in the project points to it (no variable, package, manifest entry or file of that service); its `skipped` text says which. A scan that failed is not a scan that found nothing: with an `error`, stay in the normal path (section 2.3b says what could not be checked).
 
 Then there is nothing to delete automatically, and the only thing at stake is the folder itself, which the person deletes by hand. The question becomes: **would the code be lost?** Skip Phases 2 and 3, and answer it:
 
-1. **Say it plainly**: nothing of `<PROJECT_NAME>` lives in the cloud (no site, no database, no stored files, no scheduled task, no repository on GitHub), so nothing will be deleted for them.
+1. **Say it plainly**: nothing of `<PROJECT_NAME>` lives in the cloud (no site, no database, no stored files, no scheduled task, no repository on GitHub), so nothing will be deleted for them. If sections were `skipped` for want of an account, name those services in one line, as not looked at: this computer has no account there, and nothing in the project points to them (*"Upstash and Render were not looked at: no account on this computer, and the project uses neither"*).
 2. **Where the code stands**, read in `localDir.git`:
    - `repo: false`: the folder is not a git repository, its code exists only here. Unless the person keeps another copy, **code lost if deleted**.
    - `insideLarger: true`: the folder is only part of the repository at `root`. Deleting it is a change in that repository (to commit there), and the figures below are that repository's.
    - `uncommitted` above 0: that many files modified or new, never committed. **Code lost if deleted**, for those.
-   - `unpushed` above 0: that many commits that no remote has, all local branches counted. **Code lost if deleted**.
+   - The remotes were asked what they really hold (`git ls-remote`), never what this copy remembers of them: `remotesAnswered` answered, `remotesSilent` did not (a remote repository deleted, no access, or no network).
+   - `unpushed` above 0: that many commits that no remote that answered holds, the local branches, the tags and a detached `HEAD` counted. **Code lost if deleted**, unless they are on a remote of `remotesSilent`, which could not tell. With `remoteAhead: true`, a remote holds commits this copy never fetched, and some of these may be among them: a `git fetch`, then the inventory again, tells.
+   - `stashed` above 0: that many changes put aside with `git stash`. A stash is never pushed. **Code lost if deleted**.
+   - `submodules` above 0: that many submodules, not looked into. Nothing is proven for them: no "without loss" verdict.
    - `remotes` empty: no remote at all, every commit exists only here. **Code lost if deleted**.
-   - `uncommitted` and `unpushed` at 0, and a remote: **deletable without loss**, the code is on `upstream` (or on its remote).
+   - `remotes` not empty but `remotesAnswered` empty: no remote answered, so nothing proves the code exists elsewhere (`unpushed` is `null`). **Unknown**: name the remotes of `remotesSilent`, say why it may be (the repository deleted, typically, for a folder whose cloud is gone), and give no "without loss" verdict.
+   - `uncommitted`, `unpushed`, `stashed` and `submodules` at 0, and at least one remote in `remotesAnswered`: **deletable without loss**, the code is on that remote.
    - A figure at `null` (git did not answer, `repo: null` with an `error`): nothing is proven. Say what could not be checked, and give no "without loss" verdict.
    - An `.env` in the folder is never in git: its keys go with the folder. They still exist at their services; only a key kept nowhere else would be lost, say so if there is one.
 3. **The references to the project**, so that nothing keeps pointing to a folder that no longer exists: the memory files of the inventory (`memory.files`, each with its path), and the skills that name the project or its folder: search `~/.claude/skills` (and the project's own `.claude/skills`, if any) for `<PROJECT_NAME>` and for the folder's path, with the Grep tool. List what you find; the person decides what to change in it, never you.
-4. **The verdict, in one line**: *"Deletable without loss: the code is on `<remote>`, nothing else lives only here."* or *"Code lost if deleted: <the reasons above, plainly>."*
-5. **Offer a backup first**, always when the code would be lost. For a git repository, `/save-project`: its zip keeps the whole history, the uncommitted changes and the files git does not track yet. For a folder that is not a repository, `/save-project` would not keep the code (it saves the code through git): say so, and offer the simplest copy instead, the folder zipped from the Explorer (right-click, Send to, Compressed folder) or the Finder (Compress), kept outside the folder. Wait for the answer.
+4. **The verdict, in one line**: *"Deletable without loss: the code is on `<remote>`, nothing else lives only here."*, *"Code lost if deleted: <the reasons above, plainly>."*, or, when nothing could be proven, *"Unknown: <what could not be checked, plainly>. Nothing proves the code exists elsewhere."*
+5. **Offer a backup first**, always when the code would be lost or the verdict is unknown. For a git repository, `/save-project`: its zip keeps the whole history, the uncommitted changes and the files git does not track yet. For a folder that is not a repository, `/save-project` would not keep the code (it saves the code through git): say so, and offer the simplest copy instead, the folder zipped from the Explorer (right-click, Send to, Compressed folder) or the Finder (Compress), kept outside the folder. Wait for the answer.
 6. **The folder to delete by hand**: its path (`localDir.path`), to delete from Windows Explorer (right-click, Delete) or the Finder. Never delete the folder yourself, not even here: deleting a project's folder is the person's gesture.
 
 Then end with section 4.5's closing note. Nothing was deleted, so no report of deletions.
@@ -318,7 +322,7 @@ Include conditionally:
 
 ### 2.3b Section "🔴 Scans that could not run" (only if at least one `error`)
 
-A section carrying a `skipped` field (`stripe.skipped: "project has no Stripe"`) is **not** a scan that failed: the project simply has nothing of that kind, and there is nothing to say about it.
+A section carrying a `skipped` field is **not** a scan that failed, and there is nothing to say about it here: the project has nothing of that kind (`stripe.skipped: "project has no Stripe"`), or this computer has no account at that service and nothing in the project points to it (`upstash.skipped`, `render.skipped`...; the text says which). When the project does point to a service this computer has no account at, the section keeps its `error`: list it like the others (*"the project uses Upstash, but this computer has no Upstash account: its database could not be checked"*).
 
 Any section carrying an `error` field (typically `vercel.error` or `r2.error`: vault locked, expired token, R2 not enabled on the account) did **not** return "nothing found", it returned "unknown". List them plainly, e.g. *"I could not check the file storage (R2): <reason>. There may be a bucket left."* and offer to fix the cause then re-run Phase 1 before going further. Never let the user validate a scope built on a failed scan.
 
@@ -525,7 +529,7 @@ The inventory carries `objectCount` and `sizeBytes` per bucket (from `/usage`): 
 `vercel projects ls` returns only its FIRST PAGE (20 projects), for the CURRENT team only: any older project was declared "not found" and left orphaned (bug fixed 2026-08-02), and a project of another team too (fixed 2026-09-17). The scan lists every team, all pages: REST API first (`/v2/teams`, then `/v9/projects` per team), otherwise the CLI in JSON (`vercel teams ls --format json`, then `vercel project ls --format json --scope <team>` per team), and as a last resort, with a CLI too old for JSON, the table of the current team only (`partial: true`). On current accounts an API call without `teamId` answers for the default team, so each project is attributed to the account its own record names, never to the listing that returned it. The `vercel.source` field says which path was used (`rest`, `cli`, `cli-table`).
 
 ### A scan that fails is not a scan that found nothing
-The `vercel` and `r2` sections carry an `error` field when the API call itself failed (vault locked, dead token, R2 not enabled). `found: false` **with** an `error` means "unknown", not "nothing to delete" - surface it in Phase 2 and offer to re-run rather than letting the user validate a truncated inventory.
+The `vercel` and `r2` sections carry an `error` field when the API call itself failed (vault locked, dead token, R2 not enabled). `found: false` **with** an `error` means "unknown", not "nothing to delete" - surface it in Phase 2 and offer to re-run rather than letting the user validate a truncated inventory. A section with `skipped` is the opposite case, never an unknown: nothing there to look at (no account at that service on this computer, and nothing in the project points to it; or a project without Stripe).
 
 ### Sandbox `rm -rf` on C:\DEV\
 The Claude Code classifier often blocks `rm -rf` under `C:\DEV\` (deny rule), even with the user's explicit authorization. Trying via PowerShell or Node.js is also detected. **Do not try to work around it** - give the path to the user in the final report so they delete it via Windows Explorer.

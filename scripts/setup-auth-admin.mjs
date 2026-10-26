@@ -34,6 +34,7 @@ import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
 import { render } from "./_render.mjs";
 import { newAdminPassword, signinUrl, writeCredentialsFile } from "./admin-password.mjs";
+import { ensureAdminMiddleware } from "./admin-gate.mjs";
 
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 
@@ -73,6 +74,7 @@ const STEPS = [
   "writeAuthTs",
   "writeApiRoute",
   "writeAdminPages",
+  "writeAdminGate",
   "pushEnvVars",
 ];
 const completed = [];
@@ -83,6 +85,7 @@ const state = {
   devHash: null,
   prodHash: null,
   credentialsFile: null,
+  adminGate: null,
 };
 
 async function step(stepName, fn) {
@@ -188,6 +191,7 @@ async function preflight() {
     "src/app/admin/signin/page.tsx",
     "src/app/admin/(protected)/layout.tsx",
     "src/app/admin/(protected)/page.tsx",
+    "src/server/require-admin.ts",
   ];
   for (const rel of pageCollisions) {
     if (existsSync(join(WEB_DIR, rel))) {
@@ -296,12 +300,15 @@ async function writeApiRoute() {
 
 // ─── Step 8: write admin pages (signin + protected route group) ───────
 // Scaffolds a minimal but functional admin space using the route group pattern
-// so the layout-gate doesn't catch /admin/signin (which would cause an infinite
+// so the layout's check doesn't catch /admin/signin (which would cause an infinite
 // redirect loop). Claude restyles afterwards based on the project's design.
+// Every page of the group calls requireAdmin() on its first line (3.4.17): the
+// layout's check alone let the page's content leave in the body of its redirect.
 async function writeAdminPages() {
-  log("Writing admin pages (signin + protected route group)");
+  log("Writing admin pages (signin + protected route group + requireAdmin)");
 
   const targets = [
+    ["src/server/require-admin.ts", "auth/admin/require-admin.ts"],
     ["src/app/admin/signin/page.tsx", "auth/admin/pages/signin.tsx"],
     ["src/app/admin/(protected)/layout.tsx", "auth/admin/pages/protected-layout.tsx"],
     ["src/app/admin/(protected)/page.tsx", "auth/admin/pages/protected-page.tsx"],
@@ -312,7 +319,27 @@ async function writeAdminPages() {
     mkdirSync(dirname(dest), { recursive: true });
     writeFileSync(dest, render(tplPath, {}));
   }
-  ok("Pages written: /admin/signin (signin form), /admin (protected dashboard placeholder)");
+  ok("Pages written: /admin/signin (signin form), /admin (protected dashboard placeholder), src/server/require-admin.ts");
+}
+
+// ─── Step 8b: the first barrier, a middleware (3.4.17) ────────────────
+// src/middleware.ts (src/proxy.ts from Next.js 16) sends a request for an admin
+// page without a session cookie to the sign-in page before anything renders. A
+// first barrier, never the only one. A middleware the project already has is never
+// replaced: the warning names it, and Claude merges by hand or tells the person.
+async function writeAdminGate() {
+  log("Writing the admin gate's middleware (never over an existing one)");
+  state.adminGate = ensureAdminMiddleware(WEB_DIR);
+  const { status, file, next } = state.adminGate;
+  if (status === "written") ok(`Middleware written: ${file} (Next.js ${next ?? "version unknown"})`);
+  else if (status === "present") ok(`Admin gate already in place: ${file}`);
+  else {
+    warn(
+      `The project already has a middleware (${file}): left as it is. The admin gate is not in it yet: ` +
+        "merge templates/auth/admin/middleware.ts into it by hand when that is safe, or tell the person what to add. " +
+        "The pages stay protected by requireAdmin() either way.",
+    );
+  }
 }
 
 // ─── Step 9: push env vars ────────────────────────────────────────────
@@ -357,6 +384,7 @@ await step("writePasswordTs", writePasswordTs);
 await step("writeAuthTs", writeAuthTs);
 await step("writeApiRoute", writeApiRoute);
 await step("writeAdminPages", writeAdminPages);
+await step("writeAdminGate", writeAdminGate);
 await step("pushEnvVars", pushEnvVars);
 
 dumpHandoff(true);
@@ -370,6 +398,8 @@ console.log(`
    API route:      src/app/api/auth/[...nextauth]/route.ts (with rate limiting)
    Pages:          /admin/signin (signin form) + /admin (protected dashboard placeholder)
                    Route group (protected) isolates the gate from the signin page (no redirect loop)
+                   Every page of the group starts with await requireAdmin() (src/server/require-admin.ts)
+   Middleware:     ${state.adminGate?.status === "existing" ? `none added, the project already has ${state.adminGate.file}` : state.adminGate?.file ?? "none"}
    Env vars:       AUTH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH_DEV, ADMIN_PASSWORD_HASH_PROD
 
 Dev login:    admin / Admin1234!
@@ -385,6 +415,7 @@ console.log(
     success: true,
     authMode: "admin",
     credentialsFile: state.credentialsFile,
+    adminGate: state.adminGate,
     envVars: ["AUTH_SECRET", "ADMIN_USERNAME", "ADMIN_PASSWORD_HASH_DEV", "ADMIN_PASSWORD_HASH_PROD"],
   }),
 );

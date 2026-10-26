@@ -8,7 +8,7 @@ Supprime proprement et définitivement un projet Hypervibe et toute son infrastr
 - Vous voulez **éviter de payer** pour des services restés actifs (Render, Stripe live, Neon hors free tier, etc.)
 - Vous voulez **libérer des quotas** sur vos plans gratuits (Cloudflare R2, Neon, Vercel) pour vos prochains projets
 - Vous voulez **décommissionner** une app qui ne sera plus utilisée (fin de mission, départ d'un client, refonte complète)
-- Vous voulez débarrasser un vieux dossier ou une maquette **sans aucune infrastructure** dans le cloud : rien n'est supprimé pour vous, mais Hypervibe vous dit si son code serait perdu (jamais commité, jamais poussé, pas de dépôt du tout) ou s'il peut partir sans perte, propose d'abord une sauvegarde, retrouve les notes et les skills qui le nomment encore, et vous donne le dossier à supprimer
+- Vous voulez débarrasser un vieux dossier ou une maquette **sans aucune infrastructure** dans le cloud : rien n'est supprimé pour vous, mais Hypervibe vous dit si son code serait perdu (jamais commité, jamais poussé, mis de côté avec git stash, pas de dépôt du tout), s'il peut partir sans perte (le dépôt en ligne, interrogé directement, le contient en entier), ou qu'il ne peut pas le savoir (le dépôt en ligne ne répond plus), propose d'abord une sauvegarde, retrouve les notes et les skills qui le nomment encore, et vous donne le dossier à supprimer
 
 ## Comment ça se passe
 

@@ -16,7 +16,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 
 Installs NextAuth in **admin mode**: a single admin account whose credentials live in the env vars (no DB). Invoked by `add-auth` when the user chose "Just a protected admin interface".
 
-The deterministic code (install, AUTH_SECRET generation, dev+prod hashes, scaffold `auth.ts` / `password.ts` / API route, scaffold pages `/admin/signin` + `/admin` (protected route group), push env vars) lives in `scripts/setup-auth-admin.mjs`. This SKILL only handles the pre-flight (passed by `add-auth`), the script invocation, and the post-script communication (where the prod password's file is, never the password itself + CLAUDE.md).
+The deterministic code (install, AUTH_SECRET generation, dev+prod hashes, scaffold `auth.ts` / `password.ts` / API route, scaffold pages `/admin/signin` + `/admin` (protected route group, every page checked by `requireAdmin()`), the middleware in front of the admin space, push env vars) lives in `scripts/setup-auth-admin.mjs`. This SKILL only handles the pre-flight (passed by `add-auth`), the script invocation, and the post-script communication (where the prod password's file is, never the password itself + CLAUDE.md).
 
 **Input variables** (passed by `add-auth`): `WEB_DIR`, `IS_MONOREPO`, `PROJECT_NAME`.
 
@@ -32,7 +32,9 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/setup-auth-admin.mjs" \
   --web-dir "<WEB_DIR>"
 ```
 
-The script chains 9 sub-steps: preflight, install next-auth@beta, AUTH_SECRET generation, dev hash (`Admin1234!`) + prod generation (24 alphanumeric chars) + hash, write `src/lib/password.ts`, write `src/server/auth.ts` (marker `// hypervibe:auth-modes admin`), write API route with rate limiting, write admin pages (`src/app/admin/signin/page.tsx` + `src/app/admin/(protected)/{layout,page}.tsx` - route group that isolates the gate from the signin to avoid the redirect loop), push env vars (AUTH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH_DEV, ADMIN_PASSWORD_HASH_PROD, target=all).
+The script chains 10 sub-steps: preflight, install next-auth@beta, AUTH_SECRET generation, dev hash (`Admin1234!`) + prod generation (24 alphanumeric chars) + hash, write `src/lib/password.ts`, write `src/server/auth.ts` (marker `// hypervibe:auth-modes admin`), write API route with rate limiting, write admin pages (`src/server/require-admin.ts`, `src/app/admin/signin/page.tsx` + `src/app/admin/(protected)/{layout,page}.tsx` - route group that isolates the check from the signin to avoid the redirect loop; the page calls `requireAdmin()` on its first line, the layout checks too), write the admin gate's middleware (`src/middleware.ts`, or `src/proxy.ts` from Next.js 16: a request for an admin page without a session cookie goes to the sign-in page before anything renders; never written over a middleware the project already has), push env vars (AUTH_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD_HASH_DEV, ADMIN_PASSWORD_HASH_PROD, target=all).
+
+**Why every page checks for itself**: Next.js renders a layout and its page at the same time. When the layout alone checked, its redirect of a visitor without a session (307) left with the page's content already rendered, readable with a plain `curl` (found on 26/10/2026 in production, on sites built with this skill). The middleware is a first barrier, never the only one: a cookie is not a proof, it only lets the request through to `requireAdmin()`.
 
 ### During execution
 
@@ -43,24 +45,26 @@ The script prints live:
 - At the end, a structured **handoff banner**
 - On the last line on success, a parseable JSON object:
   ```json
-  {"success":true,"authMode":"admin","credentialsFile":"<path>","envVars":["AUTH_SECRET","ADMIN_USERNAME","ADMIN_PASSWORD_HASH_DEV","ADMIN_PASSWORD_HASH_PROD"]}
+  {"success":true,"authMode":"admin","credentialsFile":"<path>","adminGate":{"status":"written","file":"src/middleware.ts","next":15},"envVars":["AUTH_SECRET","ADMIN_USERNAME","ADMIN_PASSWORD_HASH_DEV","ADMIN_PASSWORD_HASH_PROD"]}
   ```
 
 The production password is **never** in this output, and never goes through the conversation: the script writes it, with the identifier and the sign-in page, in a file of the person's downloads folder (`credentialsFile`), and only its hash goes to the project. Never open, read or display that file: it is the person's.
 
 ### On success
 
-Mark the step ✅, capture `credentialsFile` from the JSON, and move on to Step 2.
+Mark the step ✅, capture `credentialsFile` and `adminGate` from the JSON, and move on to Step 2.
+
+**`adminGate.status` is `existing`**: the project already had a middleware (next-intl, routing by host name...), named in `adminGate.file`, and the script left it as it was. Read it. When the gate fits in without changing what it already does (the cookie check of `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/middleware.ts` first, for the admin paths only, then the existing logic, and its `matcher` extended to `/admin` and `/admin/((?!signin).*)`), merge it in. Otherwise leave the file untouched and tell the person, in one plain sentence, that the first barrier is missing and what to add, the pages being protected by `requireAdmin()` all the same. Never replace their file. With `present`, the gate was already there; with `written`, nothing to do.
 
 ### On failure
 
 1. Read the error just above the handoff banner.
 2. Identify the failed step (`❌ Failed at: <step>`). The name maps 1:1 to a function in the script - open `setup-auth-admin.mjs` and look at the function.
 3. Diagnose:
-   - `preflight` failed → usually `src/server/auth.ts` already exists (re-config), or one of the pages `src/app/admin/signin/page.tsx` / `src/app/admin/(protected)/{layout,page}.tsx` already exists → go back to the Step 0 menu of `add-auth`. Or `package.json` missing / no Next.js.
+   - `preflight` failed → usually `src/server/auth.ts` already exists (re-config), or one of the pages `src/app/admin/signin/page.tsx` / `src/app/admin/(protected)/{layout,page}.tsx` (or `src/server/require-admin.ts`) already exists → go back to the Step 0 menu of `add-auth`. Or `package.json` missing / no Next.js.
    - `installNextAuth` failed → pnpm / network error → retry manually.
    - `hashPasswords` failed → often `hash-password.mjs` not found (sibling script absent) or Node too old. Diagnose with `node "${CLAUDE_SKILL_DIR}/../../scripts/hash-password.mjs" --help`.
-   - `writeAuthTs` / `writePasswordTs` / `writeApiRoute` / `writeAdminPages` failed → filesystem permission (rare) or missing template.
+   - `writeAuthTs` / `writePasswordTs` / `writeApiRoute` / `writeAdminPages` / `writeAdminGate` failed → filesystem permission (rare) or missing template.
    - `pushEnvVars` failed → all the code is in place, only the env vars did not land → run the command the error message gives: it pushes them again from `.env` without showing them. Their values are in no output, so never look for them there.
 4. Continue the remaining steps manually.
 
@@ -73,7 +77,7 @@ Invoke `_update-claude-md` with:
 - `stack`: `- **Auth**: NextAuth v5 (admin mode - single account via env vars)`
 - `conventions`:
   - `- Auth admin: \`await isAdmin()\` from \`~/server/auth\` to check access. Session via \`await auth()\`.`
-  - `- **Admin structure**: route group \`src/app/admin/(protected)/\` which contains the pages to protect (gate in its \`layout.tsx\` via \`if (!await isAdmin()) redirect("/admin/signin?callbackUrl=/admin")\`). \`src/app/admin/signin/page.tsx\` stays outside the group to avoid the redirect loop. Any new admin page goes in \`(protected)/\`. NEVER add a gate in \`app/admin/layout.tsx\` (this layout also wraps signin → infinite loop).`
+  - `- **Admin structure**: the pages to protect live in the route group \`src/app/admin/(protected)/\`, and every \`page.tsx\` there starts with \`await requireAdmin()\` (from \`~/server/require-admin\`) before reading any data: the check of the group's \`layout.tsx\` is not enough (the layout's redirect carries the page's content, Next.js rendering both at the same time). A page that needs interactivity stays a server page that calls \`requireAdmin()\` and renders a client component kept in its own file. Every \`"use server"\` action starts with \`if (!(await isAdmin())) return;\` (the sign-in action alone excepted: it is public by nature, and limited in attempts). The middleware (\`src/middleware.ts\`, \`src/proxy.ts\` from Next.js 16) sends a visitor without a session cookie to the sign-in page: a first barrier, never the only one. \`src/app/admin/signin/page.tsx\` stays outside the group to avoid the redirect loop. NEVER add a check in \`app/admin/layout.tsx\` (this layout also wraps signin → infinite loop).`
 - `custom`:
   - heading: `## Changing the admin password in production`
   - body:
@@ -107,7 +111,7 @@ Display exactly (replacing `<CREDENTIALS_FILE>` with the `credentialsFile` path 
 >
 > ⚠️ **Open it, save the password in your password manager, then delete the file.** It is stored nowhere else, only a hash (an unreadable version) is kept in the project. If you lose it, ask me for a new one.
 >
-> **How to use it**: go to `/admin/signin` and sign in. You will be redirected to `/admin`, your admin space (which for now just contains a welcome message and a sign-out button). Ask me whenever you want *"add an admin page to manage X"* - I will create the pages directly in the right folder (`src/app/admin/(protected)/...`) with the protection already in place.
+> **How to use it**: go to `/admin/signin` and sign in. You will be redirected to `/admin`, your admin space (which for now just contains a welcome message and a sign-out button). Ask me whenever you want *"add an admin page to manage X"* - I will create the pages directly in the right folder (`src/app/admin/(protected)/...`), each one checking on its own that it is you before showing anything.
 
 If the script reported warnings (e.g. `rate-limit.ts` absent), mention it here.
 

@@ -1520,6 +1520,83 @@ console.log("\n── La question d'un push nomme les commits qui partent (3.4.1
   rmSync(racine, { recursive: true, force: true });
 }
 
+console.log("\n── La question d'un push forcé dit aussi ce que le distant perd (retours de Bastien Detraz, 3.4.17 / 2.4.16) ──");
+{
+  // Pour `git push --force origin main`, la question ne disait que ce qui part (origin/main..main) :
+  // les commits que la branche du distant perd (main..origin/main) n'y étaient pas, et le « oui »
+  // portait sur un push qui avait l'air ordinaire. Un vrai dépôt temporaire : son distant (un dépôt
+  // nu local, rien ne sort de la machine) a deux commits que la copie a récupérés sans les avoir sur
+  // sa branche, et la copie un commit à elle. La décision reste « ask » partout.
+  const racine = mkdtempSync(join(tmpdir(), "hv-push-force-"));
+  const sansCrochets = join(racine, "sans-crochets");
+  const g = (cwd, ...args) =>
+    execFileSync("git", ["-c", `core.hooksPath=${sansCrochets}`, "-c", "commit.gpgsign=false", "-c", "user.name=Recette", "-c", "user.email=recette@example.com", ...args], {
+      cwd,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  const travail = join(racine, "travail");
+  const ailleurs = join(racine, "ailleurs");
+  const distant = join(racine, "distant.git");
+  let pret = true;
+  try {
+    g(racine, "init", "-q", travail);
+    g(travail, "symbolic-ref", "HEAD", "refs/heads/main");
+    writeFileSync(join(travail, "a.txt"), "a\n");
+    g(travail, "add", "a.txt");
+    g(travail, "commit", "-q", "--no-verify", "-m", "Premier commit, deja publie");
+    g(racine, "clone", "-q", "--bare", travail, distant);
+    g(travail, "remote", "add", "origin", distant);
+    g(racine, "clone", "-q", distant, ailleurs);
+    for (const [fichier, message] of [["b.txt", "Commit du distant, un"], ["c.txt", "Commit du distant, deux"]]) {
+      writeFileSync(join(ailleurs, fichier), `${fichier}\n`);
+      g(ailleurs, "add", fichier);
+      g(ailleurs, "commit", "-q", "--no-verify", "-m", message);
+    }
+    g(ailleurs, "push", "-q", "origin", "main");
+    g(travail, "fetch", "-q", "origin");
+    g(travail, "branch", "-q", "--set-upstream-to=origin/main", "main");
+    writeFileSync(join(travail, "d.txt"), "d\n");
+    g(travail, "add", "d.txt");
+    g(travail, "commit", "-q", "--no-verify", "-m", "Commit local qui partira");
+  } catch (e) {
+    pret = false;
+    checks += 1;
+    failures += 1;
+    console.log(`FAIL le dépôt temporaire n'a pas pu être préparé : ${String(e?.message ?? e).split("\n")[0]}`);
+  }
+  if (pret) {
+    const pousse = (command, cwd) => call({ tool_name: "Bash", tool_input: { command }, hook_event_name: "PreToolUse", ...(cwd ? { cwd } : {}) });
+    const raison = (r) => r?.permissionDecisionReason ?? "";
+    const perd = (r) => /2 commits are removed from origin\/main/.test(raison(r)) && /Commit du distant, un/.test(raison(r)) && /Commit du distant, deux/.test(raison(r));
+    const part = (r) => /1 commit leaves with it/.test(raison(r)) && /Commit local qui partira/.test(raison(r));
+    const cas = [
+      ["git push --force origin main : ce qui part ET les deux commits que le distant perd, lus sur main..origin/main", () => { const r = pousse(`git -C "${travail}" push --force origin main`); return r?.permissionDecision === "ask" && part(r) && perd(r) && /git log main\.\.origin\/main/.test(raison(r)); }],
+      ["git push -f, vers la branche amont : les mêmes deux commits perdus", () => { const r = pousse("git push -f", travail); return r?.permissionDecision === "ask" && part(r) && perd(r); }],
+      ["--force-with-lease sans valeur : les commits perdus", () => perd(pousse(`git -C "${travail}" push --force-with-lease origin main`))],
+      ["--force-with-lease=main:origin/main : les commits perdus", () => perd(pousse(`git -C "${travail}" push --force-with-lease=main:origin/main origin main`))],
+      ["un refspec en + (git push origin +main) : les commits perdus", () => { const r = pousse(`git -C "${travail}" push origin +main`); return part(r) && perd(r); }],
+      ["un push ordinaire : ce qui part, et rien de retiré (inchangé)", () => { const r = pousse(`git -C "${travail}" push origin main`); return r?.permissionDecision === "ask" && part(r) && !/removed from/.test(raison(r)); }],
+      ["--force-if-includes seul ne force rien : rien de retiré", () => { const r = pousse(`git -C "${travail}" push --force-if-includes origin main`); return part(r) && !/removed from/.test(raison(r)); }],
+      ["une forme qu'il ne lit pas (-fu) : la question d'avant, sans rien affirmer", () => { const r = pousse(`git -C "${travail}" push -fu origin main`); return r?.permissionDecision === "ask" && !/leaves? with it|removed from/.test(raison(r)); }],
+      // En dernier : celui-ci change la branche du dépôt d'essai.
+      ["un push forcé qui n'envoie rien mais retire deux commits : il le dit", () => { g(travail, "reset", "-q", "--hard", "HEAD~1"); const r = pousse(`git -C "${travail}" push --force origin main`); return r?.permissionDecision === "ask" && perd(r) && /Nothing leaves with it/.test(raison(r)) && !/\d+ commits? leaves? with it/.test(raison(r)); }],
+    ];
+    for (const [nom, essai] of cas) {
+      checks += 1;
+      let ok = false;
+      try {
+        ok = essai();
+      } catch {
+        ok = false;
+      }
+      if (!ok) failures += 1;
+      console.log(`${ok ? "OK  " : "FAIL"} ${nom}`);
+    }
+  }
+  rmSync(racine, { recursive: true, force: true });
+}
+
 console.log("\n── Un dossier hooks/ recopie seul garde ses regles (revue externe, 3.2.6) ──");
 {
   const { spawnSync } = await import("node:child_process");

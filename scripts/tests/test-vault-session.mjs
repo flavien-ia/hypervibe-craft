@@ -11,7 +11,8 @@
 //      its command line), then its file removed; never a newer session, never during an unlock,
 //      never a thrown error, never the token in a message;
 //   3. the unlock schedules that lock 6 hours later in the system's own scheduler (Windows task,
-//      macOS launchd agent, systemd-run then at on Linux, else said), without a window;
+//      macOS launchd agent, systemd-run then at on Linux, else said), without a window, through a
+//      copy kept out of the plugin that runs alone once the plugin's folder is gone (3.4.17);
 //   4. the SessionStart hook catches up a computer that was off, in the background, fast, silent
 //      when there is nothing to do;
 //   5. the texts say 6 hours, and that the vault closes for real.
@@ -21,7 +22,7 @@
 //   node scripts/tests/test-vault-session.mjs
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -245,7 +246,9 @@ try {
     const vbs = readFileSync(join(h, ".hypervibe", "vault-lock", "lock.vbs"));
     const text = vbs.subarray(2).toString("utf16le");
     check("... le lanceur, en UTF-16 avec sa marque, cache la console et passe l'horodatage reçu", vbs[0] === 0xff && vbs[1] === 0xfe && /, 0, False/.test(text) && /lock --at " & a\(0\)/.test(text) && text.includes("C:\\Program Files\\nodejs\\node.exe"), text);
-    const copies = ["session.mjs", "bw-home.mjs", "unlock-once.mjs"].every((f) => readFileSync(join(h, ".hypervibe", "vault-lock", f)).equals(readFileSync(join(VAULT_DIR, f))));
+    // A copy that is not there fails this check by its name, without stopping the recette.
+    const inLockDir = (f) => join(h, ".hypervibe", "vault-lock", f);
+    const copies = ["session.mjs", "bw-home.mjs", "unlock-once.mjs"].every((f) => existsSync(inLockDir(f)) && readFileSync(inLockDir(f)).equals(readFileSync(join(VAULT_DIR, f))));
     check("... et il lance une copie du verrouillage hors du plugin (une mise à jour peut retirer son dossier)", copies && text.includes(join(h, ".hypervibe", "vault-lock", "session.mjs")));
     const failing = scheduler(() => ({ status: 1, stdout: "", stderr: "Accès refusé" }));
     const r2 = S.scheduleLock({ at: TS, os: "win32", home: h, run: failing.run, node: "node" });
@@ -343,6 +346,27 @@ try {
     r = spawnSync(process.execPath, [SESSION, "lock", "--at", String(ts)], { env, encoding: "utf8" });
     const last = existsSync(join(h, ".hypervibe", "vault-lock", "last-run.json")) ? readFileSync(join(h, ".hypervibe", "vault-lock", "last-run.json"), "utf8") : "";
     check("... celui de SA session la verrouille, et en garde une trace sans le jeton", /"reason":"locked"/.test(r.stdout) && calls(log).length === 1 && !existsSync(sessionOf(h)) && /"reason":"locked"/.test(last) && !last.includes("SECRET-0042"), `${r.stdout} ${last}`);
+  }
+  {
+    // What the scheduler will run must run alone: a plugin installed from its marketplace lives in a
+    // folder of its version, which an update can remove before the lock is due (3.4.17: what 3.4.16
+    // does, now held by its run). A plugin folder of the recette's own is copied from this one, the
+    // lock is scheduled from it, that folder is removed, then the very command the scheduler
+    // recorded is launched. A task aimed at the plugin's own script, or an import that resolves in
+    // the plugin but not in the copy, fails here.
+    const h = home(7 * HOUR);
+    const ts = Number(readFileSync(sessionOf(h), "utf8").split("\n")[0]);
+    const plugin = join(scratch("hv-session-plugin-"), "scripts", "vault");
+    mkdirSync(plugin, { recursive: true });
+    for (const f of readdirSync(VAULT_DIR)) if (f.endsWith(".mjs")) copyFileSync(join(VAULT_DIR, f), join(plugin, f));
+    const sch = scheduler(() => ({ status: 0, stdout: "", stderr: "" }));
+    const made = S.scheduleLock({ at: ts, os: "linux", home: h, run: sch.run, node: process.execPath, source: plugin });
+    // systemd-run's command ends with: <node> <script> lock --at <timestamp>.
+    const scheduled = sch.seen.find((c) => c.cmd === "systemd-run")?.args?.slice(-4) ?? [];
+    rmSync(dirname(dirname(plugin)), { recursive: true, force: true });
+    const { env, log } = envFor(h);
+    const r = spawnSync(process.execPath, scheduled, { env, encoding: "utf8", cwd: h });
+    check("ce que le planificateur lancera se lance seul, le dossier du plugin retiré : la copie verrouille SA session", made.ok === true && scheduled.length === 4 && !existsSync(plugin) && r.status === 0 && /"reason":"locked"/.test(r.stdout) && calls(log).length === 1 && !existsSync(sessionOf(h)), `${made.ok} ${JSON.stringify(scheduled)} ${r.status} ${r.stdout} ${String(r.stderr).slice(0, 300)}`);
   }
 
   console.log("\n── 5. Le rattrapage au démarrage de Claude Code ──");

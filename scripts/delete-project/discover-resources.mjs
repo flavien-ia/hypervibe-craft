@@ -14,6 +14,9 @@
 // - Every scan is fault-tolerant: a single failing API call (Render down,
 //   Upstash CLI not installed, etc.) does NOT abort the discovery. The
 //   corresponding section gets `{ error: "..." }` instead.
+// - A service this machine has no account at (its key or file is not there),
+//   and that nothing of the project points to, is not a failed scan: its
+//   section gets `{ skipped: "..." }` (3.4.17, settleWithoutAccount).
 // - No mutations are ever performed here - this script is pure read-only.
 // - All scans run via Promise.all so total wall time = max(individual scan).
 
@@ -27,7 +30,7 @@ import { spawnSpec } from "../_spawn.mjs";
 import { indexLinesFor } from "./_memory-index.mjs";
 import { excludeShared, sharedIgnoredReason } from "./_shared-exclusion.mjs";
 import { keepRules } from "./_keep-rules.mjs";
-import { isSystemVar, isStripeVar, localGitState, settleStripeWithoutKey } from "./_inventory-rules.mjs";
+import { isSystemVar, isStripeVar, localGitState, projectPointers, readProjectFacts, readProviderKey, settleStripeWithoutKey, settleWithoutAccount } from "./_inventory-rules.mjs";
 import { resolveNeonOrg, withOrg } from "../neon-org.mjs";
 import { readLinkedProject, teamIdFromOrgId } from "../_vercel-auth.mjs";
 import { vercelContext, listAllProjects, getProject, pickTargets } from "../_vercel-projects.mjs";
@@ -68,12 +71,22 @@ function readUserEnvSync(name) {
   if (r.status !== 0) return process.env[name] || "";
   return (r.stdout || "").trim();
 }
-const CLOUDFLARE_API_TOKEN = (() => { try { return getSecret("CLOUDFLARE", "api_token"); } catch { return readUserEnvSync("CLOUDFLARE_API_TOKEN") || readUserEnvSync("CF_API_TOKEN") || process.env.CLOUDFLARE_API_TOKEN || ""; } })();
-const NEON_API_KEY = (() => { try { return getSecret("NEON", "api_key"); } catch { return readUserEnvSync("NEON_API_KEY") || process.env.NEON_API_KEY || ""; } })();
+// Each key: the vault first, else this machine's environment. `absent` when the vault answered
+// that it holds no such key and no variable holds one either: no account at that service on this
+// machine (3.4.17, readProviderKey in _inventory-rules.mjs). A vault that is closed, or whose read
+// failed, never makes a key absent.
+const readEnvValue = (name) => readUserEnvSync(name) || process.env[name] || "";
+const CLOUDFLARE_KEY = readProviderKey({ item: "CLOUDFLARE", field: "api_token", envNames: ["CLOUDFLARE_API_TOKEN", "CF_API_TOKEN"] }, { getSecret, readEnv: readEnvValue });
+const NEON_KEY = readProviderKey({ item: "NEON", field: "api_key", envNames: ["NEON_API_KEY"] }, { getSecret, readEnv: readEnvValue });
 // The vault first: `_setup-render` stores the key there (item RENDER, field
 // api_key), and reading the env var alone reported "missing" to every user
 // who had followed it, so their Render services were never inventoried.
-const RENDER_API_KEY = (() => { try { return getSecret("RENDER", "api_key"); } catch { return readUserEnvSync("RENDER_API_KEY") || process.env.RENDER_API_KEY || ""; } })();
+const RENDER_KEY = readProviderKey({ item: "RENDER", field: "api_key", envNames: ["RENDER_API_KEY"] }, { getSecret, readEnv: readEnvValue });
+const CLOUDFLARE_API_TOKEN = CLOUDFLARE_KEY.value;
+const NEON_API_KEY = NEON_KEY.value;
+const RENDER_API_KEY = RENDER_KEY.value;
+/** Marks a section whose key is absent from this machine: settled at the end (settleWithoutAccount). */
+const noAccountIf = (key) => (key.absent ? { noAccount: true } : {});
 const STRIPE_SECRET_KEY = readUserEnvSync("STRIPE_SECRET_KEY") || process.env.STRIPE_SECRET_KEY || "";
 
 // "NEON_API_KEY missing" read as "the key is not there" when the vault was
@@ -149,6 +162,9 @@ async function scanVercel() {
         projects: [],
         error: listing.reason,
         ...(link ? { linked: { ...link, status: "unknown" } } : {}),
+        // No token anywhere on this machine (no VERCEL_TOKEN, no sign-in of the CLI): no account
+        // here. A token that was refused is not that.
+        ...(vercelCtx.token ? {} : { noAccount: true }),
       };
     }
     let linked = null;
@@ -192,7 +208,7 @@ async function scanVercel() {
 
 // ─── 2. Neon (REST API, not MCP - script context) ──────────────────────────
 async function scanNeon() {
-  if (!NEON_API_KEY) return { found: false, error: missingKey("NEON_API_KEY") };
+  if (!NEON_API_KEY) return { found: false, error: missingKey("NEON_API_KEY"), ...noAccountIf(NEON_KEY) };
   try {
     // Neon scopes this search to ONE organisation and silently falls back to the
     // account's default. Searching the wrong one answers "nothing to delete", which
@@ -223,7 +239,7 @@ async function scanNeon() {
 
 // ─── 3. Cloudflare Workers ─────────────────────────────────────────────────
 async function scanWorkers() {
-  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN") };
+  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN"), ...noAccountIf(CLOUDFLARE_KEY) };
   try {
     const data = await httpJson(
       `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/workers/scripts`,
@@ -248,7 +264,7 @@ async function scanWorkers() {
 // reported in `error` so Phase 2 can show them instead of claiming an empty result.
 // The rest of the script already talks to the REST API directly; this aligns R2 with it.
 async function scanR2() {
-  if (!CLOUDFLARE_API_TOKEN) return { found: false, buckets: [], error: missingKey("CLOUDFLARE_API_TOKEN") };
+  if (!CLOUDFLARE_API_TOKEN) return { found: false, buckets: [], error: missingKey("CLOUDFLARE_API_TOKEN"), ...noAccountIf(CLOUDFLARE_KEY) };
   if (!CF_ACCOUNT_ID) return { found: false, buckets: [], error: "Cloudflare account id could not be resolved" };
   const buckets = [];
   const errors = [];
@@ -314,7 +330,7 @@ async function scanR2() {
 const cloudflareJson = (url) => httpJson(url, { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } });
 
 async function scanDns() {
-  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN") };
+  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN"), ...noAccountIf(CLOUDFLARE_KEY) };
   try {
     const listed = await cloudflareAll("/zones", 50, cloudflareJson);
     if (listed.error) return { found: false, error: listed.error };
@@ -407,7 +423,12 @@ async function scanDbBackup() {
     if (legacy.isTarget) return legacy;
     return { isTarget: false, totalTargets: unified.targets.length, source: "hypervibe-jobs" };
   }
-  return scanDbBackupLegacy();
+  // Neither the shared worker's registry nor the legacy worker on this machine: no backup was set
+  // up here (3.4.17), said as such and settled at the end (settleWithoutAccount). A registry that
+  // is there but cannot be read is not that: its error stays.
+  const legacy = scanDbBackupLegacy();
+  const noLegacyWorker = !existsSync(join(homedir(), ".db-backup-worker", "wrangler.toml"));
+  return !unified.exists && noLegacyWorker ? { ...legacy, noAccount: true } : legacy;
 }
 
 // ─── 6b. Scheduled cron pings (unified hypervibe-jobs registry) ─────────────
@@ -438,7 +459,7 @@ function scanCronPings() {
 
 // ─── 7. Render services ────────────────────────────────────────────────────
 async function scanRender() {
-  if (!RENDER_API_KEY) return { found: false, error: missingKey("RENDER_API_KEY") };
+  if (!RENDER_API_KEY) return { found: false, error: missingKey("RENDER_API_KEY"), ...noAccountIf(RENDER_KEY) };
   try {
     // Every page: an account with more than 100 services hid the rest (cursor pagination).
     const all = [];
@@ -493,7 +514,8 @@ async function scanStripe() {
 // ─── 9. Upstash (read ~/.upstash.json for creds) ───────────────────────────
 async function scanUpstash() {
   const credsPath = join(homedir(), ".upstash.json");
-  if (!existsSync(credsPath)) return { found: false, error: "~/.upstash.json missing" };
+  // No Upstash account on this machine: said as such, and settled at the end (settleWithoutAccount).
+  if (!existsSync(credsPath)) return { found: false, error: "~/.upstash.json missing", noAccount: true };
   try {
     const creds = JSON.parse(readFileSync(credsPath, "utf8"));
     if (!creds.email || !creds.apiKey) return { found: false, error: "invalid creds file" };
@@ -511,7 +533,7 @@ async function scanUpstash() {
 
 // ─── 10. Cloudflare Email Routing ──────────────────────────────────────────
 async function scanEmailRouting() {
-  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN") };
+  if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN"), ...noAccountIf(CLOUDFLARE_KEY) };
   try {
     const listed = await cloudflareAll("/zones", 50, cloudflareJson);
     if (listed.error) return { found: false, error: listed.error };
@@ -553,6 +575,9 @@ async function scanEmailRouting() {
 }
 
 // ─── 11. Env vars scan (Vercel + local .env) + third-party detection ───────
+// The names (never the values) of the variables the site's production gave: what points to a
+// service, for the settling at the end (readProjectFacts).
+const PULLED_VAR_NAMES = new Set();
 async function scanEnvVars(localDirPath) {
   const knownVarsPath = join(TEMPLATES_DIR, "known-env-vars.json");
   const servicesPath = join(TEMPLATES_DIR, "third-party-services.json");
@@ -573,7 +598,10 @@ async function scanEnvVars(localDirPath) {
         const content = readFileSync(tempPath, "utf8");
         for (const line of content.split("\n")) {
           const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=/);
-          if (m) envVarNames.add(m[1]);
+          if (m) {
+            envVarNames.add(m[1]);
+            PULLED_VAR_NAMES.add(m[1]);
+          }
         }
         sources.push("vercel-production");
         unlinkSync(tempPath); // ALWAYS delete the temp file (contains secrets)
@@ -1082,16 +1110,34 @@ const manifestReport = await reconcileManifest();
 // person is asked before the execution (_github-repo.mjs).
 await settleGithubDeletion(github, manifestReport?.resources ?? [], runCmd);
 
+// What, in the project, points to each service: its variables (`.env`, `.env.local`, and the names
+// the production gave), its packages, the files of a service, its manifest, in its folder and its
+// workspaces (3.4.17, readProjectFacts in _inventory-rules.mjs). Read once, for the two rules below.
+const manifestKinds = (manifestReport?.resources ?? []).map((r) => r.kind);
+let projectFacts;
+try {
+  projectFacts = readProjectFacts(PROJECT_DIR, { pulledVarNames: [...PULLED_VAR_NAMES], manifestKinds });
+} catch (e) {
+  // Facts that could not be read are unknown: they point everywhere, and no section is settled.
+  projectFacts = { varNames: [...PULLED_VAR_NAMES], dependencies: local.dependencies ?? [], manifestKinds, files: [], connections: [], unreadable: [`the project's folder (${String(e?.message ?? e).slice(0, 120)})`] };
+}
+
 // A project that has no Stripe is not a scan that failed: without a key, the
 // section's `error` stays only when the project references Stripe (the rule,
 // and why, in _inventory-rules.mjs).
 if (stripe && !STRIPE_SECRET_KEY) {
   settleStripeWithoutKey(stripe, {
-    hasStripeVar: envVars?.hasStripe === true,
-    dependencies: local.dependencies,
-    manifestKinds: (manifestReport?.resources ?? []).map((r) => r.kind),
+    hasStripeVar: envVars?.hasStripe === true || projectFacts.varNames.some(isStripeVar),
+    dependencies: projectFacts.dependencies,
+    manifestKinds,
   });
 }
+
+// A service this machine has no account at, that nothing of the project points to, is not a scan
+// that failed either: the section is `skipped`, with its reason; the error stays as soon as
+// something of the project points to the service (3.4.17; the rule, and why, in
+// _inventory-rules.mjs). Without it, section 1.1 of the skill was out of reach on most machines.
+settleWithoutAccount({ upstash, render, neon, vercel, workers, r2, dns, emailRouting, dbBackup }, projectPointers(projectFacts));
 
 // Projects the manifest declares are this project's Vercel projects: a
 // candidate found by its name alone is then a homonym (another team, a

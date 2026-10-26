@@ -53,7 +53,7 @@ No menu. Skip to **Step 1**.
 | 2 | UPGRADE section : Case B (removal + reassignment). |
 | 3 | UPGRADE section : Case C (renaming). |
 | 4 | UPGRADE section : Case D (changing the default). |
-| 5 | Retrieve the current list from `roles.ts`, rewrite the page from the `role/pages/users-page.tsx` template. |
+| 5 | Retrieve the current list from `roles.ts`, rewrite the page from the `role/pages/users-page.tsx` and `role/pages/users-table.tsx` templates (the page calls `requireAdmin()` first; `src/server/require-admin.ts` from `auth/admin/require-admin.ts` if the project lacks it). |
 | 6 | List the files / migrations to remove manually (roles.ts, admin-users router, admin page, roles column in the schema, pgEnum type) then ask to re-run. Refuse to do it automatically. |
 | 7 | Ask for clarification. |
 
@@ -164,7 +164,7 @@ The script prints its own `▸ <step>` as it goes ; relay it in natural language
 - `▸ Backfilling existing users with role "membre"` → `↳ I'm assigning the "membre" role to your existing users.`
 - `▸ Writing src/lib/roles.ts` → `↳ I'm placing the role-checking helpers in the project.`
 - `▸ Patching src/server/auth.ts (expose roles in JWT + session)` → `↳ I'm wiring the roles into the login system, so they are available everywhere in your app.`
-- `▸ Writing src/app/admin/(protected)/users/page.tsx` → `↳ I'm creating the user management page in your admin.`
+- `▸ Writing src/app/admin/(protected)/users/page.tsx` → `↳ I'm creating the user management page in your admin (it checks that it is you before showing anything).`
 - `▸ Running pnpm tsc --noEmit` → `↳ I'm checking that everything compiles correctly.`
 
 At the end, the script prints a JSON (last line of stdout). Parse it to confirm success :
@@ -197,7 +197,7 @@ Invoke `_update-claude-md` with two entries in the `conventions` section :
 
 ```
 - User roles : <list>. Default for new sign-ups : <default>. Helpers `hasRole(session, [...])` and `getRoles(session)` in `~/lib/roles`. The `admin` role is RESERVED for admin credentials (env var, never in the DB) : never add it to the enum.
-- To gate a tRPC procedure by role : use `protectedProcedure` then check `hasRole(ctx.session, [...])` at the start, otherwise `throw new TRPCError({ code: "UNAUTHORIZED" })`. To gate a server-component page : check `hasRole(await auth(), [...])`, otherwise `redirect("/")`.
+- To gate a tRPC procedure by role : use `protectedProcedure` then check `hasRole(ctx.session, [...])` at the start, otherwise `throw new TRPCError({ code: "UNAUTHORIZED" })`. To gate a server-component page : check `hasRole(await auth(), [...])` on its first lines, before reading any data, otherwise `redirect("/")`. A check in a shared `layout.tsx` is not enough : the layout's redirect carries the page's content.
 ```
 
 ### Patch admin sidebar (if the script warned about it)

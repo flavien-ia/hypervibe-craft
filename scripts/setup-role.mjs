@@ -39,6 +39,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from "node
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { render } from "./_render.mjs";
+import { ensureAdminMiddleware, ensureRequireAdmin } from "./admin-gate.mjs";
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 import { checkBeforeForcePush } from "./neon/schema-drift.mjs";
 
@@ -552,8 +553,23 @@ async function writeAdminPage() {
     );
   }
   mkdirSync(dirname(chosenDest), { recursive: true });
+  // A server page that calls requireAdmin() on its first line, and the interactive table beside it
+  // (3.4.17): the layout's check alone let the page's content leave in the body of its redirect.
   writeFileSync(chosenDest, render("role/pages/users-page.tsx", {}));
-  ok(`Admin page written: ${chosenDest.replace(WEB_DIR + "/", "")}`);
+  writeFileSync(join(dirname(chosenDest), "users-table.tsx"), render("role/pages/users-table.tsx", {}));
+  ok(`Admin page written: ${chosenDest.replace(WEB_DIR + "/", "")} (+ users-table.tsx)`);
+  // The helper the page imports, for a project whose admin space predates it; and the first barrier
+  // in front of the admin space, never written over a middleware the project already has.
+  if (ensureRequireAdmin(WEB_DIR) === "written") ok("src/server/require-admin.ts written (the check every admin page calls first)");
+  const gate = ensureAdminMiddleware(WEB_DIR);
+  if (gate.status === "written") ok(`Middleware written: ${gate.file}`);
+  else if (gate.status === "existing") {
+    warn(
+      `The project already has a middleware (${gate.file}): left as it is, without the admin gate. ` +
+        "Merge templates/auth/admin/middleware.ts into it by hand when that is safe, or tell the person what to add. " +
+        "The page stays protected by requireAdmin() either way.",
+    );
+  }
 }
 
 // ─── Step 11: best-effort patch of the admin sidebar ──────────────────
@@ -633,7 +649,7 @@ console.log(`
    Default at signup: ${DEFAULT_ROLE}
    Backfilled to:     ${BACKFILL_ROLE} (only rows with empty/NULL roles)
    Helpers:           src/lib/roles.ts (ROLES, ROLE_LABELS, hasRole, getRoles)
-   Admin page:        ${CREATE_ADMIN_PAGE ? "/admin/users (protected by isAdmin)" : "skipped"}
+   Admin page:        ${CREATE_ADMIN_PAGE ? "/admin/users (a server page that calls requireAdmin() first, its table in users-table.tsx)" : "skipped"}
    Marker:            // hypervibe:roles ${ROLES.join(", ")} (in src/lib/roles.ts)
 
 Next: Claude takes over for the CLAUDE.md update (via _update-claude-md), the user-facing
