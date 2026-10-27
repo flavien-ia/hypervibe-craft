@@ -29,8 +29,8 @@ node "$PLUGIN_DIR/scripts/update/update-hypervibe.mjs" check
 Read the JSON:
 
 - `offline: true` → *"I cannot reach the update server right now, try again a little later."* **STOP.**
-- `mode: "marketplace"` → Claude Code owns the update. Report the versions, then give the command from `commandeNative` and explain it runs in Claude Code, not here. If `updateAvailable` is false, run Step 3d first. **STOP** (do not download anything).
-- `updateAvailable: false` → *"Your plugin is already up to date (version `localVersion`)."* Run Step 3d, then **STOP.**
+- `mode: "marketplace"` → Claude Code owns the update. Report the versions, then give the command from `commandeNative` and explain it runs in Claude Code, not here. If `updateAvailable` is false, run Step 3d and Step 3f first. **STOP** (do not download anything).
+- `updateAvailable: false` → *"Your plugin is already up to date (version `localVersion`)."* Run Step 3d and Step 3f, then **STOP.**
 - `updateAvailable: true` and `mode: "manuel"` → announce: *"A new version is available: `publishedVersion` (you have `localVersion`). Shall I download and install it?"* Wait for the yes.
 
 ## Step 2 - Download
@@ -157,6 +157,42 @@ node "$PLUGIN_DIR/scripts/repair-lint.mjs" --project-dir "<project-root>" --writ
 `repaired: true` → the code check works again, and the files to commit are the ones `commit` lists (`pnpm-workspace.yaml`, `.npmrc`, or both: offer to commit them by name). `repaired: false` after a reinstall → say so plainly, the code check still stops: nothing more is tried, and the files written stay to look at. `note` present → no dependencies are installed here: the block is in place, and the next `pnpm install` finishes the job. `ok: false` with `step: "install"` → pass on `detail`: the lockfile is probably not in step with `package.json`; a `pnpm install` run by the user brings it in step, then the same command again.
 
 Other projects made by `/bootstrap` need the same pass: mention it once, with the command to run from each project's folder.
+
+## Step 3f - Close the admin space of existing projects
+
+Until 3.4.17, the admin space that `/add-auth` creates was protected by its layout alone. Next.js renders a layout and its page at the same time: when the layout sends a visitor without a session to the sign-in page, the content of the page, already prepared, leaves with that redirect. A browser shows nothing, a plain request reads it all. 3.4.17 fixed what the plugin writes and taught `/security` to find the defect, but a project built before stays exposed until it is repaired, and its CLAUDE.md keeps teaching Claude the old pattern for every new admin page. This step offers the repair for every project of this machine that needs it.
+
+Run it after a successful install, and also when Step 1 finds the plugin already up to date (marketplace or manual): the update that brought this step ran the text of the previous version, which did not have it, so the projects are caught up by the next `/update-hypervibe`.
+
+```bash
+PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
+node "$PLUGIN_DIR/scripts/repair-admin-gate.mjs" --scan --cwd "$(pwd)"
+```
+
+It looks at the current folder and its project, and at the folders where this machine keeps projects, one and two levels down (never the whole disk). It writes nothing and prints one JSON line.
+
+- `needed: 0` → one sentence (*"None of your projects has an admin space left open."*), then go on.
+- `unreadable` not empty → name those folders in one sentence: they were not looked at. Never stop on them.
+- Otherwise, list each project of `projects` whose `needed` is true, in plain words, one line each: its `name`, its folder (`dir`) and the number of pages to correct (`counts.toFix + counts.manual + counts.review`), adding *"its CLAUDE.md still teaches the old rule"* when one of its `claudeMd` entries says `outdated` or `edited`. Then say what happens today, in one sentence: *"A page of the admin space can let its content be read by someone who asks for it without being signed in: a browser shows nothing, a simple request reads it."* Then ask which projects to repair, offering every one of them (a multiple choice when they fit in one question, otherwise the numbered list and an answer in words: all of them, or their numbers). **Nothing is written before that answer.** A project left out stays as it is: say it once.
+
+Then, for each project chosen, one after the other:
+
+1. **What will change.** `node "$PLUGIN_DIR/scripts/repair-admin-gate.mjs" --project-dir "<project folder>"` (writes nothing). Say it in plain words: the check added at the top of each page of `pages` whose `status` is `to-fix`, the helper that check calls when `helper.status` is `would-write`, the first barrier when `middleware.status` is `would-write` (its `file`), the rule of the CLAUDE.md brought up to date. A `skipped` one is not written by `--write`: never announce it; its `reason` says why (the pages' own reason, or `nothing-to-fix` when no page will call the check; for the barrier, see point 4). When `uncommitted` lists files, say that they already hold changes not committed yet: committing the repair would take those changes along, and the person decides when.
+2. **The repair.** `node "$PLUGIN_DIR/scripts/repair-admin-gate.mjs" --project-dir "<project folder>" --write`. It touches only what the diagnosis named: `await requireAdmin();` first in each `to-fix` page, with its import, and `async` when the function was not, nothing else in the page; the layout keeps its own check. `ok: false` → pass on `step` and `detail`, name what was already written (`commit`), and go to the next project.
+3. **What the script leaves to you** (`remaining`), corrected by hand with the rule of `/security` (Step 3, point 2): each `manual` page (its `reason` says why) and each `review` page (a page its layout alone protects: a members' area, a role's space, an admin space outside `admin/(protected)`, or a layout whose check the script could not read for sure, which it counts as one) gets the check that `fix` names, on its first lines, before any read, nothing else changed, and never a weaker one than its layout's: `requireAdmin` is `await requireAdmin();` (from `~/server/require-admin`); `layout` is the check of the layout named in `layout` (the same condition, the same redirect), copied on the page's first lines; `admin` is the project's own admin check (`isAdmin()` from `~/server/auth` when it exists; otherwise ask the person what closes their admin space). Before closing a `review` page, make sure it is meant for signed-in people only: a public page (the home page, the pricing, a page anyone may read) stays as it is, and when in doubt, ask. A rule of the CLAUDE.md marked `edited` (the old rule, in other words) is rewritten as the current one, keeping what the person added. Show each change and apply it only on a yes. When `review` pages were corrected and the CLAUDE.md has no rule for the pages of signed-in users (`users: "absent"`), offer to add it (`_update-claude-md`, section Conventions, the line `_setup-auth-users` writes).
+4. **A middleware the project already has** (`middleware.status: "existing"`, named in `file`): never replaced. When that is safe, merge the gate of `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/middleware.ts` into it (the cookie check first, for the admin paths only, then its own logic, with `// hypervibe:admin-gate` as its first line so that the next check recognises it), shown first, on a yes; otherwise say in one sentence what is missing. The pages are protected by `requireAdmin()` either way. When `middleware.status` is `skipped`, no barrier is written, and its `reason` says why, in one sentence: no `/admin/signin` page to send to (`no-signin`), or a session cookie that is not the one it looks for (`next-auth-4`, a next-auth older than 5; `custom-cookie`, a configuration that renames it), where it would send the administrator back to sign-in forever.
+5. **The code check.** In each app of the project (`apps[].dir`), when its dependencies are installed (a `node_modules` folder there): `pnpm tsc --noEmit && pnpm lint`, and fix what they raise. Without `node_modules`, say so: the check runs after the next `pnpm install`.
+6. **The commit, offered.** The files of `commit` and the ones corrected by hand in this step, by name, each path in quotes: `git add -- <files>` then `git commit -m "<what changed, in a few words>" -- <files>`. Say it again first when one of them was in `uncommitted`. A project that is not a git repository has nothing to commit: say so.
+7. **Putting it online, offered too.** **The repair protects the live site only once it is deployed**: until then, the site keeps the old behaviour, and a request without a session still reads the pages. Say it plainly. When the project deploys from its pushes, `git push` puts it online; the guardrail asks at that moment and lists what leaves, and that question is the person's yes. A branch other than the one the site deploys from (usually `main`) is not online yet: say so.
+8. **The proof, once online.** When the project knows its public address (`node "$PLUGIN_DIR/scripts/env-value.mjs" --project-dir "<app folder>" NEXT_PUBLIC_APP_URL` gives an `https://` address other than localhost), wait for the deployment of that commit (`node "$PLUGIN_DIR/scripts/vercel/check-deploy.mjs" --project-dir "<app folder>" --sha "$(git rev-parse HEAD)" --timeout 600`), then ask, without any cookie, for one page that was `to-fix` (its address is its folders after `src/app`, route groups in parentheses left out; `/admin` itself when its page was one), the proof without risk of `/security` (1b):
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code} %{size_download}\n" https://<site>/admin/<page>
+   ```
+
+   A redirect of a few dozen bytes: the first barrier answered, and the page no longer leaves with it. When the project kept its own middleware without the gate, the redirect comes from the page itself and weighs a few kilobytes: count a word the page shows instead (`curl -s https://<site>/admin/<page> | grep -c "<a word of the page>"`), and 0 means its content no longer leaves. **Never print what comes back**: it may be personal data. Without a known address, say that `/security` makes the same check once the site is online.
+
+To finish, one sentence: this repair closes the admin space, and a complete audit of each project remains the job of `/security`.
 
 ## Step 4 - Wrap up
 

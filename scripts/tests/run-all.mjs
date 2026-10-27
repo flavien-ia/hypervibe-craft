@@ -81,6 +81,7 @@ const SUITES = [
   ["what the templates let through of an address that came from elsewhere", join(ROOT, "scripts", "tests", "test-template-guards.mjs")],
   ["the admin space's gate: requireAdmin() on the first line of every page, the middleware under the name each Next.js reads and never over an existing one, the rule said to Claude (3.4.17)", join(ROOT, "scripts", "tests", "test-admin-gate.mjs")],
   ["the admin space's gate on a real Next.js 15 and 16: without a session, no page leaves with a redirect (3.4.17; skipped without HV_RECETTE_NEXT=1, played before every release)", join(ROOT, "scripts", "tests", "test-admin-gate-next.mjs")],
+  ["the admin space of a project built before 3.4.17, closed on a yes: each page diagnosed, requireAdmin() first and nothing else, never over a middleware, the old rule of the CLAUDE.md replaced in its place, the projects of the machine found without walking the disk (3.4.18)", join(ROOT, "scripts", "tests", "test-repair-admin-gate.mjs")],
   ["the sender a project already has is kept by /add-email (3.4.11)", join(ROOT, "scripts", "tests", "test-email-sender.mjs")],
   ["a project's own sending key, never the account's: made by Resend's API for sending only, typed by hand at Brevo, revoked only when the project records it (3.4.16)", join(ROOT, "scripts", "tests", "test-email-key.mjs")],
   ["the email templates: Resend's client built at the first send, a reset request that never tells (3.4.11)", join(ROOT, "scripts", "tests", "test-email-templates.mjs")],

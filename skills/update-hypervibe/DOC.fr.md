@@ -26,7 +26,9 @@ Si vous avez installé le plugin **avec une commande** (`/plugin marketplace add
 
 6. **Elle remet votre horloge partagée à niveau.** Si votre compte Cloudflare fait tourner l’horloge partagée d’Hypervibe (le worker `hypervibe-jobs`, qui porte les sauvegardes des bases, les alertes de quotas et les tâches planifiées), elle vérifie que l’horloge exécute bien le code de la version que vous avez désormais, et la redéploie sinon. Une horloge restée en arrière garde ses anciens défauts, même avec un plugin à jour. Cette vérification a lieu aussi quand vous êtes déjà à jour.
 
-7. **Elle vous demande de relancer Claude Code**, c’est ce qui charge réellement la nouvelle version.
+7. **Elle propose de fermer l’espace admin de vos projets existants.** Jusqu’à la 3.4.17, une page de l’espace admin que crée `/add-auth` pouvait laisser lire son contenu à quelqu’un qui la demandait sans être connecté. La commande cherche les projets de votre ordinateur qui ont encore ce défaut, vous les liste, et répare ceux que vous choisissez : chaque page admin vérifie alors elle-même que c’est bien vous, et les règles du projet cessent d’apprendre l’ancienne façon de faire à Claude. Rien n’est écrit avant votre réponse. La réparation ne protège votre site qu’une fois en ligne : la commande propose d’enregistrer le changement et de le publier, et la publication reste votre « oui ». Cette étape a lieu aussi quand vous êtes déjà à jour.
+
+8. **Elle vous demande de relancer Claude Code**, c’est ce qui charge réellement la nouvelle version.
 
 ## Ce que vous obtenez
 
@@ -34,6 +36,7 @@ Si vous avez installé le plugin **avec une commande** (`/plugin marketplace add
 - La version précédente conservée en sauvegarde juste à côté, jusqu’à ce que vous décidiez de l’effacer
 - Le catalogue local des plugins remis d’accord avec le nouveau numéro de version
 - Votre horloge partagée alignée sur la version du plugin, si vous en avez une
+- L’espace admin des projets que vous avez choisis fermé, sur votre site en ligne dès qu’ils sont republiés
 
 ## Bon à savoir
 

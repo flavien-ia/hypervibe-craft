@@ -26,7 +26,9 @@ If you installed the plugin **with a command** (`/plugin marketplace add flavien
 
 6. **It brings your shared clock in step.** If your Cloudflare account runs Hypervibe's shared clock (the `hypervibe-jobs` worker behind database backups, quota alerts and scheduled tasks), it checks that the clock runs the code of the version you now have, and redeploys it if not. A clock left behind keeps its old defects, even under an up-to-date plugin. This check also runs when you are already up to date.
 
-7. **It asks you to restart Claude Code**, which is what actually loads the new version.
+7. **It offers to close the admin space of your existing projects.** Until 3.4.17, a page of the admin space that `/add-auth` creates could let its content be read by someone who asked for it without being signed in. The command looks for the projects of your computer that still have this defect, lists them, and repairs the ones you choose: each admin page then checks for itself that it is you, and the project's rules stop teaching Claude the old way. Nothing is written before your answer. The repair protects your live site only once it is online again: the command offers to save the change and to publish it, and the publication remains your yes. This also runs when you are already up to date.
+
+8. **It asks you to restart Claude Code**, which is what actually loads the new version.
 
 ## What you get
 
@@ -34,6 +36,7 @@ If you installed the plugin **with a command** (`/plugin marketplace add flavien
 - The previous version kept as a backup next to it, until you decide to delete it
 - The local plugin catalogue kept in step with the new version number
 - Your shared clock running the same version as the plugin, if you have one
+- The admin space of the projects you chose closed, on your live site once they are published again
 
 ## Good to know
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## v3.4.18 (27 octobre 2026)
+
+### Sécurité
+- **`/update-hypervibe` répare l'espace admin de vos projets existants** : la 3.4.17 a protégé l'espace admin des projets créés à partir d'elle, pas celui des projets déjà construits. Tant qu'ils ne sont pas réparés, une page de leur espace admin peut laisser lire son contenu à quelqu'un qui la demande sans être connecté, et leur CLAUDE.md continue d'apprendre à Claude l'ancienne façon de faire pour chaque nouvelle page. `/update-hypervibe` cherche désormais les projets de votre ordinateur qui ont ce défaut (le dossier ouvert, et les dossiers où vous gardez vos projets), vous les liste et répare ceux que vous choisissez : chaque page admin vérifie elle-même que c'est bien vous avant de lire la moindre donnée, une première barrière renvoie vers la connexion toute visite sans session, et la règle du CLAUDE.md est remise à jour. Rien n'est écrit avant votre réponse. Les pages qu'il ne peut pas corriger seul (une forme inhabituelle, un espace membres protégé de la même manière) se corrigent avec vous, une par une, avec un contrôle jamais plus faible que celui de l'espace qui les contient ; une page faite pour tout le monde (l'accueil, les tarifs) n'est jamais fermée. La première barrière n'est posée que là où elle reconnaît la connexion de votre site. Un espace que son seul layout ferme est signalé quelle que soit la façon dont ce layout l'écrit (une session absente, un identifiant ou une adresse qui ne sont pas ceux de l'admin, un contrôle à vous), et dans le doute il l'est aussi.
+- **La réparation compte une fois en ligne** : tant que le projet n'est pas republié, le site garde l'ancien comportement. `/update-hypervibe` propose d'enregistrer la correction puis de la mettre en ligne (le garde-fou vous demande confirmation au moment de l'envoi), et vérifie ensuite le site pour de vrai, sans jamais afficher le contenu de vos pages.
+- **Pour l'avoir** : installez la 3.4.18 par `/update-hypervibe`, fermez et rouvrez Claude Code, puis relancez `/update-hypervibe`. Une mise à jour suit toujours le texte de la version que vous aviez : c'est le passage suivant qui propose la réparation. Il a lieu aussi quand vous êtes déjà à jour, et quand le plugin est installé par la marketplace.
+
+### Coulisses
+- La réparation a sa recette, sur des projets fabriqués pour l'occasion (des pages de toutes les formes, un projet traduit, un monorepo, un middleware déjà là, un dépôt où du travail attend d'être enregistré), éprouvée en abîmant le code décision par décision.
+- Elle est éprouvée sur un vrai Next.js, en version 15 et en version 16 : un projet construit avec les fichiers d'avant la 3.4.17 laisse partir sa page vers un visiteur sans session ; réparé comme le fait `/update-hypervibe`, puis reconstruit, il ne laisse plus rien partir, et l'administrateur voit toujours sa page.
+
 ## v3.4.17 (26 octobre 2026)
 
 ### Sécurité

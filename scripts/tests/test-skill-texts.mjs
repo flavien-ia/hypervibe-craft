@@ -77,5 +77,31 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   check("/security, corrections : le contrôle et le middleware par le module, la règle écrite dans le CLAUDE.md", /scripts\/admin-gate\.mjs" --web-dir <app folder>/.test(s) && /every page of `\(protected\)\/` starts with `await requireAdmin\(\)` before reading any data/.test(s));
 }
 
+// /update-hypervibe, 3.4.18: the repair of the admin space of the projects built before 3.4.17.
+{
+  const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
+  const at = u.indexOf("## Step 3f - Close the admin space of existing projects");
+  const step = at < 0 ? "" : u.slice(at, u.indexOf("\n## ", at + 3));
+  const one = u.slice(u.indexOf("## Step 1 - Check"), u.indexOf("## Step 2 - Download"));
+  check("/update-hypervibe : l'étape qui ferme l'espace admin des projets existants, après celle du lint", at > u.indexOf("## Step 3e - Repair the code check") && at < u.indexOf("## Step 4 - Wrap up"));
+  check("... jouée aussi quand le plugin est déjà à jour (installé d'ailleurs, ou par l'ancien texte)", /If `updateAvailable` is false, run Step 3d and Step 3f first\./.test(one) && /Run Step 3d and Step 3f, then \*\*STOP\.\*\*/.test(one));
+  check("... cherche les projets de la machine sans rien écrire, puis les liste en mots simples", /repair-admin-gate\.mjs" --scan --cwd "\$\(pwd\)"/.test(step) && /It writes nothing/.test(step) && /`counts\.toFix \+ counts\.manual \+ counts\.review`/.test(step));
+  check("... dit ce qui se passe aujourd'hui, en une phrase", /A page of the admin space can let its content be read by someone who asks for it without being signed in/.test(step));
+  check("... l'accord avant toute écriture : tous les projets proposés, rien d'écrit avant la réponse", /offering every one of them \(a multiple choice when they fit in one question, otherwise the numbered list[^)]*\)\. \*\*Nothing is written before that answer\.\*\*/.test(step) && step.indexOf("Nothing is written before that answer") < step.indexOf("--write"));
+  check("... les pages manual et review corrigées à la main par la règle de /security, le changement montré, sur un oui", /rule of `\/security` \(Step 3, point 2\)/.test(step) && /Show each change and apply it only on a yes/.test(step));
+  check("... le middleware déjà là jamais remplacé, fusionné quand c'est sûr, sinon dit", /never replaced/.test(step) && /`\/\/ hypervibe:admin-gate` as its first line/.test(step) && /otherwise say in one sentence what is missing/.test(step));
+  check("... la vérification du code quand les dépendances sont là, sinon dite", /`pnpm tsc --noEmit && pnpm lint`/.test(step) && /Without `node_modules`, say so/.test(step));
+  check("... le commit proposé, par les noms de fichiers", /\*\*The commit, offered\.\*\*/.test(step) && /git add -- <files>/.test(step) && !/git add -A|git add \./.test(step));
+  check("... la mise en ligne reste un geste de la personne : proposée, et la question du garde-fou est son oui", /\*\*Putting it online, offered too\.\*\*/.test(step) && /the guardrail asks at that moment and lists what leaves, and that question is the person's yes/.test(step));
+  check("... la réparation ne vaut qu'une fois déployée, et l'étape le dit", /\*\*The repair protects the live site only once it is deployed\*\*/.test(step) && /Say it plainly/.test(step));
+  check("... la preuve sans risque une fois en ligne : la taille de la réponse sans cookie, jamais son contenu affiché", step.includes('curl -s -o /dev/null -w "%{http_code} %{size_download}\\n" https://<site>/admin/<page>') && /\*\*Never print what comes back\*\*/.test(step) && /grep -c/.test(step));
+  check("... et pour finir : un audit complet reste le rôle de /security", /a complete audit of each project remains the job of `\/security`/.test(step));
+  check("... jamais un contrôle plus faible que celui du layout : layout dit (le contrôle du layout nommé, recopié), admin dit", /never a weaker one than its layout's/.test(step) && /`layout` is the check of the layout named in `layout` \(the same condition, the same redirect\), copied on the page's first lines/.test(step) && /`admin` is the project's own admin check/.test(step) && !/`session` is the session read/.test(step));
+  check("... une page review peut être un espace admin hors de admin/(protected), ou un layout dont le contrôle se lit mal, compté comme une garde", /an admin space outside `admin\/\(protected\)`, or a layout whose check the script could not read for sure, which it counts as one/.test(step));
+  check("... une page publique ne se ferme jamais : l'accueil, les tarifs restent tels quels, et dans le doute, demander", /Before closing a `review` page, make sure it is meant for signed-in people only: a public page \(the home page, the pricing, a page anyone may read\) stays as it is, and when in doubt, ask\./.test(step));
+  check("... ce que --write ne posera pas (skipped) n'est jamais annoncé, sa raison est dite", /A `skipped` one is not written by `--write`: never announce it/.test(step) && /`helper\.status` is `would-write`/.test(step));
+  check("... la barrière skipped dite là où l'étape traite existing : pas de page de connexion, ou un cookie de session qui n'est pas le sien (next-auth 4, cookie renommé)", /When `middleware\.status` is `skipped`, no barrier is written/.test(step) && /`next-auth-4`/.test(step) && /`custom-cookie`/.test(step) && /send the administrator back to sign-in forever/.test(step));
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;
