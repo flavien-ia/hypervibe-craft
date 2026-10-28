@@ -31,12 +31,31 @@ self.addEventListener("push", (event) => {
   );
 });
 
+/**
+ * Un chemin de ce site venu d'ailleurs (ici, le lien d'une notification), ou null. Lu par le
+ * lecteur d'adresses du navigateur, jamais par un motif sur le texte brut : le navigateur retire
+ * tabulations et retours à la ligne et lit `\` comme `/`, si bien que `/\t/evil.com` devient
+ * `//evil.com`, un autre site. Un chemin qui commence encore par `//` une fois lu (`/.//evil.com`)
+ * est refusé aussi. Une adresse `javascript:` a une autre origine : refusée.
+ */
+function internalPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const origin = self.location.origin;
+    const target = new URL(raw, origin);
+    if (target.origin !== origin || target.pathname.startsWith("//")) return null;
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return null;
+  }
+}
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  // Le lien d'une notification est un chemin interne ("/commandes/12"). Tout le reste (adresse
-  // externe, "//hote", "javascript:") ouvre l'accueil : un clic n'envoie jamais vers un autre site.
-  const raw = (event.notification.data as { url?: string })?.url;
-  const url = raw && /^\/(?![/\\])/.test(raw) ? raw : "/";
+  // Le lien d'une notification est un chemin de ce site ("/commandes/12"). Tout le reste (adresse
+  // externe, "//hote", "/\t/hote", "javascript:") ouvre l'accueil : un clic n'envoie jamais vers
+  // un autre site.
+  const url = internalPath((event.notification.data as { url?: string })?.url) ?? "/";
   event.waitUntil(
     self.clients
       .matchAll({ type: "window", includeUncontrolled: true })

@@ -12,6 +12,25 @@ import { Label } from "~/components/ui/label";
 import { toast } from "sonner";
 import { loginAction } from "./actions";
 
+/**
+ * A path of this site taken from outside (here, ?callbackUrl=), or null. Read with the browser's
+ * own URL parser, never with a pattern on the raw text: the parser drops tabs and line breaks and
+ * reads `\` as `/`, so `/\t/evil.com` becomes `//evil.com`, another site. A path that still starts
+ * with `//` once parsed (`/.//evil.com`) is refused too: the next navigation would read it as
+ * another site. A `javascript:` address has another origin: refused.
+ */
+function internalPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const origin = window.location.origin;
+    const target = new URL(raw, origin);
+    if (target.origin !== origin || target.pathname.startsWith("//")) return null;
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return null;
+  }
+}
+
 export default function AdminSignInPage() {
   return (
     <Suspense fallback={null}>
@@ -41,11 +60,10 @@ function SignInForm() {
 
     switch (res.status) {
       case "ok": {
-        // Only accept a same-origin relative path. The router runs a `javascript:`
-        // address, and an `https://` or `//` one sends the admin to another site:
-        // ?callbackUrl= must never be taken as it comes.
-        const rawCallback = params.get("callbackUrl");
-        const callbackUrl = rawCallback && /^\/(?![/\\])/.test(rawCallback) ? rawCallback : "/admin";
+        // Only a path of this site. The router runs a `javascript:` address, and
+        // another site's address sends the admin there: ?callbackUrl= must never be
+        // taken as it comes (internalPath, above).
+        const callbackUrl = internalPath(params.get("callbackUrl")) ?? "/admin";
         router.push(callbackUrl);
         router.refresh();
         return;

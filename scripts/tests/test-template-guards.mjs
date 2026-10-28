@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // test-template-guards.mjs - Ce que les gabarits laissent passer d'une adresse venue d'ailleurs.
 //
-// Trois défauts de la même famille, corrigés en 3.3.11, tenus ici :
+// Trois défauts de la même famille, corrigés en 3.3.11 (le premier repris en 3.4.19), tenus ici :
 //   - une adresse de retour lue dans l'URL (`callbackUrl`) partait telle quelle dans le routeur
 //     après la connexion : `javascript:...` y est exécuté, `//hote` mène ailleurs ;
 //   - le lien d'une notification (cloche, notification système) était suivi tel quel ;
@@ -30,60 +30,171 @@ function check(label, ok, detail = "") {
   console.log(`${ok ? "OK  " : "FAIL"} ${label}${ok || !detail ? "" : `   (${String(detail).slice(0, 500)})`}`);
 }
 
-// ── 1. Un chemin interne, et rien d'autre ──
-const INTERNES = ["/", "/admin", "/admin/commandes?page=2", "/a/b#c"];
+// ── 1. Un chemin de ce site, et rien d'autre ──
+// 3.4.19 : le filtre d'avant (un `/` en tête, ni `/` ni `\` derrière, un motif sur le texte brut)
+// laissait passer `/\t/evil.com` : le navigateur retire tabulations et retours à la ligne avant de
+// lire une adresse, et en fait `//evil.com`, un autre site (signalé le 28/10/2026). Chaque gabarit lit
+// désormais l'adresse par le lecteur d'adresses (`new URL`) dans une fonction à lui, `internalPath`.
+// Cette fonction est TIRÉE du texte de chaque gabarit, ses annotations de type retirées, puis jouée
+// avec le lecteur d'adresses de Node (celui des navigateurs, WHATWG) : rien n'est recopié ici.
+const ORIGINE = "https://site.exemple";
+const INTERNES = ["/", "/admin", "/admin/commandes?page=2", "/admin/clients?tri=nom&page=3#liste", "/a/b#c"];
 const AILLEURS = [
-  "https://exemple.invalid/",
-  "http://exemple.invalid",
-  "//exemple.invalid",
-  "/\\exemple.invalid",
+  "/\t/evil.com",
+  new URLSearchParams("callbackUrl=/%09/evil.com").get("callbackUrl"),
+  new URLSearchParams("callbackUrl=/%0A/evil.com").get("callbackUrl"),
+  new URLSearchParams("callbackUrl=/%0D/evil.com").get("callbackUrl"),
+  "/\n/evil.com",
+  "/\r/evil.com",
+  "/\r\n/evil.com",
+  "\t//evil.com",
+  " //evil.com",
+  "//evil.com",
+  "///evil.com",
+  "/\\evil.com",
+  "\\\\evil.com",
+  "/\t\\evil.com",
+  "/.//evil.com",
+  "/a/..//evil.com",
+  "/./\\evil.com",
+  `${ORIGINE}//evil.com`,
+  "https://evil.com",
+  "http://evil.com",
+  "http:evil.com",
+  "HTTPS://evil.com",
+  "https://site.exemple.evil.com/",
+  "https://site.exemple@evil.com/",
   "javascript:alert(1)",
   "JaVaScRiPt:alert(1)",
+  "\tjavascript:alert(1)",
+  "java\tscript:alert(1)",
   "data:text/html,x",
-  "exemple.invalid",
-  " /admin",
+  "https://ex ample.com/",
+  "http://[::1",
   "",
 ];
 
-/** Le filtre tel qu'un gabarit l'écrit : `/^...$/.test(nom)`, lu puis compilé. */
-function filtreDe(source, nom) {
-  const i = source.indexOf(`.test(${nom})`);
-  if (i < 0) return null;
-  const debut = source.lastIndexOf("/^", i);
-  const fin = source.lastIndexOf("/", i);
-  if (debut < 0 || fin <= debut) return null;
+/**
+ * La fonction `internalPath` telle que le gabarit l'écrit, ses seules annotations de type retirées
+ * (sa signature), compilée avec `global` (window ou self) pour seul monde. null si elle manque ou ne
+ * se lit pas.
+ */
+function fonctionDe(source, global) {
+  const at = source.indexOf("function internalPath(");
+  if (at < 0) return null;
+  const finParams = source.indexOf(")", at);
+  const ouvre = source.indexOf("{", finParams);
+  if (finParams < 0 || ouvre < 0) return null;
+  let profondeur = 0;
+  let ferme = -1;
+  for (let i = ouvre; i < source.length; i += 1) {
+    if (source[i] === "{") profondeur += 1;
+    else if (source[i] === "}") {
+      profondeur -= 1;
+      if (profondeur === 0) {
+        ferme = i;
+        break;
+      }
+    }
+  }
+  if (ferme < 0) return null;
+  const signature = source.slice(at, ouvre);
+  if (!/^function internalPath\(raw: string \| null \| undefined\): string \| null\s*$/.test(signature)) return null;
+  const corps = source.slice(ouvre, ferme + 1);
   try {
-    return new RegExp(source.slice(debut + 1, fin));
+    return { corps, f: new Function(global, `return function internalPath(raw) ${corps};`)({ location: { origin: ORIGINE } }) };
   } catch {
     return null;
   }
 }
 
+/** Ce qu'une navigation vers `chemin` atteint, lu comme un navigateur le lit depuis ce site. */
+const atteint = (chemin) => new URL(chemin, `${ORIGINE}/admin/signin`).origin;
+
+// Toutes les adresses faites de quelques morceaux piégés suivis d'un hôte : aucune ne doit sortir du site.
+const MORCEAUX = ["/", "\\", "\t", "\n", "\r", " ", ".", "..", "%2F", "%5C", "%09", ":", "@", "?", "#", "http:", "https:", "javascript:"];
+const FUZZ = [];
+for (const a of MORCEAUX) {
+  FUZZ.push(`${a}evil.com`);
+  for (const b of MORCEAUX) {
+    FUZZ.push(`${a}${b}evil.com`);
+    for (const c of MORCEAUX) FUZZ.push(`${a}${b}${c}evil.com`);
+  }
+}
+
 const GABARITS = [
-  ["templates/auth/admin/pages/signin.tsx", "rawCallback", "la connexion de l'admin"],
-  ["templates/2fa/signin-page.tsx", "rawCallback", "la connexion à deux facteurs"],
-  ["templates/auth-signin/plain.tsx", "rawCallback", "la connexion des membres"],
-  ["templates/notif-center/notification-bell.tsx", "n.url", "la cloche"],
-  ["templates/push/sw-push-handlers.ts", "raw", "le clic sur une notification système"],
+  ["templates/auth/admin/pages/signin.tsx", "window", "la connexion de l'admin", "/admin"],
+  ["templates/2fa/signin-page.tsx", "window", "la connexion à deux facteurs", "/admin"],
+  ["templates/auth-signin/plain.tsx", "window", "la connexion des membres", "/dashboard"],
+  ["templates/auth-signin/i18n.tsx", "window", "la connexion des membres (traduite)", "/dashboard"],
+  ["templates/notif-center/notification-bell.tsx", "window", "la cloche", null],
+  ["templates/push/sw-push-handlers.ts", "self", "le clic sur une notification système", null],
 ];
-for (const [fichier, nom, quoi] of GABARITS) {
+const corps = new Set();
+for (const [fichier, global, quoi, repli] of GABARITS) {
   if (!existsSync(join(ROOT, fichier))) {
     check(`${quoi} : le gabarit existe (${fichier})`, false);
     continue;
   }
-  const filtre = filtreDe(lire(fichier), nom);
-  check(`${quoi} : l'adresse passe par un filtre lisible`, filtre !== null, fichier);
-  if (!filtre) continue;
-  const acceptes = AILLEURS.filter((a) => filtre.test(a));
-  const refuses = INTERNES.filter((a) => !filtre.test(a));
-  check(`${quoi} : aucune adresse d'ailleurs ne passe (autre site, //hote, javascript:)`, acceptes.length === 0, JSON.stringify(acceptes));
-  check(`${quoi} : un chemin interne passe`, refuses.length === 0, JSON.stringify(refuses));
+  const source = lire(fichier);
+  const lue = fonctionDe(source, global);
+  check(`${quoi} : l'adresse passe par internalPath, lue dans le gabarit et jouée`, lue !== null, fichier);
+  if (!lue) continue;
+  corps.add(lue.corps.replace(/\b(window|self)\.location/g, "LIEU.location"));
+  // Une adresse que le lecteur refuse (un hôte invalide) lève une exception : la fonction la rattrape
+  // et rend null. Une exception qui sort d'elle est comptée comme une réponse fausse, et dite.
+  const internalPath = (a) => {
+    try {
+      return lue.f(a);
+    } catch (e) {
+      return `EXCEPTION ${e?.code ?? e?.message ?? e}`;
+    }
+  };
+  const passees = AILLEURS.filter((a) => internalPath(a) !== null);
+  check(`${quoi} : aucune adresse d'ailleurs ne passe (tabulation, retour à la ligne, //, \\, /.//, javascript:, un autre site, un hôte invalide, vide)`, passees.length === 0, JSON.stringify(passees.map((a) => [a, internalPath(a)])));
+  const abimes = INTERNES.filter((a) => internalPath(a) !== a);
+  check(`${quoi} : un chemin de ce site passe intact, paramètres et ancre compris`, abimes.length === 0, JSON.stringify(abimes.map((a) => [a, internalPath(a)])));
+  check(`${quoi} : l'adresse complète de ce site se ramène à son chemin`, internalPath(`${ORIGINE}/admin/clients?x=1#y`) === "/admin/clients?x=1#y");
+  const sorties = FUZZ.filter((a) => {
+    const r = internalPath(a);
+    return r !== null && (!r.startsWith("/") || r.startsWith("//") || atteint(r) !== ORIGINE);
+  });
+  check(`${quoi} : ${FUZZ.length} adresses piégées, aucune ne mène hors du site`, sorties.length === 0, JSON.stringify(sorties.slice(0, 8).map((a) => [a, internalPath(a)])));
+  check(`${quoi} : plus aucun motif sur le texte brut`, !source.includes("/^\\/(?![") && !/\.test\((raw|rawCallback|n\.url)\)/.test(source), fichier);
+  // L'appel : ce que la page ou le clic fait de la réponse.
+  if (repli) {
+    const appel = new RegExp(`const callbackUrl = (internalPath\\(params\\.get\\("callbackUrl"\\)\\) \\?\\? "${repli.replace(/\//g, "\\/")}");`).exec(source);
+    check(`${quoi} : callbackUrl vient de internalPath, avec ${repli} à défaut, et c'est lui que suit le routeur`, appel !== null && /router\.push\(callbackUrl\)/.test(source), fichier);
+    if (appel) {
+      const joue = (lien) => new Function("internalPath", "params", `return ${appel[1]};`)(internalPath, new URLSearchParams(lien));
+      check(`${quoi} : ?callbackUrl=/%09/evil.com (décodé par searchParams.get) ramène à ${repli}`, joue("callbackUrl=/%09/evil.com") === repli && joue("callbackUrl=%2F%0A%2Fevil.com") === repli && joue("") === repli && joue("callbackUrl=") === repli);
+      check(`${quoi} : ?callbackUrl=/admin/clients%3Fpage%3D2 est suivi tel quel`, joue("callbackUrl=%2Fadmin%2Fclients%3Fpage%3D2%23liste") === "/admin/clients?page=2#liste");
+    }
+  }
 }
-for (const fichier of ["templates/auth/admin/pages/signin.tsx", "templates/2fa/signin-page.tsx"]) {
-  const src = lire(fichier);
-  check(`${fichier} : l'adresse lue dans l'URL n'est jamais suivie telle quelle`, !/callbackUrl\s*=\s*params\.get\("callbackUrl"\)\s*(\?\?|\|\|)/.test(src) && /rawCallback && \/\^/.test(src));
+check("la même fonction dans tous les gabarits (seul window ou self change)", corps.size === 1, `${corps.size} versions`);
+{
+  const cloche = lire("templates/notif-center/notification-bell.tsx");
+  check("la cloche ne suit le lien que s'il est un chemin de ce site, et rien d'autre", /const lien = internalPath\(n\.url\);\s*\n\s*if \(lien\) window\.location\.assign\(lien\);/.test(cloche) && (cloche.match(/location\.assign\(/g) ?? []).length === 1);
+  const sw = lire("templates/push/sw-push-handlers.ts");
+  check("le clic sur une notification système ouvre le chemin de ce site, l'accueil sinon", /const url = internalPath\(\(event\.notification\.data as \{ url\?: string \}\)\?\.url\) \?\? "\/";/.test(sw) && /navigate\(url\)/.test(sw) && /openWindow\(url\)/.test(sw));
 }
-check("la cloche ne suit le lien que s'il passe le filtre", /if \(n\.url && \/\^[^\n]+\.test\(n\.url\)\) window\.location\.assign\(n\.url\)/.test(lire("templates/notif-center/notification-bell.tsx")));
+// Aucun gabarit ni aucune skill ne garde l'ancien filtre, ni ne le propose en correctif.
+{
+  const restes = [];
+  const parcours = (rel) => {
+    for (const e of readdirSync(join(ROOT, rel), { withFileTypes: true })) {
+      const p = `${rel}/${e.name}`;
+      if (e.isDirectory()) parcours(p);
+      else if (e.isFile()) {
+        const t = readFileSync(join(ROOT, p), "utf8");
+        if (t.includes("/^\\/(?![") || /rawCallback && \/\^/.test(t)) restes.push(p);
+      }
+    }
+  };
+  for (const rel of ["templates", "skills"]) if (existsSync(join(ROOT, rel))) parcours(rel);
+  check("aucun gabarit ni aucune skill ne contient plus l'ancien filtre (un motif sur le texte brut de l'adresse)", restes.length === 0, restes.join(", "));
+}
 
 // ── 2. L'adresse d'un abonnement : un service de notification connu ──
 {

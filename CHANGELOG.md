@@ -1,5 +1,25 @@
 # Changelog
 
+## v3.4.19 (28 octobre 2026)
+
+### Sécurité
+- **Le retour après la connexion ne peut plus mener sur un autre site** : quand on arrive sur la page de connexion par un lien, ce lien peut porter l'adresse où revenir une fois connecté. Le plugin vérifiait cette adresse avec un filtre qu'un lien piégé savait traverser : en glissant une tabulation au bon endroit, il envoyait la personne, juste après sa connexion (double authentification comprise), sur un faux site qui pouvait lui redemander son mot de passe. Les pages de connexion, la cloche des notifications et le clic sur une notification système lisent désormais cette adresse comme le navigateur la lit, et ne suivent qu'une page de votre propre site. Sinon, elles vous mènent à la page prévue par défaut.
+- **Vos projets déjà construits** : cette correction vaut pour les projets créés à partir de cette version. Pour les autres, `/update-hypervibe` propose la réparation, dans le même passage que celle de l'espace admin et avec le même accord : il cherche vos projets, vous dit lesquels ont encore l'ancien filtre, et ne réécrit que les lignes restées telles que le plugin les avait écrites. Une ligne que vous avez retouchée à la main n'est jamais réécrite : il vous la signale, et `/security` la corrige avec vous (il repère désormais l'ancien filtre, qu'il laissait passer jusqu'ici). La correction ne protège votre site qu'une fois remise en ligne, et la commande vous propose de le faire.
+
+### Mise à jour de vos projets
+- **Un projet tenu dans plusieurs dossiers n'est plus compté plusieurs fois** : quand vous travaillez sur plusieurs branches d'un même projet dans des dossiers séparés, `/update-hypervibe` le liste une seule fois, avec la branche de chaque dossier, et vous propose d'abord celui de la branche que votre site met en ligne.
+- **Rien ne part dans un enregistrement sans que vous l'ayez vu** : quand la commande ne peut pas vérifier si des fichiers portent déjà des modifications de votre part, elle le dit, et ne propose d'enregistrer la réparation qu'après que vous avez regardé.
+- **Un projet atteint par un raccourci** (un dossier relié depuis un autre endroit, ou le dossier temporaire d'un Mac) : la vérification des modifications en attente y marche désormais.
+- **Une page admin qui se protège déjà avec sa propre adresse de retour** (`requireAdmin("/admin")`) est reconnue comme protégée, au lieu de vous être proposée à la main.
+
+### Pour l'avoir
+- Lancez `/update-hypervibe`, puis tapez `/reload-plugins` (ou ouvrez une nouvelle conversation). Relancez ensuite `/update-hypervibe` : c'est ce passage qui propose la réparation de vos projets (celui qui installe la nouvelle version suit encore le texte de l'ancienne, qui ne la connaît pas). Puis `/security` dans chaque projet où il vous signale une ligne retouchée.
+
+### Coulisses
+- La correction est éprouvée sur le texte réel de chaque fichier concerné : des milliers d'adresses piégées, fabriquées pour l'occasion, ne mènent jamais hors du site, et une page de votre site passe intacte, avec ses paramètres.
+- Les nouvelles vérifications de `/update-hypervibe` ont leurs recettes (un projet atteint par un raccourci, un projet en plusieurs dossiers, une adresse de retour en argument), chacune éprouvée en abîmant le code.
+- La réparation de vos projets est éprouvée sur les fichiers tels que la version précédente les écrivait : chacun devient, à l'octet, celui de cette version, avec les fins de ligne de Windows comme avec les autres ; relancée, elle ne change plus rien, et une ligne retouchée reste telle quelle.
+
 ## v3.4.18 (27 octobre 2026)
 
 ### Sécurité

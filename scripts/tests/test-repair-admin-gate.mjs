@@ -22,7 +22,7 @@
 //   node scripts/tests/test-repair-admin-gate.mjs
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -198,7 +198,7 @@ try {
   check("... sa page qui contrôle elle-même la session n'est pas citée, sa page client non plus", statut(d, "src/app/(espace)/tableau/page.tsx") === null && statut(d, "src/app/(espace)/panier/page.tsx") === null);
   check("une page qu'aucun layout ne garde (l'accueil) n'est pas citée", statut(d, "src/app/page.tsx") === null);
   check("un dossier privé (_composants) n'est pas une route : ignoré", !d.pages.some((p) => p.file.includes("_composants")));
-  check("les comptes : 3 to-fix, 3 manual, 1 review, 2 checked, 1 client", JSON.stringify(d.counts) === JSON.stringify({ checked: 2, client: 1, toFix: 3, manual: 3, review: 1 }), JSON.stringify(d.counts));
+  check("les comptes : 3 to-fix, 3 manual, 1 review, 2 checked, 1 client", JSON.stringify(d.counts) === JSON.stringify({ checked: 2, client: 1, toFix: 3, manual: 3, review: 1, redirect: 0 }), JSON.stringify(d.counts));
   const app = d.apps[0];
   check("le mode d'authentification : isAdmin exporté par ~/server/auth, requireAdmin() utilisable", app?.auth?.isAdmin === true && app.requireAdmin === "usable" && JSON.stringify(app.auth.modes) === JSON.stringify(["admin"]), JSON.stringify(app));
   check("le contrôle et la barrière, comme admin-gate.mjs --check les dirait : would-write, src/middleware.ts (Next.js 15)", app?.helper?.status === "would-write" && app.middleware?.status === "would-write" && app.middleware.file === "src/middleware.ts", JSON.stringify(app));
@@ -562,6 +562,195 @@ try {
     const dedans = R.findProjects({ cwd: join(DEV, "alpha", "src", "app"), home: join(s, "vide") });
     check("le dossier courant dans un projet : la racine de ce projet trouvée", dedans.projects.some((p) => /[\\/]alpha$/.test(p)), JSON.stringify(dedans.projects));
     check("le scan n'a rien écrit (la page d'alpha intacte)", lire(join(DEV, "alpha"), P("page.tsx")) === ANCIEN_PAGE);
+  }
+
+  console.log("\n── 3.4.19 : un projet atteint par un lien, les copies de travail, requireAdmin avec un argument, l'ancien filtre d'adresse ──");
+  {
+    const s = join(base, "s3419");
+    const sansCrochets = join(s, "sans-crochets");
+    mkdirSync(sansCrochets, { recursive: true });
+    const g = (cwd, ...args) => execFileSync("git", ["-c", `core.hooksPath=${sansCrochets}`, "-c", "commit.gpgsign=false", "-c", "user.name=Recette", "-c", "user.email=recette@example.com", "-c", "init.defaultBranch=main", ...args], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    const depotAncien = (dir) => {
+      ecrire(dir, "package.json", JSON.stringify({ name: dir.split(/[\\/]/).pop(), private: true, dependencies: { next: "^15.2.3", "next-auth": "5.0.0-beta.25" } }));
+      ecrire(dir, "tsconfig.json", JSON.stringify({ compilerOptions: { paths: { "~/*": ["./src/*"] } } }));
+      ecrire(dir, "src/server/auth.ts", render("auth/admin/auth.ts", {}));
+      ecrire(dir, "src/app/admin/signin/page.tsx", SIGNIN);
+      ecrire(dir, P("layout.tsx"), ANCIEN_LAYOUT);
+      ecrire(dir, P("page.tsx"), ANCIEN_PAGE);
+      ecrire(dir, P("clients/page.tsx"), ANCIEN_PAGE.replace("AdminHomePage", "Clients"));
+    };
+
+    // a. Reached through a link: macOS's temporary folder (/var -> /private/var), a folder linked from
+    // elsewhere, a junction under Windows (no administrator's right needed).
+    const vrai = join(s, "vrai");
+    const depot = join(vrai, "depot");
+    depotAncien(depot);
+    g(depot, "init", "-q");
+    g(depot, "add", "-A");
+    g(depot, "commit", "-q", "--no-verify", "-m", "Projet");
+    writeFileSync(join(depot, P("clients/page.tsx")), `${ANCIEN_PAGE.replace("AdminHomePage", "Clients")}// travail en cours\n`);
+    const lien = join(s, "lien");
+    let lienFait = true;
+    try {
+      symlinkSync(vrai, lien, process.platform === "win32" ? "junction" : "dir");
+    } catch (e) {
+      lienFait = false;
+      console.log(`     (lien impossible ici : ${e.code ?? e.message}, cas non joué)`);
+    }
+    if (lienFait) {
+      const parLien = join(lien, "depot");
+      const dl = R.diagnose(parLien, { git: true });
+      check("un projet atteint par un lien (jonction sous Windows, lien symbolique ailleurs) : uncommitted nomme le fichier en cours, jamais null", JSON.stringify(dl.uncommitted) === JSON.stringify([P("clients/page.tsx")]), JSON.stringify(dl.uncommitted));
+      check("... la même réponse que par le chemin réel", JSON.stringify(R.diagnose(depot, { git: true }).uncommitted) === JSON.stringify(dl.uncommitted));
+      const rl = R.repair(parLien);
+      check("... et la réparation par le lien le redit (uncommittedBefore)", JSON.stringify(rl.uncommittedBefore) === JSON.stringify([P("clients/page.tsx")]), JSON.stringify(rl.uncommittedBefore));
+    }
+    // A project in a subfolder of a larger repository: the paths given to git are read from the folder.
+    const grand = join(s, "grand");
+    depotAncien(join(grand, "site"));
+    g(grand, "init", "-q");
+    g(grand, "add", "-A");
+    g(grand, "commit", "-q", "--no-verify", "-m", "Grand");
+    writeFileSync(join(grand, "site", P("page.tsx")), `${ANCIEN_PAGE}// travail\n`);
+    const sous = R.diagnose(join(grand, "site"), { git: true });
+    check("un projet dans un sous-dossier d'un plus grand dépôt : le fichier en cours nommé, les autres non", JSON.stringify(sous.uncommitted) === JSON.stringify([P("page.tsx")]), JSON.stringify(sous.uncommitted));
+
+    // c. The working copies of one repository: one project, each copy with its branch.
+    const repo = join(s, "copies", "boutique");
+    depotAncien(repo);
+    g(repo, "init", "-q");
+    g(repo, "add", "-A");
+    g(repo, "commit", "-q", "--no-verify", "-m", "Boutique");
+    g(repo, "branch", "demo-salon");
+    g(repo, "branch", "essai");
+    g(repo, "checkout", "-q", "demo-salon");
+    const copieMain = join(s, "copies", "boutique-main");
+    const copieEssai = join(s, "copies", "boutique-essai");
+    g(repo, "worktree", "add", "-q", copieMain, "main");
+    g(repo, "worktree", "add", "-q", copieEssai, "essai");
+    // A copy the scan does not meet (a hidden folder): found through the repository's own files.
+    const cachee = join(s, "copies", ".cache", "boutique-cachee");
+    g(repo, "branch", "cachee");
+    g(repo, "worktree", "add", "-q", cachee, "cachee");
+    const dossierCopies = join(s, "copies");
+    const sc = R.scan({ cwd: dossierCopies, home: join(s, "profil-vide") });
+    const boutiques = (sc.projects ?? []).filter((p) => /boutique/.test(p.dir));
+    check("un dépôt et ses copies de travail (git worktree add) : un seul projet", boutiques.length === 1, JSON.stringify((sc.projects ?? []).map((p) => p.dir)));
+    const b = boutiques[0] ?? {};
+    const memes = (a, c) => String(a).toLowerCase().replace(/\\/g, "/") === String(c).toLowerCase().replace(/\\/g, "/");
+    check("... proposé d'abord par la copie de la branche qui se déploie (main), même quand le dossier principal est sur une branche de démo", memes(b.dir, copieMain) && b.branch === "main" && b.productionBranch === "main", JSON.stringify({ dir: b.dir, branch: b.branch, prod: b.productionBranch }));
+    const branches = (b.copies ?? []).map((c) => c.branch);
+    check("... avec toutes ses copies et leur branche, la copie de production en tête, chacune comptée", (b.copies ?? []).length === 4 && branches[0] === "main" && b.copies[0].production === true && ["demo-salon", "essai", "cachee"].every((x) => branches.includes(x)) && b.copies.every((c) => c.counts?.toFix === 2), JSON.stringify(b.copies));
+    check("... la copie qu'un dossier caché tenait, trouvée par les fichiers du dépôt", (b.copies ?? []).some((c) => memes(c.dir, cachee)));
+    check("... compté une fois dans needed", sc.needed === boutiques.filter((p) => p.needed).length && b.needed === true, JSON.stringify(sc.needed));
+    // The copy of the production branch repaired, the others not yet: the project still needs it.
+    const reparee = R.repair(copieMain);
+    const sc1 = R.scan({ cwd: dossierCopies, home: join(s, "profil-vide") });
+    const b1 = (sc1.projects ?? []).find((p) => /boutique/.test(p.dir)) ?? {};
+    check("la copie de production réparée, une autre pas encore : le projet reste à réparer (needed), la copie réparée dite propre", reparee.ok === true && memes(b1.dir, copieMain) && b1.needed === true && sc1.needed === 1 && b1.copies?.[0]?.needed === false && b1.copies.slice(1).every((c) => c.needed === true), JSON.stringify({ n: b1.needed, c: (b1.copies ?? []).map((c) => [c.branch, c.needed]) }));
+    // The remote's default branch wins when it is known (refs/remotes/origin/HEAD), without the network.
+    g(repo, "update-ref", "refs/remotes/origin/essai", "HEAD");
+    g(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/essai");
+    const sc2 = R.scan({ cwd: dossierCopies, home: join(s, "profil-vide") });
+    const b2 = (sc2.projects ?? []).find((p) => /boutique/.test(p.dir)) ?? {};
+    check("la branche par défaut du dépôt distant connue (origin/HEAD) : sa copie en tête", memes(b2.dir, copieEssai) && b2.productionBranch === "essai", JSON.stringify({ dir: b2.dir, prod: b2.productionBranch }));
+    check("... sans réseau : la branche est lue dans les fichiers du dépôt (productionFrom: origin)", b2.productionFrom === "origin");
+    // A repository without a copy on its production branch: the main folder first.
+    const seul = join(s, "seul", "atelier");
+    depotAncien(seul);
+    g(seul, "init", "-q");
+    g(seul, "add", "-A");
+    g(seul, "commit", "-q", "--no-verify", "-m", "Atelier");
+    g(seul, "checkout", "-q", "-b", "maquette");
+    g(seul, "branch", "-D", "main");
+    const autreCopie = join(s, "seul", "atelier-v2");
+    g(seul, "worktree", "add", "-q", "-b", "v2", autreCopie);
+    const g3 = typeof R.groupCopies === "function" ? R.groupCopies([autreCopie, seul]) : [];
+    check("sans copie sur main ni master : le dossier principal en tête", g3.length === 1 && memes(g3[0].copies[0].dir, seul) && g3[0].production.branch === null, JSON.stringify(g3.map((x) => x.copies.map((c) => c.branch))));
+    check("un projet sans copie de travail garde sa forme (ni copies), avec sa branche", !("copies" in R.scan({ cwd: join(s, "vrai"), home: join(s, "profil-vide") }).projects.find((p) => /depot/.test(p.dir))), "");
+
+    // d. A page that starts with requireAdmin() given one plain string.
+    const avecArg = projet("avec-argument", {
+      pages: {
+        [P("page.tsx")]: 'import { requireAdmin } from "~/server/require-admin";\n\nexport default async function A() {\n  await requireAdmin("/admin");\n  return <p>a</p>;\n}\n',
+        [P("simples/page.tsx")]: "import { requireAdmin } from \"~/server/require-admin\";\n\nexport default async function B() {\n  await requireAdmin('/admin/simples');\n  return <p>b</p>;\n}\n",
+        [P("gabarit/page.tsx")]: "import { requireAdmin } from \"~/server/require-admin\";\n\nexport default async function C() {\n  await requireAdmin(`/admin/gabarit`);\n  return <p>c</p>;\n}\n",
+        [P("variable/page.tsx")]: 'import { requireAdmin } from "~/server/require-admin";\n\nconst ICI = "/admin/variable";\n\nexport default async function D() {\n  await requireAdmin(ICI);\n  return <p>d</p>;\n}\n',
+        [P("interpolee/page.tsx")]: 'import { requireAdmin } from "~/server/require-admin";\n\nexport default async function E({ params }: { params: { id: string } }) {\n  await requireAdmin(`/admin/${params.id}`);\n  return <p>e</p>;\n}\n',
+        [P("commentaire/page.tsx")]: 'import { db } from "~/server/db";\n\nexport default async function F() {\n  // await requireAdmin("/admin");\n  const rows = await db.query.t.findMany();\n  return <p>{rows.length}</p>;\n}\n',
+        [P("chaine/page.tsx")]: 'import { db } from "~/server/db";\n\nexport default async function G() {\n  "await requireAdmin(\'/admin\')";\n  const rows = await db.query.t.findMany();\n  return <p>{rows.length}</p>;\n}\n',
+      },
+    });
+    const da = R.diagnose(avecArg);
+    check("await requireAdmin(\"/admin\") en tête : checked, comme await requireAdmin()", statut(da, P("page.tsx")) === null && statut(da, P("simples/page.tsx")) === null && statut(da, P("gabarit/page.tsx")) === null && da.counts.checked >= 3, JSON.stringify(da.pages));
+    check("... mais pas un argument qui n'est pas une chaîne simple (une variable, un gabarit interpolé) : à lire", statut(da, P("variable/page.tsx")) === "manual" && statut(da, P("interpolee/page.tsx")) === "manual", JSON.stringify(da.pages));
+    check("... ni un commentaire ou une chaîne qui contient les mots : la page reste à corriger", statut(da, P("commentaire/page.tsx")) === "to-fix" && statut(da, P("chaine/page.tsx")) === "to-fix", JSON.stringify(da.pages));
+
+    // The old filter of the return address: said, read-only, outside `needed`.
+    const VIEILLE_CONNEXION = '"use client";\n\nexport function f(params: URLSearchParams) {\n  const rawCallback = params.get("callbackUrl");\n  const callbackUrl = rawCallback && /^\\/(?![/\\\\])/.test(rawCallback) ? rawCallback : "/admin";\n  return callbackUrl;\n}\n';
+    const filtre = projet("ancien-filtre", { pages: { [P("page.tsx")]: render("auth/admin/pages/protected-page.tsx", {}) }, fichiers: { "src/app/admin/signin/page.tsx": VIEILLE_CONNEXION } });
+    const df = R.diagnose(filtre);
+    check("l'ancien filtre de l'adresse de retour : nommé (openRedirect, son fichier, sa ligne), hors de needed", df.needed === false && df.openRedirect?.length === 1 && df.openRedirect[0].file === "src/app/admin/signin/page.tsx" && df.openRedirect[0].line === 5 && df.openRedirect[0].form === "old-filter", JSON.stringify({ needed: df.needed, o: df.openRedirect }));
+    const avantFiltre = empreinte(filtre);
+    const rf = R.repair(filtre);
+    check("... jamais réparé par ce script : rien d'écrit", rf.written === false && empreinte(filtre) === avantFiltre, JSON.stringify(rf));
+    const sansFiltre = R.diagnose(projet("gabarit-neuf", { pages: { [P("page.tsx")]: render("auth/admin/pages/protected-page.tsx", {}) }, fichiers: { "src/app/admin/signin/page.tsx": render("auth/admin/pages/signin.tsx", {}) } }));
+    check("... et le gabarit de connexion de cette version n'est pas signalé", Array.isArray(sansFiltre.openRedirect) && sansFiltre.openRedirect.length === 0, JSON.stringify(sansFiltre.openRedirect));
+    const scf = R.scan({ cwd: join(base, "ancien-filtre"), home: join(s, "profil-vide") });
+    check("le scan compte les projets qui gardent l'ancien filtre (openRedirect), même sans rien à réparer", scf.openRedirect === 1 && scf.needed === 0, JSON.stringify({ o: scf.openRedirect, n: scf.needed }));
+    const ligneFiltre = (scf.projects ?? []).find((p) => /ancien-filtre/.test(p.dir));
+    check("... et la ligne de ce projet nomme ses lignes, pour que la mise à jour le dise", ligneFiltre?.needed === false && ligneFiltre?.openRedirect?.length === 1 && ligneFiltre.openRedirect[0].form === "old-filter", JSON.stringify(ligneFiltre));
+
+    // The repair of the old filter, with --redirects (the text of 3.4.19 passes it).
+    const FIX = join(ROOT, "scripts", "tests", "fixtures", "redirect-3418");
+    const vieilleConnexion = readFileSync(join(FIX, "admin-signin.tsx.txt"), "utf8");
+    const vieilleCloche = readFileSync(join(FIX, "notification-bell.tsx.txt"), "utf8");
+    const retouchee = vieilleCloche.replace("if (n.url && /^\\/(?![/\\\\])/.test(n.url)) window", "if (n.url && n.url.length < 200 && /^\\/(?![/\\\\])/.test(n.url)) window");
+    const sansAdmin = () => ({ [P("page.tsx")]: render("auth/admin/pages/protected-page.tsx", {}) });
+    const filtres = projet("filtres", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion, "src/components/notification-bell.tsx": retouchee } });
+    const sansDrapeau = R.diagnose(filtres, { git: true });
+    check("sans --redirects (le texte de la 3.4.18, qui lance ce script juste après l'installation) : l'ancien filtre dit, hors de needed, rien à écrire", sansDrapeau.needed === false && sansDrapeau.openRedirect.length === 2 && JSON.stringify(sansDrapeau.uncommitted) !== "undefined", JSON.stringify({ n: sansDrapeau.needed, o: sansDrapeau.openRedirect }));
+    const avantSans = empreinte(filtres);
+    const rSans = R.repair(filtres);
+    check("... et --write sans --redirects ne touche à rien de l'ancien filtre", rSans.written === false && empreinte(filtres) === avantSans, JSON.stringify(rSans));
+    // The first pass after installing 3.4.19 runs this script from the text of 3.4.18: a project with
+    // an admin page to close AND the old filter. Without --redirects, the page is repaired as that
+    // text announces, and the sign-in page is left as it is.
+    const premierPassage = projet("premier-passage", { pages: { [P("page.tsx")]: ANCIEN_PAGE }, fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion } });
+    const rPremier = R.repair(premierPassage);
+    check("le texte de la 3.4.18 (sans --redirects) : la page admin réparée, la page de connexion laissée telle quelle", rPremier.ok === true && rPremier.commit.includes(P("page.tsx")) && !rPremier.commit.includes("src/app/admin/signin/page.tsx") && lire(premierPassage, "src/app/admin/signin/page.tsx") === vieilleConnexion && !rPremier.remaining.some((x) => x.kind === "redirect"), JSON.stringify(rPremier.commit));
+    const avec = R.diagnose(filtres, { git: true, withRedirects: true });
+    const parFichier = (f) => avec.openRedirect.find((x) => x.file === f);
+    check("avec --redirects : la ligne des gabarits est à réparer (fix: auto), comptée dans needed (counts.redirect)", avec.needed === true && avec.counts.redirect === 1 && parFichier("src/app/admin/signin/page.tsx")?.fix === "auto", JSON.stringify(avec.openRedirect));
+    check("... une ligne retouchée à la main : manual, jamais comptée à réparer", parFichier("src/components/notification-bell.tsx")?.fix === "manual", JSON.stringify(avec.openRedirect));
+    check("... hors d'un dépôt : uncommitted null (inconnu), jamais [] (propre)", avec.uncommitted === null, JSON.stringify(avec.uncommitted));
+    const rAvec = R.repair(filtres, { withRedirects: true });
+    check("la réparation : la page de connexion devient le gabarit de cette version, à l'octet", rAvec.ok === true && lire(filtres, "src/app/admin/signin/page.tsx") === lireHarnais("templates/auth/admin/pages/signin.tsx"), JSON.stringify(rAvec).slice(0, 300));
+    check("... nommée dans commit et dans redirects", rAvec.commit?.includes("src/app/admin/signin/page.tsx") && rAvec.redirects?.some((x) => x.file === "src/app/admin/signin/page.tsx"), JSON.stringify(rAvec.commit));
+    check("... la ligne retouchée laissée telle quelle, renvoyée à /security (remaining, kind: redirect)", lire(filtres, "src/components/notification-bell.tsx") === retouchee && rAvec.remaining.some((x) => x.kind === "redirect" && x.file === "src/components/notification-bell.tsx" && /\/security/.test(x.reason)), JSON.stringify(rAvec.remaining));
+    const encore = R.diagnose(filtres, { withRedirects: true });
+    const rEncore = R.repair(filtres, { withRedirects: true });
+    check("... relancée, plus rien à réparer de l'ancien filtre, rien d'écrit", encore.counts.redirect === 0 && encore.needed === false && rEncore.written === false, JSON.stringify({ c: encore.counts, w: rEncore.written }));
+    // In a repository: the file already holds work not committed, and git says so; CRLF kept.
+    const depotFiltre = projet("depot-filtre", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion.replace(/\n/g, "\r\n") } });
+    g(depotFiltre, "init", "-q");
+    g(depotFiltre, "add", "-A");
+    g(depotFiltre, "commit", "-q", "--no-verify", "-m", "Projet");
+    writeFileSync(join(depotFiltre, "src/app/admin/signin/page.tsx"), `${vieilleConnexion.replace(/\n/g, "\r\n")}// en cours\r\n`);
+    const dDepot = R.diagnose(depotFiltre, { git: true, withRedirects: true });
+    check("dans un dépôt : le fichier de l'ancien filtre qui porte du travail non enregistré est nommé (uncommitted)", JSON.stringify(dDepot.uncommitted) === JSON.stringify(["src/app/admin/signin/page.tsx"]), JSON.stringify(dDepot.uncommitted));
+    const rDepot = R.repair(depotFiltre, { withRedirects: true });
+    const repare = lire(depotFiltre, "src/app/admin/signin/page.tsx");
+    check("... la réparation le redit (uncommittedBefore), garde le CRLF et le travail en cours", JSON.stringify(rDepot.uncommittedBefore) === JSON.stringify(["src/app/admin/signin/page.tsx"]) && repare === `${lireHarnais("templates/auth/admin/pages/signin.tsx").replace(/\n/g, "\r\n")}// en cours\r\n`, JSON.stringify(rDepot.uncommittedBefore));
+    check("le scan avec --redirects compte dans needed un projet qui n'a que l'ancien filtre à réparer", (() => {
+      const p2 = projet("filtres-scan", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion } });
+      const sc = R.scan({ cwd: p2, home: join(s, "profil-vide"), withRedirects: true });
+      const sc0 = R.scan({ cwd: p2, home: join(s, "profil-vide") });
+      return sc.needed === 1 && sc.projects[0].counts?.redirect === 1 && sc0.needed === 0;
+    })());
+    const cliFiltre = projet("cli-filtre", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion } });
+    const wCli = spawnSync(process.execPath, [SCRIPT, "--project-dir", cliFiltre, "--write", "--redirects"], { encoding: "utf8", windowsHide: true });
+    check("la commande : --project-dir <dossier> --write --redirects répare, sortie 0", wCli.status === 0 && lire(cliFiltre, "src/app/admin/signin/page.tsx") === lireHarnais("templates/auth/admin/pages/signin.tsx"), `${wCli.stdout}${wCli.stderr}`.slice(0, 300));
   }
 
   console.log("\n── La commande ──");

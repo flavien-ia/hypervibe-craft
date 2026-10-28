@@ -10,6 +10,26 @@
 import { useEffect, useState } from "react";
 import { api } from "~/trpc/react";
 
+/**
+ * Un chemin de ce site venu d'ailleurs (ici, le lien d'une notification, lu en base), ou null. Lu
+ * par le lecteur d'adresses du navigateur, jamais par un motif sur le texte brut : le navigateur
+ * retire tabulations et retours à la ligne et lit `\` comme `/`, si bien que `/\t/evil.com`
+ * devient `//evil.com`, un autre site. Un chemin qui commence encore par `//` une fois lu
+ * (`/.//evil.com`) est refusé aussi : la navigation suivante y verrait un autre site. Une adresse
+ * `javascript:` a une autre origine : refusée.
+ */
+function internalPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const origin = window.location.origin;
+    const target = new URL(raw, origin);
+    if (target.origin !== origin || target.pathname.startsWith("//")) return null;
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return null;
+  }
+}
+
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const utils = api.useUtils();
@@ -98,10 +118,11 @@ export function NotificationBell() {
         // l'optimiste a déjà été rollback par onError ; on navigue quand même
       }
     }
-    // Un lien de notification vient de la base : seul un chemin interne est suivi
-    // (un seul / en tête, ni // ni /\). Une adresse javascript: ou un autre site
-    // ne déclenche aucune navigation.
-    if (n.url && /^\/(?![/\\])/.test(n.url)) window.location.assign(n.url);
+    // Un lien de notification vient de la base : seul un chemin de ce site est
+    // suivi (internalPath, plus haut). Une adresse javascript: ou un autre site ne
+    // déclenche aucune navigation.
+    const lien = internalPath(n.url);
+    if (lien) window.location.assign(lien);
   };
 
   const count = unread.data ?? 0;

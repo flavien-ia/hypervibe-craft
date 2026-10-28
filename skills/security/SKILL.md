@@ -240,7 +240,15 @@ grep -rnE "router\.(push|replace)\(|location\.(href|assign|replace)|window\.open
 
 Write search patterns without look-around (`(?!...)`, `(?<=...)`): ripgrep rejects them. Then read each hit: a path written in the code (`router.push("/dashboard")`) is fine; a variable is followed back to where its value comes from.
 
-The only value to accept is an **internal path**: one `/` at the start, and neither `//` nor `/\` (browsers read both as another site). Anything else falls back to a fixed page.
+The only value to accept is a **path of this site, read with the URL parser**, never with a pattern on the raw text. Browsers drop tabs and line breaks from an address before they read it, and read `\` as `/`: `/\t/evil.com` (`/%09/evil.com` in a link, which `searchParams.get` decodes) becomes `//evil.com`, another site, and `/.//evil.com` keeps a path that starts with `//`. So a test written on the raw text is a finding too, 🔴 like a missing one: a pattern that wants one `/` at the start and neither `/` nor `\` after it (the filter of this plugin's templates from 3.3.11 to 3.4.18: right after signing in, a trapped link sends the administrator to a copy of the site, reported on 2026-10-28), `startsWith("/")`, the first character compared to `/`. Anything that is not a path of this site falls back to a fixed page.
+
+Find them with the plugin's reader (it writes nothing, one JSON line):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/redirect-filter.mjs" --project-dir <project folder>
+```
+
+Each entry of `found` names a line (`file`, `line`) and its `form`: `old-filter` (the templates' filter from 3.3.11 to 3.4.18) and `unfiltered` (the templates before 3.3.11, the address followed as it came) are 🔴, each, never ✅; a `suspect` one (another test written by hand on the raw text) is read: 🔴 when it is what guards a navigation, nothing otherwise (a `line.startsWith("/")` that parses a file guards no navigation).
 
 This is 🔴, never 🟠, whatever the version of Next.js. The router of Next.js 15 RUNS a `javascript:` address: there is no guard against it in `router.push` or `router.replace` on the 15.5 branch, the one `/bootstrap` installs (checked in the code of 15.5.28 on 2026-10-26). Next.js 16's router refuses one, but `location.assign`, `window.location.href` and `window.open` run it in every version, and an outside address leads to someone else's site in all of them. `?callbackUrl=javascript:...` on a sign-in page executes someone else's code in the session of the person who just signed in (an administrator, on an admin sign-in page), and `?callbackUrl=https://...` sends them to a copy of the site that asks for their password again. Found in production on a real project ten days after an audit of the same code had scored 18/20 (2026-09-23): this point exists so that it no longer depends on luck.
 
@@ -301,12 +309,24 @@ If yes, fix in this order of priority:
 1. **Exposed secrets** → move them into `.env`, check `.gitignore`. If a `.env` was committed in the past, remove it from the git history and **regenerate all the affected keys** (the history remains accessible).
 2. **Unprotected routes and IDOR** → add the auth checks (`protectedProcedure` or session check) AND the ownership filters (`where userId = session.user.id`) on every procedure that accesses a record by id. **Pages protected by their layout only** (1b) → `await requireAdmin()` on the first line of each page of the group, before any read (in a members' area, the session check on the first lines); the layout keeps its own. `node "${CLAUDE_SKILL_DIR}/../../scripts/admin-gate.mjs" --web-dir <app folder>` writes the helper (`src/server/require-admin.ts`) if the project lacks it, and the middleware that sends a request without a session cookie to the sign-in page (`src/middleware.ts`, or `src/proxy.ts` from Next.js 16): a first barrier, never the only one. It never replaces a middleware the project already has: with `"status":"existing"` in its last line, merge the gate of `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/middleware.ts` into it by hand when that is safe (the check first, for the admin paths only, then the existing logic), or say what is missing. Then the project's CLAUDE.md gets the rule, through `_update-claude-md` (section Conventions): every page of `(protected)/` starts with `await requireAdmin()` before reading any data, the layout's check is not enough, every `"use server"` action starts with `if (!(await isAdmin())) return;`. **Server actions** (1b) → the same check on their first line. **Costly work behind an open door** (1b) → a session with the right role, or a secret compared in constant time. **Real data in a client module** (1b) → a server file with `import "server-only"`, handed over by the protected page or a protected procedure.
 3. **Unverified webhooks** → add the provider signature verification (Stripe `constructEvent` on the raw body, etc.) before any payload processing.
-4. **Missing input validation** → add the server-side Zod schemas. If an SSRF was found (1l), add the URL allowlist validation here too. **A navigation driven by the URL (1n)** → accept an internal path only, and fall back to a fixed page otherwise:
+4. **Missing input validation** → add the server-side Zod schemas. If an SSRF was found (1l), add the URL allowlist validation here too. **A navigation driven by the URL (1n)** → accept a path of this site only, read with the URL parser, and fall back to a fixed page otherwise. A small function in the file that needs it (the templates of this plugin write the same one):
    ```ts
-   const raw = params.get("callbackUrl");
-   const callbackUrl = raw && /^\/(?![/\\])/.test(raw) ? raw : "/dashboard";
+   // A path of this site, or null: read with the URL parser, never with a pattern on the raw text.
+   function internalPath(raw: string | null | undefined): string | null {
+     if (!raw) return null;
+     try {
+       const origin = window.location.origin;
+       const target = new URL(raw, origin);
+       if (target.origin !== origin || target.pathname.startsWith("//")) return null;
+       return target.pathname + target.search + target.hash;
+     } catch {
+       return null;
+     }
+   }
+
+   const callbackUrl = internalPath(params.get("callbackUrl")) ?? "/dashboard";
    ```
-   The same test before `location.assign`, `window.open` or `redirect()` on a value read from the database: when it fails, do not navigate.
+   The same function before `location.assign`, `window.open` or `router.push` on a value read from the database: when it gives `null`, do not navigate. In a service worker, `self.location.origin` takes the place of `window.location.origin`; on the server (`redirect()`, `NextResponse.redirect()`), the site's own origin does (`request.nextUrl.origin` in a route or a middleware). Each line that `redirect-filter.mjs` named gets it, nothing else in the file changed; then the reader again, and no `old-filter` nor `unfiltered` is left.
 5. **Missing security headers** → run `node "${CLAUDE_SKILL_DIR}/../../scripts/setup-security.mjs"` (idempotent: injects the headers into the EXISTING next.config without regenerating it - wrapped configs like next-intl and custom options survive - + console.log isDev guard + rate-limit.ts + rateLimitedProcedure if not already in place; also removes the deprecated X-XSS-Protection header if present). Two follow-ups after running it:
    - If the script reports a ⚠️ saying it could not inject (custom `headers()` already present, or config object not found), apply the `securityHeaders` block manually in `next.config` by merging it with what exists.
    - The script writes the `rateLimitedProcedure` error message in English: if the project's audience is not English-speaking, translate that message in `src/server/api/trpc.ts` into the site's language.

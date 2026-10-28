@@ -16,6 +16,25 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { toast } from "sonner";
 
+/**
+ * A path of this site taken from outside (here, ?callbackUrl=), or null. Read with the browser's
+ * own URL parser, never with a pattern on the raw text: the parser drops tabs and line breaks and
+ * reads `\` as `/`, so `/\t/evil.com` becomes `//evil.com`, another site. A path that still starts
+ * with `//` once parsed (`/.//evil.com`) is refused too: the next navigation would read it as
+ * another site. A `javascript:` address has another origin: refused.
+ */
+function internalPath(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const origin = window.location.origin;
+    const target = new URL(raw, origin);
+    if (target.origin !== origin || target.pathname.startsWith("//")) return null;
+    return target.pathname + target.search + target.hash;
+  } catch {
+    return null;
+  }
+}
+
 export default function SignInPage() {
   return (
     <Suspense fallback={null}>
@@ -46,10 +65,9 @@ function SignInForm() {
       toast.error(t("errorInvalidCredentials"));
       return;
     }
-    // Only accept a same-origin relative path - block open redirects such as
-    // ?callbackUrl=https://evil.com or //evil.com.
-    const rawCallback = params.get("callbackUrl");
-    const callbackUrl = rawCallback && /^\/(?![/\\])/.test(rawCallback) ? rawCallback : "/dashboard";
+    // Only a path of this site - no open redirect through ?callbackUrl=https://evil.com,
+    // //evil.com or /%09/evil.com (internalPath, above).
+    const callbackUrl = internalPath(params.get("callbackUrl")) ?? "/dashboard";
     router.push(callbackUrl);
     router.refresh();
   }

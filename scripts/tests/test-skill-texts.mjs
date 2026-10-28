@@ -103,5 +103,26 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   check("... la barrière skipped dite là où l'étape traite existing : pas de page de connexion, ou un cookie de session qui n'est pas le sien (next-auth 4, cookie renommé)", /When `middleware\.status` is `skipped`, no barrier is written/.test(step) && /`next-auth-4`/.test(step) && /`custom-cookie`/.test(step) && /send the administrator back to sign-in forever/.test(step));
 }
 
+// 3.4.19: the return address read with the URL parser (reported on 28/10/2026), and the points of a
+// reader of 3.4.18 on /update-hypervibe (the same day): an unknown `uncommitted`, the working copies
+// of a repository, the old filter said read-only.
+{
+  const s = security;
+  const n = s.slice(s.indexOf("### 1n"), s.indexOf("## Step 2 - Report"));
+  check("/security 1n : un test écrit sur le texte brut de l'adresse est un défaut, 🔴 comme s'il manquait (l'ancien filtre des gabarits nommé)", /a test written on the raw text is a finding too, 🔴 like a missing one/.test(n) && /the filter of this plugin's templates from 3\.3\.11 to 3\.4\.18/.test(n) && /`\/\\t\/evil\.com`/.test(n));
+  check("... le chemin de ce site lu par le lecteur d'adresses, jamais par un motif", /\*\*path of this site, read with the URL parser\*\*, never with a pattern on the raw text/.test(n));
+  const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
+  const at = u.indexOf("## Step 3f - Close the admin space of existing projects");
+  const step = at < 0 ? "" : u.slice(at, u.indexOf("\n## ", at + 3));
+  check("/update-hypervibe 3f : uncommitted null n'est jamais « rien en attente », et c'est dit avant le commit", /When `uncommitted` is `null`, git could not be asked/.test(step) && /it is never "nothing pending"/.test(step) && /I could not check whether these files already hold changes not saved yet: look at them before the commit\./.test(step));
+  check("... point 6 : uncommittedBefore null, aucun commit proposé avant que la personne ait regardé", /When `uncommittedBefore` \(or `uncommitted` of point 1\) is `null`/.test(step) && /offer no commit until the person has looked at those files/.test(step));
+  check("... les copies de travail d'un dépôt : UN projet, la copie de la branche qui se déploie d'abord, les autres avec leur branche", /\*\*A project with `copies`\*\*/.test(step) && /it is ONE project, never one line per folder/.test(step) && /`productionBranch`/.test(step) && /When `productionBranch` is null/.test(step));
+  check("... l'ancien filtre réparé dans le même passage, avec --redirects sur les trois appels du script", /--scan --cwd "\$\(pwd\)" --redirects/.test(step) && /--project-dir "<project folder>" --redirects` \(writes nothing\)/.test(step) && /--project-dir "<project folder>" --write --redirects/.test(step) && /The same pass repairs a second defect, in the same projects and with the same agreement/.test(step));
+  check("... annoncé avant d'écrire (les fichiers en fix: auto), compté dans la liste (counts.redirect)", /each file of `openRedirect` with `fix: "auto"`/.test(step) && /when `counts\.redirect` is above 0/.test(step) && /A trapped link can send someone, right after they sign in, to another site/.test(step));
+  check("... une ligne retouchée à la main (fix: manual, kind: redirect) jamais réécrite, renvoyée à /security", /A line with `fix: "manual"`[^\n]*is never rewritten by this step, it is only said/.test(step) && /`\/security` in this project fixes it/.test(step) && /An entry with `kind: "redirect"`[^\n]*is not corrected in this step/.test(step) && /then the lines left to `\/security` below \(`openRedirect`\), then go on/.test(step));
+  const doc = read("skills/update-hypervibe/DOC.md");
+  check("... et la page DOC le dit (copies listées une fois, le filtre réparé dans le même passage, la ligne retouchée laissée)", /is listed once/.test(doc) && /In the same pass, and with the same yes, it also repairs the sign-in and notification links/.test(doc) && /A line you changed by hand is left as it is/.test(doc));
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;
