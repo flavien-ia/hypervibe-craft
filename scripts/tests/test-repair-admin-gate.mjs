@@ -13,7 +13,10 @@
 //      ever running a program the folder's configuration names;
 //   4. the --scan: the projects of an umbrella folder and of the folders where projects are kept, one
 //      and two levels down, node_modules and hidden folders left alone, a folder that cannot be read
-//      said without stopping the rest; the profile itself is a simulated one;
+//      said without stopping the rest; the profile itself is a simulated one; the working copies of
+//      a repository grouped, each by its real path (3.4.20), the project's `needed` being its first
+//      copy's and the others said apart with their state (`otherCopies`), the collaborator's work
+//      branch first with --collab;
 //   5. the rules the script writes are the ones the skills write today, and the update skill calls it.
 // Projects made in a temporary folder from the old templates (3.4.16, kept here as they were) and
 // from the harness's own; no network, no real project. The same file runs in the solo harness and in
@@ -22,7 +25,7 @@
 //   node scripts/tests/test-repair-admin-gate.mjs
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -637,17 +640,54 @@ try {
     const boutiques = (sc.projects ?? []).filter((p) => /boutique/.test(p.dir));
     check("un dépôt et ses copies de travail (git worktree add) : un seul projet", boutiques.length === 1, JSON.stringify((sc.projects ?? []).map((p) => p.dir)));
     const b = boutiques[0] ?? {};
-    const memes = (a, c) => String(a).toLowerCase().replace(/\\/g, "/") === String(c).toLowerCase().replace(/\\/g, "/");
+    // Compared by their real paths: the script gives every copy by its real one (3.4.20), and the
+    // folders of this recette may be reached through a link (macOS's /var is /private/var).
+    const reel = (p) => {
+      try {
+        return realpathSync(String(p));
+      } catch {
+        return String(p);
+      }
+    };
+    const memes = (a, c) => reel(a).toLowerCase().replace(/\\/g, "/") === reel(c).toLowerCase().replace(/\\/g, "/");
     check("... proposé d'abord par la copie de la branche qui se déploie (main), même quand le dossier principal est sur une branche de démo", memes(b.dir, copieMain) && b.branch === "main" && b.productionBranch === "main", JSON.stringify({ dir: b.dir, branch: b.branch, prod: b.productionBranch }));
     const branches = (b.copies ?? []).map((c) => c.branch);
     check("... avec toutes ses copies et leur branche, la copie de production en tête, chacune comptée", (b.copies ?? []).length === 4 && branches[0] === "main" && b.copies[0].production === true && ["demo-salon", "essai", "cachee"].every((x) => branches.includes(x)) && b.copies.every((c) => c.counts?.toFix === 2), JSON.stringify(b.copies));
     check("... la copie qu'un dossier caché tenait, trouvée par les fichiers du dépôt", (b.copies ?? []).some((c) => memes(c.dir, cachee)));
     check("... compté une fois dans needed", sc.needed === boutiques.filter((p) => p.needed).length && b.needed === true, JSON.stringify(sc.needed));
-    // The copy of the production branch repaired, the others not yet: the project still needs it.
+    // 3.4.20: the copy of the production branch repaired, the others not yet (old copies of branches
+    // already merged, nothing pending): the project is repaired, its other copies said apart.
     const reparee = R.repair(copieMain);
     const sc1 = R.scan({ cwd: dossierCopies, home: join(s, "profil-vide") });
     const b1 = (sc1.projects ?? []).find((p) => /boutique/.test(p.dir)) ?? {};
-    check("la copie de production réparée, une autre pas encore : le projet reste à réparer (needed), la copie réparée dite propre", reparee.ok === true && memes(b1.dir, copieMain) && b1.needed === true && sc1.needed === 1 && b1.copies?.[0]?.needed === false && b1.copies.slice(1).every((c) => c.needed === true), JSON.stringify({ n: b1.needed, c: (b1.copies ?? []).map((c) => [c.branch, c.needed]) }));
+    const autres = b1.otherCopies ?? [];
+    check("la copie de production réparée, les autres pas encore : le projet n'est plus à réparer (son needed est celui de la copie proposée), la copie réparée dite propre", reparee.ok === true && memes(b1.dir, copieMain) && b1.needed === false && sc1.needed === 0 && b1.copies?.[0]?.needed === false && b1.copies.slice(1).every((c) => c.needed === true), JSON.stringify({ n: b1.needed, c: (b1.copies ?? []).map((c) => [c.branch, c.needed]) }));
+    check("... ses autres copies dites à part (otherCopies), chacune avec sa branche et son compte, et le scan compte le projet (otherCopies)", autres.length === 3 && ["demo-salon", "essai", "cachee"].every((x) => autres.some((c) => c.branch === x)) && autres.every((c) => c.counts?.toFix === 2) && sc1.otherCopies === 1 && b1.firstCopy === "production", JSON.stringify({ autres, n: sc1.otherCopies, f: b1.firstCopy }));
+    check("... rien en attente et déjà contenues dans la branche de production : merged, containedIn main", autres.length === 3 && autres.every((c) => c.state === "merged" && c.uncommitted === false && c.contained === true && c.containedIn === "main"), JSON.stringify(autres.map((c) => [c.branch, c.state, c.uncommitted, c.contained, c.containedIn])));
+    // Work in progress: a file not committed in one copy, a commit that main does not have in another.
+    writeFileSync(join(copieEssai, "notes.txt"), "à reprendre\n");
+    writeFileSync(join(cachee, "ajout.txt"), "nouveau\n");
+    g(cachee, "add", "ajout.txt");
+    g(cachee, "commit", "-q", "--no-verify", "-m", "Ajout");
+    const avantEtat = [repo, copieEssai, cachee].map(empreinte);
+    const sc1b = R.scan({ cwd: dossierCopies, home: join(s, "profil-vide") });
+    const autresB = ((sc1b.projects ?? []).find((p) => /boutique/.test(p.dir)) ?? {}).otherCopies ?? [];
+    const de = (br) => autresB.find((c) => c.branch === br) ?? {};
+    check("une autre copie qui porte un fichier pas encore enregistré : work (uncommitted)", de("essai").state === "work" && de("essai").uncommitted === true, JSON.stringify(de("essai")));
+    check("une autre copie qui porte un commit absent de la branche de production : work (contained: false), sans rien d'autre en attente", de("cachee").state === "work" && de("cachee").contained === false && de("cachee").uncommitted === false, JSON.stringify(de("cachee")));
+    check("... et celle qui n'a rien de neuf reste merged", de("demo-salon").state === "merged", JSON.stringify(de("demo-salon")));
+    check("lire l'état des autres copies n'a rien écrit dans aucune d'elles", JSON.stringify([repo, copieEssai, cachee].map(empreinte)) === JSON.stringify(avantEtat));
+    const etatDe = typeof R.copyState === "function" ? R.copyState : () => ({});
+    // What the copy holds is on the remote's production branch, not yet on the local one: contained.
+    const sommet = g(cachee, "rev-parse", "HEAD").trim();
+    g(repo, "update-ref", "refs/remotes/origin/main", sommet);
+    const parLeDistant = etatDe(cachee, "main", { common: join(repo, ".git") });
+    g(repo, "update-ref", "-d", "refs/remotes/origin/main");
+    check("un commit déjà sur la branche de production du dépôt distant (origin/main), pas encore sur la locale : contenu (merged)", parLeDistant.state === "merged" && parLeDistant.contained === true, JSON.stringify(parLeDistant));
+    const sansReponse = etatDe(copieEssai, "main", { run: () => ({ status: 128, stdout: "", stderr: "" }) });
+    check("git qui ne répond pas : unread, jamais merged", sansReponse.state === "unread" && sansReponse.uncommitted === null && sansReponse.contained === null, JSON.stringify(sansReponse));
+    const sansBranche = etatDe(copieEssai, null);
+    check("sans branche à laquelle comparer et un fichier en cours : work (le fichier suffit) ; contained null", sansBranche.state === "work" && sansBranche.contained === null && sansBranche.containedIn === null, JSON.stringify(sansBranche));
     // The remote's default branch wins when it is known (refs/remotes/origin/HEAD), without the network.
     g(repo, "update-ref", "refs/remotes/origin/essai", "HEAD");
     g(repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/essai");
@@ -668,6 +708,79 @@ try {
     const g3 = typeof R.groupCopies === "function" ? R.groupCopies([autreCopie, seul]) : [];
     check("sans copie sur main ni master : le dossier principal en tête", g3.length === 1 && memes(g3[0].copies[0].dir, seul) && g3[0].production.branch === null, JSON.stringify(g3.map((x) => x.copies.map((c) => c.branch))));
     check("un projet sans copie de travail garde sa forme (ni copies), avec sa branche", !("copies" in R.scan({ cwd: join(s, "vrai"), home: join(s, "profil-vide") }).projects.find((p) => /depot/.test(p.dir))), "");
+    const atelier = (R.scan({ cwd: join(s, "seul"), home: join(s, "profil-vide") }).projects ?? []).find((p) => /atelier/.test(p.dir)) ?? {};
+    check("sans branche de production lue : le needed est celui du dossier principal (firstCopy: main), l'autre copie comparée à sa branche", atelier.firstCopy === "main" && atelier.needed === true && atelier.otherCopies?.length === 1 && atelier.otherCopies[0].containedIn === "maquette" && atelier.otherCopies[0].state === "merged", JSON.stringify({ f: atelier.firstCopy, n: atelier.needed, o: atelier.otherCopies }));
+
+    // 3.4.20, Bastien on macOS: a copy found through worktrees/*/gitdir came back as git wrote it (its
+    // real path, /private/var/...) and the others as the scan met them (/var/...). Reproduced here by
+    // a link (a junction under Windows): the repository and its hidden copy made by their real path,
+    // the scan run through the link.
+    const reelles = join(s, "copies-reelles");
+    const vitrine = join(reelles, "vitrine");
+    depotAncien(vitrine);
+    g(vitrine, "init", "-q");
+    g(vitrine, "add", "-A");
+    g(vitrine, "commit", "-q", "--no-verify", "-m", "Vitrine");
+    g(vitrine, "branch", "cachee");
+    const vitrineCachee = join(reelles, ".cache", "vitrine-cachee");
+    g(vitrine, "worktree", "add", "-q", vitrineCachee, "cachee");
+    const lienCopies = join(s, "copies-lien");
+    let lienCopiesFait = true;
+    try {
+      symlinkSync(reelles, lienCopies, process.platform === "win32" ? "junction" : "dir");
+    } catch (e) {
+      lienCopiesFait = false;
+      console.log(`     (lien impossible ici : ${e.code ?? e.message}, cas non joué)`);
+    }
+    if (lienCopiesFait) {
+      const v = (R.scan({ cwd: lienCopies, home: join(s, "profil-vide") }).projects ?? []).find((p) => /vitrine/.test(p.dir)) ?? {};
+      const formes = [v.dir, ...(v.copies ?? []).map((c) => c.dir), ...(v.otherCopies ?? []).map((c) => c.dir)];
+      check("atteint par un lien : la copie qu'un dossier caché tenait, trouvée par les fichiers du dépôt", (v.copies ?? []).length === 2 && v.copies.some((c) => memes(c.dir, vitrineCachee)), JSON.stringify(v.copies));
+      check("... et toutes les copies du groupe, son dir compris, rendues par leur chemin réel : jamais deux formes de chemin dans un même groupe", formes.length >= 3 && formes.every((d) => typeof d === "string" && d === reel(d)), JSON.stringify(formes));
+    }
+
+    // The collaborator (--collab): in a project of the organisation, the copy on the work branch
+    // collab/<login> first, and the project's needed is that copy's.
+    const org = join(s, "org", "portail");
+    depotAncien(org);
+    ecrire(org, ".github/workflows/deploy.yml", "name: deploy\non: push\n");
+    g(org, "init", "-q");
+    g(org, "add", "-A");
+    g(org, "commit", "-q", "--no-verify", "-m", "Portail");
+    g(org, "branch", "collab/alice");
+    const travail = join(s, "org", "portail-alice");
+    g(org, "worktree", "add", "-q", travail, "collab/alice");
+    const portail = (opts) => (R.scan({ cwd: join(s, "org"), home: join(s, "profil-vide"), ...opts }).projects ?? []).find((p) => /portail/.test(p.dir)) ?? {};
+    const pc = portail({ collab: true });
+    check("--collab, un projet de l'organisation : la copie de la branche de travail collab/<pseudo> d'abord (firstCopy: work-branch), la copie de main dans otherCopies", memes(pc.dir, travail) && pc.branch === "collab/alice" && pc.firstCopy === "work-branch" && pc.otherCopies?.length === 1 && pc.otherCopies[0].branch === "main", JSON.stringify({ d: pc.dir, b: pc.branch, f: pc.firstCopy, o: pc.otherCopies }));
+    const cliCollab = spawnSync(process.execPath, [SCRIPT, "--scan", "--cwd", join(s, "org"), "--home", join(s, "profil-vide"), "--collab"], { encoding: "utf8", windowsHide: true });
+    const parCli = (() => {
+      try {
+        return (JSON.parse(String(cliCollab.stdout).trim()).projects ?? []).find((p) => /portail/.test(p.dir)) ?? {};
+      } catch {
+        return {};
+      }
+    })();
+    check("la commande : --scan ... --collab met la copie de la branche de travail d'abord, sortie 0", cliCollab.status === 0 && memes(parCli.dir, travail) && parCli.firstCopy === "work-branch", `${cliCollab.stdout}${cliCollab.stderr}`.slice(0, 300));
+    const ps = portail({});
+    check("... sans --collab (le solo) : la copie de production d'abord, comme avant", memes(ps.dir, org) && ps.firstCopy === "production", JSON.stringify({ d: ps.dir, f: ps.firstCopy }));
+    R.repair(travail);
+    const pr = portail({ collab: true });
+    check("--collab : la copie de travail réparée, le projet n'est plus à réparer, main (rien en attente) dite à part", pr.needed === false && pr.otherCopies?.[0]?.state === "merged", JSON.stringify({ n: pr.needed, o: pr.otherCopies }));
+    const sansOrg = join(s, "perso", "carnet");
+    depotAncien(sansOrg);
+    g(sansOrg, "init", "-q");
+    g(sansOrg, "add", "-A");
+    g(sansOrg, "commit", "-q", "--no-verify", "-m", "Carnet");
+    g(sansOrg, "branch", "collab/alice");
+    g(sansOrg, "worktree", "add", "-q", join(s, "perso", "carnet-alice"), "collab/alice");
+    const carnet = (R.scan({ cwd: join(s, "perso"), home: join(s, "profil-vide"), collab: true }).projects ?? []).find((p) => /carnet/.test(p.dir)) ?? {};
+    check("--collab, un dépôt qui n'est pas de l'organisation (sans deploy.yml) : la branche collab/ n'y passe pas devant", memes(carnet.dir, sansOrg) && carnet.firstCopy === "production", JSON.stringify({ d: carnet.dir, f: carnet.firstCopy }));
+    g(org, "branch", "collab/bob");
+    g(org, "worktree", "add", "-q", join(s, "org", "portail-bob"), "collab/bob");
+    const deux = portail({ collab: true });
+    check("--collab, deux copies sur une branche collab/ : le script ne choisit pas (la copie de production d'abord), workBranches les nomme pour que la mise à jour demande", deux.firstCopy === "production" && JSON.stringify([...(deux.workBranches ?? [])].sort()) === JSON.stringify(["collab/alice", "collab/bob"]), JSON.stringify({ f: deux.firstCopy, w: deux.workBranches }));
+    check("... et otherCopies ne nomme que les copies qui ont encore les pages d'avant (la copie déjà réparée n'y est pas)", JSON.stringify((deux.otherCopies ?? []).map((c) => c.branch)) === JSON.stringify(["collab/bob"]), JSON.stringify((deux.otherCopies ?? []).map((c) => [c.branch, c.state])));
 
     // d. A page that starts with requireAdmin() given one plain string.
     const avecArg = projet("avec-argument", {

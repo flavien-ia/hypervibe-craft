@@ -124,5 +124,22 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   check("... et la page DOC le dit (copies listées une fois, le filtre réparé dans le même passage, la ligne retouchée laissée)", /is listed once/.test(doc) && /In the same pass, and with the same yes, it also repairs the sign-in and notification links/.test(doc) && /A line you changed by hand is left as it is/.test(doc));
 }
 
+// 3.4.20: a project's `needed` is the one of the copy offered first, and its other working copies
+// that still have the old pages are said apart, one line per project, never offered for writing nor
+// for removal (Bastien, 28/10/2026: five old copies of branches already merged kept a repaired
+// project "to repair", and the warning was no longer read).
+{
+  const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
+  const at = u.indexOf("## Step 3f - Close the admin space of existing projects");
+  const step = at < 0 ? "" : u.slice(at, u.indexOf("\n## ", at + 3));
+  check("/update-hypervibe 3f : le needed d'un projet, ses comptes et la réparation sont ceux de la copie proposée d'abord (firstCopy dit pourquoi)", /The project's `needed`, its counts and the repair are that copy's alone/.test(step) && /`firstCopy` says why that copy comes first/.test(step) && !/as choices of their own/.test(step));
+  check("... les autres copies qui ont encore les anciennes pages : otherCopies, une ligne par projet, même quand le projet n'est pas à réparer", /\*\*The other copies that still have the old pages\*\* \(`otherCopies`, on any project of `projects`, `needed` or not/.test(step) && /one line per project, never one per folder/.test(step) && /then the other copies below \(`otherCopies`\), then the lines left to `\/security`/.test(step));
+  check("... leur état dit en mots (merged, work, unread), et ce qu'on peut en faire : mises à jour ou retirées", /`merged`, \*"with nothing pending, and already in <containedIn>"\*/.test(step) && /`work`, \*"with work in progress"\*/.test(step) && /`unread`, \*"I could not read whether they hold work in progress"\*/.test(step) && /Each can be brought up to date from <containedIn>, or removed once it is of no use\./.test(step));
+  check("... jamais proposées à la réparation, à l'écriture ni à la suppression", /Never offer to repair them, to write in them, or to remove them: this step only says it, and the person decides/.test(step));
+  const doc = read("skills/update-hypervibe/DOC.md");
+  const docFr = read("skills/update-hypervibe/DOC.fr.md");
+  check("... et les pages DOC le disent (les autres dossiers jamais réparés, à mettre à jour ou retirer)", /Its other folders are never repaired by this step/.test(doc) && /you can bring them up to date or remove them/.test(doc) && /Ses autres dossiers ne sont jamais réparés par cette étape/.test(docFr) && /vous pouvez les mettre à jour ou les retirer/.test(docFr));
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;

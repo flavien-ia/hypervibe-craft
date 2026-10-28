@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.4.20 (28 octobre 2026)
+
+### Mise à jour de vos projets
+- **Un projet réparé ne vous est plus signalé « à réparer » à cause de ses vieux dossiers** : quand un projet est tenu dans plusieurs dossiers (une branche par dossier), `/update-hypervibe` ne regarde plus que celui qu'il vous propose, celui de la branche que votre site met en ligne. Une fois celui-là réparé, le projet est à jour, même si d'anciens dossiers gardent les pages d'avant.
+- **Ces anciens dossiers vous sont tout de même dits, en une ligne par projet** : combien gardent encore les pages d'avant, et dans quel état. Soit ils n'ont rien en attente et tout ce qu'ils contiennent est déjà dans la branche mise en ligne, soit ils portent du travail en cours (des fichiers pas encore enregistrés, ou des enregistrements qui n'y sont pas encore). La commande n'y écrit jamais rien et ne les supprime pas : elle vous dit seulement que vous pouvez les mettre à jour, ou les retirer quand ils ne servent plus.
+- **Un projet tenu dans plusieurs dossiers est lu correctement sur un Mac** : un dossier rangé à l'écart, retrouvé par les fichiers du projet lui-même, revenait sous une autre forme d'adresse que ses voisins, alors que c'était le même endroit du disque. Tous les dossiers d'un même projet sont désormais donnés sous la même forme, celle que le disque leur donne vraiment.
+
+### Pour l'avoir
+- Lancez `/update-hypervibe`, puis tapez `/reload-plugins` (ou ouvrez une nouvelle conversation). Relancez ensuite `/update-hypervibe` pour voir vos projets sous la nouvelle règle.
+
+### Coulisses
+- Avant chaque version, le plugin est désormais vérifié contre les limites du dialogue « Téléverser un plugin » de Claude Desktop : la longueur de sa présentation, celle de la description de chaque commande, et la forme de leurs noms. Un dépassement est refusé avant de partir, plutôt que d'être découvert par la personne qui installe. Ce plugin n'était pas concerné par le refus constaté chez le plugin collaborateur de l'offre d'équipe : sa présentation tient très en dessous de la limite.
+- Le cas du Mac est reproduit sur Windows avec un dossier relié, et chaque nouvelle règle est éprouvée en abîmant le code : un projet dont seuls les vieux dossiers attendent, un dossier avec un fichier en cours, un autre avec un enregistrement absent de la branche mise en ligne.
+
 ## v3.4.19 (28 octobre 2026)
 
 ### Sécurité

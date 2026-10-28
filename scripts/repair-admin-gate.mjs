@@ -15,6 +15,7 @@
 //   node repair-admin-gate.mjs --project-dir <dir> --write   the repair of that project
 //   node repair-admin-gate.mjs --scan [--cwd <dir>]          the projects of this machine, each
 //                                                            diagnosed; nothing is written
+//                                 [--collab]                 the collaborator's order of the copies
 //
 // The diagnosis, for each Next.js app of the project (its root, or the apps/* of a monorepo):
 //   - every page of an admin/(protected)/ folder of src/app, at any depth (a project translated by
@@ -44,9 +45,12 @@
 // middleware the project already has), `await requireAdmin();` first in each `to-fix` page with its
 // import (and `async` when the function was not), the old rule replaced in its place. Run again, it
 // changes nothing. It lists the files it wrote (`commit`) and what is left to Claude (`remaining`).
-// It never runs git, but for one question asked in the neutral form of 3.4.17 (no file system
-// monitor, no filter, no hook, no pager): which of the files it would write already have changes not
-// committed (`uncommitted`, with --project-dir only).
+// It never runs git, but for these questions, each asked in the neutral form of 3.4.17 (no file
+// system monitor, no filter, no hook, no pager, no optional lock), without a shell, five seconds at
+// most: which of the files it would write already have changes not committed (`uncommitted`, with
+// --project-dir only); and, with --scan, for each working copy other than the first that still needs
+// the repair, whether it has changes not committed (`git status`) and whether what it holds is
+// already in the production branch (`git merge-base --is-ancestor HEAD <branch>`, see copyState).
 //
 // 3.4.19: the --scan groups the working copies of one repository (`git worktree add`) into one
 // project, each copy with its branch, the copy on the production branch first (`copies`,
@@ -55,6 +59,17 @@
 // it in `needed` (`counts.redirect`) and --write repairs the lines that are still the templates' own,
 // word for word (`fix: "auto"`), never another (`fix: "manual"`, left to /security); a page that starts with `await requireAdmin("/admin")` (one plain string) is
 // `checked`; `uncommitted` reads git's paths and the project's to their real path.
+//
+// 3.4.20: every working copy of a project, and its `dir`, are given by their real path. A copy found
+// through worktrees/*/gitdir came back as git wrote it (/private/var/... on macOS), the others as the
+// scan met them (/var/...): one group held two forms of the same folders (reported on 28/10/2026).
+// A project's `needed` is its first copy's, the one offered for the repair: five old copies of
+// branches already merged no longer kept a repaired project "to repair" (reported the same day). The
+// other copies that still need it are named apart (`otherCopies`), each with its state (`merged`:
+// nothing pending and already in the production branch; `work`: changes not committed, or commits
+// the production branch does not have; `unread`), and are never offered for writing. With --collab
+// (the collaborator's /update-hypervibe-team), in a project of the organisation
+// (.github/workflows/deploy.yml), the copy on the work branch `collab/<login>` is offered first.
 //
 // One JSON line. Exit 0, or 1 when a step failed (`step` says which).
 
@@ -1305,6 +1320,34 @@ export function diagnose(dir, { git = false, run = spawnSync, withRedirects = fa
   return result;
 }
 
+/** A path read to its real one (every link resolved), or as it is when it cannot be read. */
+function realOf(p) {
+  try {
+    return realpathSync(p);
+  } catch {
+    return resolve(p);
+  }
+}
+
+/** git run in `base` in the neutral form of 3.4.17, without a shell, five seconds at most; the hooks
+ *  pointed to `neutral`, an empty folder of ours. */
+function neutralGit(base, neutral, run) {
+  const safe = ["--no-pager", "--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", `core.hooksPath=${neutral}`, "-c", "core.virtualFilesystem="];
+  return (args) => run("git", ["-C", base, ...safe, ...args], { encoding: "utf8", timeout: 5000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+}
+
+/** The `-c` that empty the filters of the repository's own configuration, or null when git could not
+ *  say them. */
+function emptiedFilters(git) {
+  const filters = git(["config", "--show-scope", "--includes", "--name-only", "--get-regexp", "^filter\\..+\\.(clean|smudge|process)$"]);
+  if (filters.status !== 0 && filters.status !== 1) return null;
+  return (filters.status === 0 ? String(filters.stdout ?? "") : "")
+    .split(/\r?\n/)
+    .map((l) => l.trim().split(/\s+/))
+    .filter(([scope, key]) => key && (scope === "local" || scope === "worktree"))
+    .flatMap(([, key]) => ["-c", `${key}=`]);
+}
+
 /**
  * Which of `files` (relative to `dir`) already have changes not committed, asked of git in the
  * neutral form of 3.4.17 (localGitState of /delete-project): no pager, no optional lock, no file
@@ -1322,28 +1365,15 @@ export function diagnose(dir, { git = false, run = spawnSync, withRedirects = fa
  */
 export function uncommittedFiles(dir, files, run = spawnSync) {
   if (!files.length) return [];
-  const realOf = (p) => {
-    try {
-      return realpathSync(p);
-    } catch {
-      return resolve(p);
-    }
-  };
   const base = realOf(dir);
   const neutral = mkdtempSync(join(tmpdir(), "hv-git-neutre-"));
   try {
-    const safe = ["--no-pager", "--no-optional-locks", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", `core.hooksPath=${neutral}`, "-c", "core.virtualFilesystem="];
-    const git = (args) => run("git", ["-C", base, ...safe, ...args], { encoding: "utf8", timeout: 5000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 });
+    const git = neutralGit(base, neutral, run);
     const top = git(["rev-parse", "--show-toplevel"]);
     if (top.status !== 0) return null;
     const root = realOf(String(top.stdout ?? "").trim());
-    const filters = git(["config", "--show-scope", "--includes", "--name-only", "--get-regexp", "^filter\\..+\\.(clean|smudge|process)$"]);
-    if (filters.status !== 0 && filters.status !== 1) return null;
-    const emptied = (filters.status === 0 ? String(filters.stdout ?? "") : "")
-      .split(/\r?\n/)
-      .map((l) => l.trim().split(/\s+/))
-      .filter(([scope, key]) => key && (scope === "local" || scope === "worktree"))
-      .flatMap(([, key]) => ["-c", `${key}=`]);
+    const emptied = emptiedFilters(git);
+    if (emptied === null) return null;
     // The paths given to git are read from the folder it runs in (the real one); the ones it prints
     // are relative to the repository's root.
     const fromRoot = (f) => slash(relative(root, join(base, f)));
@@ -1468,7 +1498,15 @@ const isProject = (dir) => existsSync(join(dir, ".git")) && nextApps(dir).length
 // is not enough either: it may be on a demo branch while a copy holds the branch that is deployed.
 // So the copies of a repository are grouped, each with its branch, and the one on the branch that
 // goes to production is offered first. Everything is read in the files git keeps (HEAD, commondir,
-// worktrees/*/gitdir, refs): git is never run, nothing is written, no network.
+// worktrees/*/gitdir, refs): git is never run, nothing is written, no network. Each copy is given by
+// its real path: git writes worktrees/*/gitdir with every link resolved, and the scan meets the
+// others as their parent folder was typed (3.4.20).
+//
+// The project's `needed` is its first copy's: the repair is offered there only. An old copy of a
+// branch already merged kept a repaired project "to repair" for good, and the warning ended up
+// unread (reported on 28/10/2026). The other copies that still need it are named apart, with their
+// state (copyState), which is the one place where git is asked: whether a copy has changes not
+// committed, and whether what it holds is already in the production branch.
 
 /** The text of a small file of git's, or null. */
 const gitFile = (file) => {
@@ -1520,6 +1558,55 @@ export function productionBranchOf(common, branches = []) {
   if (head) return { branch: head, from: "origin" };
   for (const name of ["main", "master"]) if (branches.includes(name) || hasBranch(common, name)) return { branch: name, from: "default" };
   return { branch: null, from: null };
+}
+
+/** The refs of `branch` that the repository has, read in its files: the local one, then the
+ *  remote's. Both names when the repository's folder is not known (git then says). */
+function refsOf(common, branch) {
+  const refs = [`refs/heads/${branch}`, `refs/remotes/origin/${branch}`];
+  if (!common) return refs;
+  const packed = (gitFile(join(common, "packed-refs")) ?? "").split(/\r?\n/);
+  return refs.filter((ref) => existsSync(join(common, ...ref.split("/"))) || packed.some((l) => l.trim().endsWith(` ${ref}`)));
+}
+
+/**
+ * The state of a working copy that the repair leaves alone, said so that the person knows whether it
+ * can be brought up to date or removed (nothing is ever written in it, nothing is removed):
+ *   - `uncommitted`: whether it has changes not committed (`git status`, untracked files counted,
+ *     ignored ones not), null when git could not say;
+ *   - `contained`: whether what it holds is already in `reference`, the production branch (or the
+ *     branch of the copy offered first, when the production branch is not read): `git merge-base
+ *     --is-ancestor HEAD <ref>`, against the local branch, then the remote's; null when no such
+ *     branch is there or git could not say;
+ *   - `state`: `work` when it has changes not committed or commits the branch does not have,
+ *     `merged` when neither, `unread` otherwise.
+ * git is asked in the neutral form of uncommittedFiles, from the copy's real folder.
+ */
+export function copyState(dir, reference, { common = null, run = spawnSync } = {}) {
+  const folder = realOf(dir);
+  const neutral = mkdtempSync(join(tmpdir(), "hv-git-neutre-"));
+  let uncommitted = null;
+  let contained = null;
+  try {
+    const git = neutralGit(folder, neutral, run);
+    const emptied = emptiedFilters(git);
+    if (emptied !== null) {
+      const st = git([...emptied, "status", "--porcelain", "-z", "--ignore-submodules=all", "--untracked-files=normal"]);
+      if (st.status === 0) uncommitted = String(st.stdout ?? "").length > 0;
+    }
+    for (const ref of reference ? refsOf(common, reference) : []) {
+      const a = git(["merge-base", "--is-ancestor", "HEAD", ref]);
+      if (a.status === 0) {
+        contained = true;
+        break;
+      }
+      if (a.status === 1) contained = false;
+    }
+  } finally {
+    rmSync(neutral, { recursive: true, force: true });
+  }
+  const state = uncommitted === true || contained === false ? "work" : uncommitted === false && contained === true ? "merged" : "unread";
+  return { state, uncommitted, contained, containedIn: reference ?? null };
 }
 
 /**
@@ -1611,9 +1698,19 @@ export function findProjects({ cwd = process.cwd(), home = null, plat = process.
  * the copies of `git worktree add`) make one project. Its first copy is the one on the production
  * branch, otherwise the main folder, otherwise the first found; the others follow, each with its
  * branch. A copy that the scan did not meet (made elsewhere, a hidden folder) is added when it holds
- * Next.js. A folder whose git cannot be read is a project of its own, as before.
+ * Next.js. A folder whose git cannot be read is a project of its own, as before. Every copy is given
+ * by its real path (3.4.20), so that one group never holds two forms of a path.
+ *
+ * `collab` (the collaborator's harness): in a project of the organisation (the copy has
+ * .github/workflows/deploy.yml), the copy on a `collab/` branch comes first, before the production
+ * one. The collaborator works on `collab/<login>` and sends it to production through its own path
+ * (`_publish-prod`); the copy on `main` is never where the repair goes. Read in the files, without
+ * the network: the login is not known here, so this holds only when ONE copy is on such a branch;
+ * with several, the order stays the production one and `workBranches` names them, for the skill to
+ * ask which one is the person's. `first` says why the first copy is first: `work-branch`,
+ * `production`, `main` (the main folder) or `found`.
  */
-export function groupCopies(projects) {
+export function groupCopies(projects, { collab = false } = {}) {
   const groups = new Map();
   const add = (key, dir, copy) => {
     if (!groups.has(key)) groups.set(key, { common: copy?.common ?? null, copies: new Map() });
@@ -1633,12 +1730,16 @@ export function groupCopies(projects) {
         if (copy && same(copy.common) === same(g.common)) g.copies.set(same(other), copy);
       }
     }
-    const copies = [...g.copies.values()];
+    const copies = [...g.copies.values()].map((c) => ({ ...c, dir: realOf(c.dir) }));
     const production = g.common ? productionBranchOf(g.common, copies.map((c) => c.branch).filter(Boolean)) : { branch: null, from: null };
     const main = g.common && /^\.git$/i.test(basename(g.common)) ? same(dirname(g.common)) : null;
-    const rank = (c) => (production.branch && c.branch === production.branch ? 0 : same(c.dir) === main ? 1 : 2);
+    const working = collab ? copies.filter((c) => /^collab\/./.test(c.branch ?? "") && existsSync(join(c.dir, ".github", "workflows", "deploy.yml"))) : [];
+    const work = working.length === 1 ? working[0] : null;
+    const rank = (c) => (c === work ? -1 : production.branch && c.branch === production.branch ? 0 : same(c.dir) === main ? 1 : 2);
     copies.sort((a, b) => rank(a) - rank(b));
-    out.push({ copies, production });
+    const head = copies[0];
+    const first = head === work ? "work-branch" : production.branch && head.branch === production.branch ? "production" : main && same(head.dir) === main ? "main" : "found";
+    out.push({ copies, production, first, ...(working.length > 1 ? { workBranches: working.map((c) => c.branch) } : {}) });
   }
   return out;
 }
@@ -1648,7 +1749,7 @@ export function groupCopies(projects) {
 export function scan(options = {}) {
   const { projects, holders, unreadable } = findProjects(options);
   const unread = [...unreadable];
-  const results = groupCopies(projects).map(({ copies, production }) => {
+  const results = groupCopies(projects, { collab: Boolean(options.collab) }).map(({ copies, production, first: offered, workBranches }) => {
     const diagnosed = copies.map((c) => ({ copy: c, d: diagnose(c.dir, { withRedirects: Boolean(options.withRedirects) }) }));
     for (const { d } of diagnosed) for (const u of d.unreadable ?? []) unread.push({ path: join(d.dir, u.path), error: u.error });
     const [first, ...others] = diagnosed;
@@ -1660,16 +1761,24 @@ export function scan(options = {}) {
     if (others.length) {
       // Every working copy, the first one included, each with its own count.
       r.copies = diagnosed.map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, production: Boolean(production.branch) && copy.branch === production.branch, needed: d.needed, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length }));
-      r.needed = diagnosed.some(({ d }) => d.needed);
+      // The project's `needed` stays its first copy's (r is that copy's diagnosis): the repair is
+      // offered there only. The other copies that still need it are said apart, with their state.
+      r.firstCopy = offered;
+      if (workBranches) r.workBranches = workBranches;
+      const reference = production.branch ?? first.copy.branch;
+      r.otherCopies = others
+        .filter(({ d }) => d.needed)
+        .map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length, ...copyState(copy.dir, reference, { common: copy.common ?? null, run: options.run }) }));
     }
     return r;
   });
   const needed = results.filter((r) => r.needed);
-  const brief = ({ dir, name, needed: n, reason, branch, productionBranch, copies, openRedirect }) => ({ dir, name, needed: n, ...(reason ? { reason } : {}), branch, productionBranch, ...(copies ? { copies } : {}), openRedirect: openRedirect ?? [] });
+  const brief = ({ dir, name, needed: n, reason, branch, productionBranch, firstCopy, workBranches, otherCopies, copies, openRedirect }) => ({ dir, name, needed: n, ...(reason ? { reason } : {}), ...(firstCopy ? { firstCopy } : {}), ...(workBranches ? { workBranches } : {}), ...(otherCopies ? { otherCopies } : {}), branch, productionBranch, ...(copies ? { copies } : {}), openRedirect: openRedirect ?? [] });
   const withRedirect = (r) => (r.openRedirect ?? []).length > 0 || (r.copies ?? []).some((c) => c.openRedirect > 0);
   return {
     scanned: holders,
     needed: needed.length,
+    otherCopies: results.filter((r) => (r.otherCopies ?? []).length > 0).length,
     openRedirect: results.filter(withRedirect).length,
     projects: [...needed, ...results.filter((r) => !r.needed).map(brief)],
     unreadable: unread,
@@ -1703,7 +1812,7 @@ if (launchedDirectly()) {
   if (args.includes("--scan")) {
     out = args.includes("--write")
       ? { ok: false, step: "args", detail: "--scan never writes: repair one project at a time, with --project-dir <dir> --write" }
-      : scan({ cwd: value("--cwd") ?? process.cwd(), home: value("--home") ?? null, withRedirects: args.includes("--redirects") });
+      : scan({ cwd: value("--cwd") ?? process.cwd(), home: value("--home") ?? null, withRedirects: args.includes("--redirects"), collab: args.includes("--collab") });
   } else {
     const dir = resolve(fromGitBashPath(value("--project-dir") ?? process.cwd()));
     const withRedirects = args.includes("--redirects");

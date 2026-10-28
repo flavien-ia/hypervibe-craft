@@ -9,7 +9,7 @@
       "name": "hypervibe",
       "source": "./",
       "description": "Bootstrap a full-stack T3 project (Next.js + tRPC + Drizzle + Tailwind + shadcn/ui) with modular addons for database, auth, payments, email, storage, i18n, analytics, domain, and SEO. Deploys to Vercel with GitHub integration.",
-      "version": "3.4.19",
+      "version": "3.4.20",
       "author": {
         "name": "Flavien Chervet"
       },
