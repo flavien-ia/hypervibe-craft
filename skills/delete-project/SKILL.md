@@ -444,7 +444,7 @@ Display a recap to the user, plain language, with the following structure:
 ### 4.1 "✅ Deleted automatically"
 Table of the `report.deleted` entries translated into accessible language.
 
-For Vercel, name each site with its team. A result `absent` means the site was already gone. `verified: false` means Vercel accepted the deletion but it could not be checked afterwards (the `note` says why): say so, and suggest a look at the team's page on vercel.com rather than announcing a certainty.
+For Vercel, name each site with its team. A result `absent` means the site was already gone. `verified: false` means Vercel accepted the deletion but it could not be checked afterwards (the `note` says why): say so, and suggest a look at the Vercel team's page on vercel.com rather than announcing a certainty.
 
 For the code repository (`deleted.github.results`): `deleted` names the repository, `verified: false` meaning GitHub accepted the deletion but it could not be checked afterwards; `absent` means it was already gone.
 

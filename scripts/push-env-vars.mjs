@@ -294,7 +294,7 @@ if (!existsSync(vercelProjectPath)) {
 
 const project = JSON.parse(readFileSync(vercelProjectPath, "utf8"));
 const projectId = project.projectId;
-const orgId = project.orgId; // team ID (null for personal accounts)
+const orgId = project.orgId; // Vercel team ID (null for personal accounts)
 
 // ─── Step 3 - Try to load CLI auth token (for REST API) ────────────────
 // Resolution lives in _vercel-auth.mjs, shared with scripts/vercel/check-deploy.mjs.

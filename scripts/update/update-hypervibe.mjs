@@ -12,7 +12,7 @@
 //   node update-hypervibe.mjs download [--plugin-dir DIR]
 //   node update-hypervibe.mjs install  --zip FICHIER [--plugin-dir DIR]
 //
-// Contrairement au Team, aucune licence n'entre en jeu : le plugin est sous Apache 2.0,
+// Contrairement à Hypervibe Enterprise, aucune licence n'entre en jeu : le plugin est sous Apache 2.0,
 // l'annonce de version se lit sur le depot public et l'archive se telecharge sans jeton.
 //
 // Sortie (stdout) : un objet JSON unique.
@@ -23,6 +23,7 @@ import { createHash } from "node:crypto";
 import { inflateRawSync } from "node:zlib";
 import { homedir } from "node:os";
 import path from "node:path";
+import { placeDuPlugin } from "../plugin-place.mjs";
 
 const MANIFESTE_PUBLIC =
   "https://raw.githubusercontent.com/flavien-ia/hypervibe-harness/main/.claude-plugin/marketplace.json";
@@ -390,12 +391,18 @@ function cmdInstall() {
     }
   }
 
+  // La sauvegarde n'est promise que dans un dossier de marketplace : le registre des plugins
+  // televerses de Claude Desktop l'efface en quelques minutes (voir scripts/plugin-place.mjs).
+  const { place, backupKept, desktop } = placeDuPlugin(pluginDir, "hypervibe");
   rendre({
     ok: true,
     oldVersion: ancienne,
     version: nouvelle,
     pluginDir,
     backup: sauvegarde,
+    backupKept,
+    desktop,
+    place,
     catalogueMisAJour: catalogue,
   });
 }

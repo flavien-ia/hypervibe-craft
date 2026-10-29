@@ -133,7 +133,7 @@ check("never as an argument", byArgument.length === 0);
 const ensure = readFileSync(join(WORKER_DIR, "ensure.mjs"), "utf8");
 check("ensure.mjs asks whether the clock is deployed in three answers", ensure.includes("deploymentState("));
 const harness = JSON.parse(readFileSync(join(ROOT, ".claude-plugin", "plugin.json"), "utf8")).name;
-if (harness === "hypervibe-team-admin") {
+if (harness === "hypervibe-enterprise-admin") {
   check(
     "the administrator's refuses to scaffold over a clock it cannot see",
     ensure.includes('flags["force-takeover"]') && ensure.includes("Could not tell whether the organisation's clock is already deployed"),

@@ -827,9 +827,9 @@ async function fetchResend() {
 // ─── Service: Vercel (plan-aware - partial) ──────────────────────────
 //
 // Plan detection: `/v2/user` returns `user.billing.plan` for the personal
-// account, but most projects live on a team. We resolve the user's default
-// team and read its `billing.plan` - that's the plan that actually applies
-// to deployments. Falls back to user plan if no default team.
+// account, but most projects live on a Vercel team. We resolve the user's default
+// Vercel team and read its `billing.plan` - that's the plan that actually applies
+// to deployments. Falls back to user plan if no default Vercel team.
 //
 // What we surface: plan label, deployment count this month, project count.
 // Bandwidth / function-time aren't exposed via API on any plan (the
@@ -844,7 +844,7 @@ async function fetchVercel() {
   const token = readUserEnv("VERCEL_TOKEN") || loadAuthToken();
   if (!token) return svc("vercel", "Vercel (hébergement)", false, [], "Vercel CLI non connectée (lance `vercel login` ou définis VERCEL_TOKEN)");
 
-  // Resolve user + default team + plan in one shot
+  // Resolve user + default Vercel team + plan in one shot
   const userRes = await fetchJson("https://api.vercel.com/v2/user", {
     headers: { Authorization: `Bearer ${token}` },
   });

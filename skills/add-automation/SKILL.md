@@ -49,7 +49,7 @@ Every automation belongs to one of two worlds, and mixing them up is the one unf
 
 **A job of the APP** - its output feeds the app or its end users: cleaning the database, sending emails to customers, syncing data the app displays, processing user uploads, webhooks. It must keep running no matter what happens to the operator's tools or subscriptions → it runs on the **app's infrastructure** (cron, Cloudflare Worker, Render).
 
-**A job of the OPERATOR** - its output is for the user themselves (or their team): a morning brief, a weekly analysis, a watch that alerts them, a report, a triage with proposals. It is personal tooling → it runs as a **Claude routine on the user's own account** (their personal AI doing recurring work for them).
+**A job of the OPERATOR** - its output is for the user themselves (or their organisation): a morning brief, a weekly analysis, a watch that alerts them, a report, a triage with proposals. It is personal tooling → it runs as a **Claude routine on the user's own account** (their personal AI doing recurring work for them).
 
 ### How to infer it (do NOT ask by default)
 

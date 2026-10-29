@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // test-shell-portable.mjs - A command a script runs through a shell must work in Windows' shell too.
 // `VAR=1 command` is a POSIX prefix that Windows' shell does not know: the collaborator's bootstrap
-// stopped at its second step on it at the Team trial of 30/09/2026 (and in the published 2.3.7). A
+// stopped at its second step on it at the trial of 30/09/2026 (and in the published 2.3.7). A
 // variable goes in the child's environment (`env: { ...process.env, VAR: "1" }`), never before the
 // command.
 //

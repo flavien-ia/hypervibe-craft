@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test-detect-projects-dir.mjs - Recette of scripts/detect-projects-dir.mjs, the folder /bootstrap
-// creates a project in. Cases of the ticket of 30/09/2026 (a Team collaborator on Windows 11): a
+// creates a project in. Cases of the ticket of 30/09/2026 (an Enterprise collaborator on Windows 11): a
 // path as Git Bash writes it, with spaces; a projects folder named freely, which held projects;
 // a conventional folder that does not exist. Every profile is simulated (--home): nothing of the
 // real Desktop is read.

@@ -16,6 +16,7 @@ import { tmpdir as guardTmp } from "node:os";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const SUITES = [
+  ["Hypervibe Enterprise: the former name of the offer is gone, outside a short and justified list (3.4.19)", join(ROOT, "scripts", "tests", "test-enterprise-name.mjs")],
   ["managed rule blocks", join(ROOT, "scripts", "tests", "test-managed-block.mjs")],
   ["the rule on database reads: columns named in findFirst too, the read cached rather than the page, both plans, an untouched copy updated (3.4.16)", join(ROOT, "scripts", "tests", "test-db-reads-rule.mjs")],
   ["global block size", join(ROOT, "scripts", "rules", "measure.mjs")],
@@ -23,6 +24,7 @@ const SUITES = [
   ["no skill tells Claude to run a command its guard refuses", join(ROOT, "scripts", "tests", "test-skills-guard.mjs")],
   ["the plugin's paths and the organisation's name are set by the skill that uses them", join(ROOT, "scripts", "tests", "test-skill-variables.mjs")],
   ["git hooks chain (a clone never runs its hooks)", join(ROOT, "scripts", "tests", "test-hooks-chain.mjs")],
+  ["the update says where the plugin lives: no backup promised in Claude Desktop's registry, /reload-plugins, the version that runs (3.4.21)", join(ROOT, "scripts", "tests", "test-update-place.mjs")],
   ["child processes and paths with spaces", join(ROOT, "scripts", "tests", "test-spawn-paths.mjs")],
   ["workflow actions on a Node GitHub still runs", join(ROOT, "scripts", "tests", "test-workflow-actions.mjs")],
   ["commands run through a shell work in Windows' shell too", join(ROOT, "scripts", "tests", "test-shell-portable.mjs")],

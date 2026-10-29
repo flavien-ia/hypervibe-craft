@@ -145,7 +145,7 @@ try {
 
   console.log("\n── Proposée par la mise à jour, lancée sur un oui ──");
   {
-    const files = ["skills/update-hypervibe/SKILL.md", "skills/update-hypervibe-team/SKILL.md"].map((f) => join(ROOT, f)).filter(existsSync);
+    const files = ["skills/update-hypervibe/SKILL.md", "skills/update-hypervibe-enterprise/SKILL.md"].map((f) => join(ROOT, f)).filter(existsSync);
     // The repair's own step, up to the next heading: another step's "only if the user agrees" is
     // not this one's.
     const step = files

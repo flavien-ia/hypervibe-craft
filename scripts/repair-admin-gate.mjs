@@ -7,7 +7,7 @@
 // redirect, readable with a plain request (found on 26/10/2026 on sites built with this harness).
 // 3.4.17 fixed the templates and /security, not the projects already built: each one stays exposed
 // until someone repairs it, and its CLAUDE.md keeps teaching Claude the old pattern for every new
-// page. /update-hypervibe (and the collaborator's /update-hypervibe-team) offers this repair for
+// page. /update-hypervibe (and the collaborator's /update-hypervibe-enterprise) offers this repair for
 // every project of the machine that needs it:
 //
 //   node repair-admin-gate.mjs --project-dir <dir>           the diagnosis of one project; nothing
@@ -68,7 +68,7 @@
 // other copies that still need it are named apart (`otherCopies`), each with its state (`merged`:
 // nothing pending and already in the production branch; `work`: changes not committed, or commits
 // the production branch does not have; `unread`), and are never offered for writing. With --collab
-// (the collaborator's /update-hypervibe-team), in a project of the organisation
+// (the collaborator's /update-hypervibe-enterprise), in a project of the organisation
 // (.github/workflows/deploy.yml), the copy on the work branch `collab/<login>` is offered first.
 //
 // One JSON line. Exit 0, or 1 when a step failed (`step` says which).

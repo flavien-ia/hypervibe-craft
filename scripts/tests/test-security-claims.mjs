@@ -189,6 +189,11 @@ check(
     pre.map((e) => e.matcher).join(", "),
   );
   check(
+    "chaque garde-fou PreToolUse a 30 s pour repondre : au-dela, Claude Code lance la commande sans lui (banc Desktop du 29/10/2026, 16 a 24 s sur un poste charge)",
+    pre.length >= 1 && pre.every((e) => (e.hooks ?? []).length >= 1 && e.hooks.every((x) => x.timeout === 30)),
+    JSON.stringify(pre.map((e) => (e.hooks ?? []).map((x) => x.timeout))),
+  );
+  check(
     "guard-bash.mjs accepte les deux outils",
     /SHELL_TOOLS = new Set\(\["Bash", "Monitor"\]\)/.test(lire("hooks/guard-bash.mjs")),
   );

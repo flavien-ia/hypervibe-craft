@@ -139,7 +139,7 @@ async function fromNeon() {
   }
 }
 
-// Every project of every team, all pages: the same listing as /delete-project
+// Every project of every Vercel team, all pages: the same listing as /delete-project
 // (_vercel-projects.mjs), so that both skills see the same names. Reading
 // `vercel projects ls` here saw the CLI's current team only, and its first
 // page only (20 projects).

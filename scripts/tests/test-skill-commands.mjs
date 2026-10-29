@@ -47,7 +47,7 @@ const CONTINUATION_LITTERALE = /[ \t]\\n[ \t]+(?:-|\|\||&&|\|)/;
 const ANCRE_SANS_ACCOLADES = new RegExp("\\" + DOLLAR + "CLAUDE_(?:SKILL_DIR|PLUGIN_ROOT)(?![A-Za-z0-9_])");
 // Le dossier du plugin tape en dur (celui du poste de l'auteur) : il ne vaut
 // que la ou le plugin a ete televerse dans Claude Desktop, jamais dans un port.
-// Sept commandes du Team l'ont porte jusqu'en 2.1.10 (le `start` solo jusqu'en 3.1.6).
+// Sept commandes des harnais Enterprise l'ont porte jusqu'en 2.1.10 (le `start` solo jusqu'en 3.1.6).
 const CHEMIN_CODE_EN_DUR = /\.claude\/plugins\/marketplaces\/[^/\s"'`]+\/hypervibe/;
 const VARIANTE = /\.(codex|opencode|antigravity)\.md$/;
 
@@ -59,7 +59,7 @@ verifier("un \\n de printf ou de chaine JS passe", !CONTINUATION_LITTERALE.test(
 verifier("un chemin Windows passe", !CONTINUATION_LITTERALE.test("C:\\Program Files\\nodejs"));
 verifier("l'ancre sans accolades est reperee", ANCRE_SANS_ACCOLADES.test('node "' + ancreNue + '/../../scripts/x.mjs"'));
 verifier("l'ancre avec accolades passe", !ANCRE_SANS_ACCOLADES.test('node "' + ancreAccolades + '/../../scripts/x.mjs"'));
-verifier("un dossier de plugin tape en dur est repere", CHEMIN_CODE_EN_DUR.test('PLUGIN_DIR="' + DOLLAR + 'HOME/.claude/plugins/marketplaces/mon-poste/hypervibe-team-admin"'));
+verifier("un dossier de plugin tape en dur est repere", CHEMIN_CODE_EN_DUR.test('PLUGIN_DIR="' + DOLLAR + 'HOME/.claude/plugins/marketplaces/mon-poste/hypervibe-enterprise-admin"'));
 verifier("l'ancre du plugin passe", !CHEMIN_CODE_EN_DUR.test('PLUGIN_DIR="' + ancreAccolades + '/../.."'));
 
 const markdowns = [];

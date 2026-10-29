@@ -2231,7 +2231,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
 
     // 8b. An author address that is not an address. Every commit carries user.email in its
     //     header, and a push publishes it: on 22/09/2026 a machine's user.email held what
-    //     looked like a password, and the Team licence had sent it to the server. A literal
+    //     looked like a password, and the Enterprise licence had sent it to the server. A literal
     //     value that is not an address is refused; a variable, which this hook cannot read,
     //     is not. The refusal never repeats the value.
     const emailKey = /^git\s+config\b/.test(seg) ? /(?:^|\s)user\.email(?=\s|$)/i.exec(seg) : null;

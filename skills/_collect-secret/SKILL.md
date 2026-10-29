@@ -268,7 +268,7 @@ Order matters here: open the input window **before** the user closes the provide
 - URL: `https://vercel.com/account/tokens`
 - Instructions:
   1. **Create Token**, give it a name
-  2. Scope: Full Account (or Team if applicable)
+  2. Scope: Full Account (or the Vercel team, if applicable)
   3. Expiration: your choice (6 months typical)
   4. **Create**, then copy the value
 

@@ -195,7 +195,7 @@ Trois choses à savoir :
 - **Aucun email ne porte de lien vers localhost.** Le helper `mail.ts` qu'installe `/add-email` (Brevo ou Resend) refuse d'envoyer un message dont le corps pointe vers `localhost` ou `127.0.0.1`, avec une erreur qui nomme la cause : ça arrive quand un script qui envoie du courrier tourne sur un poste dont le `.env` porte l'URL locale, et de vrais destinataires reçoivent alors un bouton qui n'ouvre rien. `MAIL_ALLOW_LOCAL_LINKS=1`, posé par vous dans l'environnement, lève le refus pour un banc d'essai.
 - **Une automatisation qui pousse légitimement** peut préfixer sa commande par `HYPERVIBE_GUARD_ALLOW_PUSH=1`. Une opération qui restructure légitimement tout l'arbre (conversion en monorepo) peut préfixer son indexation globale par `HYPERVIBE_GUARD_ALLOW_SWEEP=1`, après qu'un `git status` a montré qu'aucun travail étranger n'est en attente. Ces deux préfixes sont visibles dans la commande, et c'est le but : l'exception est dite, jamais silencieuse. Une base de données jetable, dont personne ne dépend (un projet construit en direct sur scène, un bac à sable), est un autre cas : le hook ne sait pas distinguer une base jetable de la production, et un préfixe tapé par le modèle lui laisserait cette décision. Cette exception se lit donc dans l'environnement où Claude Code a été lancé (`HYPERVIBE_GUARD_ALLOW_DB_PUSH=1`, posé par vous avant la session), jamais dans la commande.
 
-Les hooks se chargent au démarrage de Claude Code : après une installation ou une mise à jour du plugin, le relancer.
+Les hooks se chargent avec le plugin : après une installation ou une mise à jour, taper `/reload-plugins` (ou ouvrir une nouvelle conversation).
 
 ## Conventions (inscrites dans le CLAUDE.md)
 

@@ -18,7 +18,7 @@
 //      on their own first lines, and the contact form writes to the site's owner, never to the
 //      address it was given.
 // Only language-neutral tokens of the skills are read: the same file runs in the solo harness and
-// in the Team's collaborator harness.
+// in the Enterprise collaborator harness.
 //
 //   node scripts/tests/test-admin-gate.mjs
 

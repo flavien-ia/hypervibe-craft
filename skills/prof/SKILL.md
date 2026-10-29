@@ -232,7 +232,7 @@ Wait for the user's reply, then explain the requested topic using the content be
 >
 > A few examples of what you can ask me:
 > - "Change the button color to blue"
-> - "Add an 'About' page with a presentation of the team"
+> - "Add an 'About' page with a presentation of the people behind it"
 > - "When someone fills out the form, send me an email"
 > - "Add a password-protected admin area"
 > - "Make the site available in English"

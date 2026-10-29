@@ -117,7 +117,7 @@ Ask:
 >    - **A mix of both** (e.g. a training to buy + a member subscription)
 > 2. **Your products / plans**: give me the list with a name, a price, and the currency (default EUR). E.g.:
 >    - "Online training - 297 EUR"
->    - "Pro plan - 19 EUR/month", "Team plan - 49 EUR/month"
+>    - "Pro plan - 19 EUR/month", "Business plan - 49 EUR/month"
 > 3. **Do you already know**, or would you rather define this later?
 
 Store the provided context (mode + product list) in a mental variable `<product_context>` for the following Steps.
@@ -436,7 +436,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vercel/plan.mjs"
 - **`plan` is `hobby`**: explain, then ask with `AskUserQuestion`:
   > Your Vercel project is on the free **Hobby** plan, which Vercel reserves for non-commercial projects. Collecting real payments requires the paid **Pro** plan (current price: https://vercel.com/pricing), otherwise Vercel may pause the site.
   >
-  > 1. **Upgrade to Pro first** (recommended): in the Vercel dashboard, open your team's billing settings and choose Pro. Tell me once it is done and I check again.
+  > 1. **Upgrade to Pro first** (recommended): in the Vercel dashboard, open your Vercel team's billing settings and choose Pro. Tell me once it is done and I check again.
   > 2. **Continue anyway**: I switch Stripe to live now, and you handle the plan yourself.
 
   Choice 1: wait for the user, re-run the script, and continue with 10.1 once it reads `pro`. Choice 2: continue with 10.1, and keep the warning line in the 10.9 recap.

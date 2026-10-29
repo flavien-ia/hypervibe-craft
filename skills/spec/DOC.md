@@ -15,7 +15,7 @@ The specification it produces is a readable `.md` file that `/bootstrap` can the
 Hypervibe guides you through **4 short blocks**. At each block, you answer the questions at your own pace, Hypervibe sums up what it understood, and we move on to the next one.
 
 **Block 1: Project identity**
-- Who is the app for (customers, team, general public, yourself)?
+- Who is the app for (customers, colleagues, general public, yourself)?
 - What problem does it solve?
 - Are you drawing inspiration from an existing site or app for the vibe?
 

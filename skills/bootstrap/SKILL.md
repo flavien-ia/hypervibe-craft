@@ -603,7 +603,7 @@ The infrastructure and the addons are in place. Now we build the real applicatio
 4. **Make it beautiful.** Choose a coherent color palette and design system. Use modern UI patterns: cards, badges, gradients, hover effects, transitions. The app should look professional, not like a tutorial exercise.
 
 5. **Use real images, never gray boxes or invented local paths** (e.g. `/images/hero.jpg` without the file → 404). Two options:
-   - **Default: Lorem Picsum** (reliable, deterministic URL, no 404): `https://picsum.photos/seed/<keyword>/<w>/<h>` - the seed fixes the same image between rebuilds. E.g. `https://picsum.photos/seed/restaurant/1600/900`, `https://picsum.photos/seed/team-portrait/800/800`.
+   - **Default: Lorem Picsum** (reliable, deterministic URL, no 404): `https://picsum.photos/seed/<keyword>/<w>/<h>` - the seed fixes the same image between rebuilds. E.g. `https://picsum.photos/seed/restaurant/1600/900`, `https://picsum.photos/seed/staff-portrait/800/800`.
    - **If the context is very specific** (hero of a French gourmet restaurant, portrait of a business lawyer, etc.) and a real Unsplash visual would have more impact: use WebSearch to find a real Unsplash photo-id, then build the URL `https://images.unsplash.com/photo-<real-id>?w=1600&q=80`. **Never invent an Unsplash ID** - they 404.
    Always wrap in the `<Image>` component from `next/image` with a descriptive `alt`.
 

@@ -195,7 +195,7 @@ Three things worth knowing:
 - **No email carries a link to localhost.** The `mail.ts` helper that `/add-email` installs (Brevo or Resend) refuses to send a message whose body links to `localhost` or `127.0.0.1`, with an error that names the cause: it happens when a script that sends mail runs on a workstation whose `.env` holds the local URL, and real recipients then get a button that opens nothing. `MAIL_ALLOW_LOCAL_LINKS=1`, set by you in the environment, lifts the refusal for a test bench.
 - **Automations that legitimately push** may prefix their command with `HYPERVIBE_GUARD_ALLOW_PUSH=1`. An operation that legitimately restructures the whole tree (a monorepo conversion) may prefix its sweeping stage with `HYPERVIBE_GUARD_ALLOW_SWEEP=1`, after a `git status` proved nothing foreign is pending. Both prefixes are visible in the command, which is the point: the exception is stated, never silent. A throwaway database nobody depends on (a project built live on stage, a scratch sandbox) is a different case: the hook cannot tell a scratch database from production, and a prefix typed by the model would let the model decide that, so this exception is read from the environment Claude Code was launched in (`HYPERVIBE_GUARD_ALLOW_DB_PUSH=1`, set by you before the session), never from the command.
 
-Hooks load when Claude Code starts: after installing or updating the plugin, restart it.
+Hooks load with the plugin: after installing or updating it, type `/reload-plugins` (or open a new conversation).
 
 ## Conventions (written to CLAUDE.md)
 

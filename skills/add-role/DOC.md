@@ -6,7 +6,7 @@ Adds a **user roles system** to differentiate access rights in your app. Each us
 
 - Your users don't all have the same rights : some read, some publish, some moderate
 - You want a **subscription** system with different tiers (`free`, `pro`, `enterprise`)
-- You want an internal team with distinct permissions (`agent`, `superviseur`)
+- You want an internal group with distinct permissions (`agent`, `superviseur`)
 - You want an **administration page** to change each user's role from a table
 
 ## How it works

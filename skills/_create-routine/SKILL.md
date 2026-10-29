@@ -24,7 +24,7 @@ You receive from the calling skill (or infer from the conversation):
 
 ## Step 0 - Guard: is this really an operator-side task?
 
-A routine is the right tool ONLY when the OUTPUT is for the operator (the user or their team): a brief, a report, a triage, an alert, a proposal. If the task's output feeds the APP or its end users (cleaning the database, sending emails to customers, syncing data the app displays), STOP and hand back to `/add-automation`: that is an app runtime job and it must run on the app's infrastructure (worker or cron), never on someone's personal Claude account.
+A routine is the right tool ONLY when the OUTPUT is for the operator (the user or their organisation): a brief, a report, a triage, an alert, a proposal. If the task's output feeds the APP or its end users (cleaning the database, sending emails to customers, syncing data the app displays), STOP and hand back to `/add-automation`: that is an app runtime job and it must run on the app's infrastructure (worker or cron), never on someone's personal Claude account.
 
 Three-point smell test (any hit = app job, bounce back):
 1. Would the app break or the end users notice if this stopped running?

@@ -9,7 +9,7 @@ Create a recurring mission for your own Claude: a morning brief, a Friday analys
 - A **watch**: "monitor this topic and alert me when something happens"
 - A **periodic triage**: "every Monday, review Y and prepare a summary for me"
 
-The criterion: the output is **for you** (or your team), not for your app or its users.
+The criterion: the output is **for you** (or your organisation), not for your app or its users.
 
 ## How it goes
 

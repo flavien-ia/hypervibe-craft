@@ -24,7 +24,7 @@ function check(label, ok) {
 
 const optimize = read("skills/optimize/SKILL.md");
 check("/optimize lit les requêtes par `vercel logs requests` (CLI 64), et pagine par --next", /`vercel logs requests --json --since <start> --until <end> --limit <n>`/.test(optimize) && /--next <the summary's next value>/.test(optimize));
-check("... laisse de côté la ligne de résumé, et dit que ces journaux ne servent que les projets d'une équipe", /summary line that is not a request/.test(optimize) && /owned by a team/.test(optimize));
+check("... laisse de côté la ligne de résumé, et dit que ces journaux ne servent que les projets d'une équipe", /summary line that is not a request/.test(optimize) && /owned by a Vercel team/.test(optimize));
 check("... et garde la forme d'avant la 64", /Below 64 \(`vercel --version`\)/.test(optimize));
 
 const security = read("skills/security/SKILL.md");
@@ -77,6 +77,16 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   check("/security, corrections : le contrôle et le middleware par le module, la règle écrite dans le CLAUDE.md", /scripts\/admin-gate\.mjs" --web-dir <app folder>/.test(s) && /every page of `\(protected\)\/` starts with `await requireAdmin\(\)` before reading any data/.test(s));
 }
 
+// /update-hypervibe, 3.4.19: the end no longer says to close and reopen Claude Code, but to type
+// /reload-plugins (or open a new conversation), which loads an installed version (decision E2).
+{
+  const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
+  const fin = u.slice(u.indexOf("## Step 4 - Wrap up"));
+  check("/update-hypervibe : la fin dit /reload-plugins (ou une nouvelle conversation), jamais « close and reopen »", /type `\/reload-plugins`\*\* \(or open a new conversation\)/.test(fin) && !/close and reopen/i.test(u));
+  const docs = ["DOC.md", "DOC.fr.md"].map((f) => read(`skills/update-hypervibe/${f}`)).join("\n");
+  check("... et ses pages de documentation aussi", (docs.match(/\/reload-plugins/g) ?? []).length === 2 && !/restart Claude Code|relancer Claude Code/.test(docs));
+}
+
 // /update-hypervibe, 3.4.18: the repair of the admin space of the projects built before 3.4.17.
 {
   const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
@@ -84,7 +94,7 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   const step = at < 0 ? "" : u.slice(at, u.indexOf("\n## ", at + 3));
   const one = u.slice(u.indexOf("## Step 1 - Check"), u.indexOf("## Step 2 - Download"));
   check("/update-hypervibe : l'étape qui ferme l'espace admin des projets existants, après celle du lint", at > u.indexOf("## Step 3e - Repair the code check") && at < u.indexOf("## Step 4 - Wrap up"));
-  check("... jouée aussi quand le plugin est déjà à jour (installé d'ailleurs, ou par l'ancien texte)", /If `updateAvailable` is false, run Step 3d and Step 3f first\./.test(one) && /Run Step 3d and Step 3f, then \*\*STOP\.\*\*/.test(one));
+  check("... jouée aussi quand le plugin est déjà à jour (installé d'ailleurs, ou par l'ancien texte)", /If `updateAvailable` is false, run Step 3b \(the rules\), the hooks-chain step \(Step 3c - Close the hooks chain\), Step 3d and Step 3f first\./.test(one) && /Run Step 3b \(the rules\), the hooks-chain step \(Step 3c - Close the hooks chain\), Step 3d and Step 3f, then \*\*STOP\.\*\*/.test(one));
   check("... cherche les projets de la machine sans rien écrire, puis les liste en mots simples", /repair-admin-gate\.mjs" --scan --cwd "\$\(pwd\)"/.test(step) && /It writes nothing/.test(step) && /`counts\.toFix \+ counts\.manual \+ counts\.review`/.test(step));
   check("... dit ce qui se passe aujourd'hui, en une phrase", /A page of the admin space can let its content be read by someone who asks for it without being signed in/.test(step));
   check("... l'accord avant toute écriture : tous les projets proposés, rien d'écrit avant la réponse", /offering every one of them \(a multiple choice when they fit in one question, otherwise the numbered list[^)]*\)\. \*\*Nothing is written before that answer\.\*\*/.test(step) && step.indexOf("Nothing is written before that answer") < step.indexOf("--write"));
@@ -139,6 +149,22 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   const doc = read("skills/update-hypervibe/DOC.md");
   const docFr = read("skills/update-hypervibe/DOC.fr.md");
   check("... et les pages DOC le disent (les autres dossiers jamais réparés, à mettre à jour ou retirer)", /Its other folders are never repaired by this step/.test(doc) && /you can bring them up to date or remove them/.test(doc) && /Ses autres dossiers ne sont jamais réparés par cette étape/.test(docFr) && /vous pouvez les mettre à jour ou les retirer/.test(docFr));
+}
+
+// /update-hypervibe, 3.4.21 (banc Desktop du 29/10/2026, défaut D) : on "already up to date",
+// marketplace or manual, the rules and the hooks chain run too: a plugin uploaded by hand or updated
+// natively arrives without them, and would keep the old block of the global hooks.
+{
+  const u = read("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n");
+  const check1 = u.slice(u.indexOf("## Step 1 - Check"), u.indexOf("## Step 2 - Download"));
+  const runs = check1.match(/Run Step 3b \(the rules\), the hooks-chain step \(Step 3c - Close the hooks chain\), Step 3d and Step 3f/gi) || [];
+  check("/update-hypervibe : already up to date (marketplace and manual) runs the rules and the hooks chain, then 3d and 3f", runs.length === 2);
+  const regles = u.slice(u.indexOf("## Step 3b - Bring the rules in step"), u.indexOf("## Step 3c - Adopt the resource manifest"));
+  const hooks = u.slice(u.indexOf("## Step 3c - Close the hooks chain"), u.indexOf("## Step 3d - Bring the shared clock"));
+  check("... and both sections say so", /also when Step 1 finds the plugin already up to date \(marketplace or manual\)/.test(regles) && /idempotent and safe to run again/.test(regles) && /also when Step 1 finds the plugin already up to date \(marketplace or manual/.test(hooks));
+  const doc = read("skills/update-hypervibe/DOC.md");
+  const docFr = read("skills/update-hypervibe/DOC.fr.md");
+  check("... and the DOC pages say it in both languages", /still brings this computer's Claude rules and machine-wide git hooks in step/.test(doc) && /remet quand même à niveau les règles de Claude et les hooks git communs de cet ordinateur/.test(docFr));
 }
 
 console.log(`\n${checks - failures}/${checks} checks`);

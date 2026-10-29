@@ -33,7 +33,7 @@ for (const top of ["templates", "skills", "scripts"]) {
 
 /** The setup-node steps of a text that do not turn its automatic cache off. setup-node v5 turns a
  *  cache on by itself when package.json declares a package manager, and looks for that package
- *  manager before anything installed it: the run stops there (Team trial, 30/09/2026). The harness
+ *  manager before anything installed it: the run stops there (trial of 30/09/2026). The harness
  *  pins pnpm in package.json for a host that builds an image, and a project may declare it itself. */
 export function setupNodeWithCache(text) {
   const lines = text.split(/\r?\n/);

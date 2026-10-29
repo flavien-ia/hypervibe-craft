@@ -1,5 +1,29 @@
 # Changelog
 
+## v3.4.21 (29 octobre 2026)
+
+### Sécurité : un accord qui n'était demandé à personne
+- **Sur un ordinateur où le scan des secrets n'a jamais été installé**, `/update-hypervibe` déclarait le dépôt ouvert à ce moment-là « de confiance » pour ses hooks git, sans vous le demander. Un dépôt arrivé avec ses propres hooks les aurait fait tourner à la publication suivante.
+- **Désormais, la mise à jour n'écrit rien et n'accorde rien sur un tel ordinateur.** Elle vous dit simplement qu'il n'y avait rien à refermer. Faire confiance à un dépôt reste votre décision, dépôt par dépôt, par `/add-test`.
+- Au passage, `/add-test` pose ce hook correctement depuis un sous-dossier ou une copie de travail liée.
+
+### Mise à jour sous Claude Desktop
+- **Plus de sauvegarde promise là où elle ne tient pas** : sous Claude Desktop, l'ancienne version mise de côté est effacée par Desktop lui-même quelques minutes après la mise à jour. La commande ne vous la promet plus sur ce poste. Elle sert toujours à revenir en arrière si le remplacement échoue.
+- **Le bon numéro de version** : l'écran Plugins de Desktop continue d'afficher le numéro de la version que vous aviez téléversée. La mise à jour vous le dit désormais, avec la version qui tourne vraiment, pour que vous ne la croyiez pas ratée.
+- **« Quelle version tourne ? »** : posez la question, et la réponse est lue dans le plugin que Claude a réellement chargé. Avant, Claude pouvait chercher sur le disque et tomber sur une vieille copie.
+- **Une mise à jour qui répare même quand vous êtes à jour** : `/update-hypervibe` remet désormais à niveau les règles de Claude et les hooks git communs de votre ordinateur même s'il n'y a pas de nouvelle version. Un plugin téléversé à la main ou mis à jour par Claude Code lui-même en profite au passage suivant.
+- **Le bon geste à la fin** : « tapez `/reload-plugins` (ou ouvrez une nouvelle conversation) », au lieu de « fermez et relancez Claude Code ». La nouvelle version se charge tout de suite, garde-fous compris.
+
+### Des garde-fous plus patients
+- Sur un ordinateur très chargé, un garde-fou qui mettait plus de 10 secondes à répondre laissait passer la commande sans l'avoir vérifiée. Il a désormais 30 secondes. D'ordinaire il répond en une fraction de seconde : rien ne ralentit.
+
+### Pour l'avoir
+- Lancez `/update-hypervibe`, puis tapez `/reload-plugins` (ou ouvrez une nouvelle conversation).
+
+### Coulisses
+- L'offre pour les organisations s'appelle désormais Hypervibe Enterprise : les quelques endroits où le plugin la nommait suivent.
+- Chaque correction est éprouvée dans les deux sens : un hook posé dans un vrai dépôt sans hooks communs, depuis un sous-dossier et depuis une copie liée, et une vraie installation dans un dossier de marketplace comme dans celui de Claude Desktop.
+
 ## v3.4.20 (28 octobre 2026)
 
 ### Mise à jour de vos projets

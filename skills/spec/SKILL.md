@@ -60,7 +60,7 @@ At the end, the 4 blocs must all be `✅` before generating the specification fi
 ## Bloc 1 - The project
 
 Ask:
-- **Who is this app for?** (your customers, your team, the general public, just you?)
+- **Who is this app for?** (your customers, your colleagues, the general public, just you?)
 - **What problem does it solve?** (what do people do today without this app, and why is it painful?)
 - **Is there an existing site or app you draw inspiration from?** (not to copy, but to understand the mood and the features)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // test-repair-admin-gate.mjs - The repair of the admin space of the projects built before 3.4.17,
-// offered by /update-hypervibe (and the collaborator's /update-hypervibe-team), 3.4.18:
+// offered by /update-hypervibe (and the collaborator's /update-hypervibe-enterprise), 3.4.18:
 //   1. the diagnosis of a page: `checked`, `client`, `to-fix` (a function declaration without the
 //      check), `manual` (an arrow, a name, a check of its own, a layout that lets in more than the
 //      admin, a project where the templates' requireAdmin() would not fit), and `review` for a
@@ -908,7 +908,7 @@ try {
 
   console.log("\n── La mise à jour propose la réparation ──");
   {
-    const skill = ["skills/update-hypervibe/SKILL.md", "skills/update-hypervibe-team/SKILL.md"].map(lireHarnais).join("\n");
+    const skill = ["skills/update-hypervibe/SKILL.md", "skills/update-hypervibe-enterprise/SKILL.md"].map(lireHarnais).join("\n");
     check("elle cherche les projets de la machine (--scan), sans rien écrire", /repair-admin-gate\.mjs" --scan --cwd "\$\(pwd\)"/.test(skill));
     check("... puis répare un projet choisi (--project-dir ... --write)", /repair-admin-gate\.mjs" --project-dir "<[^"]+>" --write/.test(skill));
   }

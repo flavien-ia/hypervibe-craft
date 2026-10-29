@@ -4,7 +4,7 @@ Adds **sign-in / signup** to your app. A single question decides between two mod
 
 ## When to use it
 
-- You want a private area on your site that only you (or a small team) can see
+- You want a private area on your site that only you (or a few people) can see
 - Your app has users who need to create an account, sign in, and have their own space
 - You want to add sign-in via Google or GitHub (you will run `/add-auth` first, then `/add-google-auth` or `/add-github-auth`)
 

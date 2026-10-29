@@ -2,7 +2,7 @@
 //
 // `bw unlock` hands back a session token. The unlock window (interactive.mjs) writes it to
 // ~/.hypervibe/bw-session ("<unix_timestamp>\n<token>"), and every read that is not a window takes
-// it from there: vault.mjs, and in the Team harnesses bw-org.mjs and apply-bienvenue.mjs.
+// it from there: vault.mjs, and in the Enterprise harnesses bw-org.mjs and apply-bienvenue.mjs.
 // TTL_SECONDS below is the ONE length of a session all of them read: 6 hours since 3.4.16 / 2.4.15
 // (12 before).
 //

@@ -128,7 +128,7 @@ Look at WHO the mission serves and HOW OFTEN it runs:
 > The full agent (with its own server, database traces and dashboard) stays the right choice if you want this to run for your app's users, or if you want detailed execution logs you can audit. Which do you prefer, the **routine** (recommended here) or the **full agent**?
 
 If the user picks the routine → invoke **`_create-routine`** with the goal + cadence, and STOP here (no Step 2-7; `_create-routine` handles everything including the final summary).
-If the user picks the full agent (or the mission is genuinely product-side / continuous / on-demand for a team) → continue with Q2.
+If the user picks the full agent (or the mission is genuinely product-side / continuous / on-demand for an organisation) → continue with Q2.
 
 - **Product-side, continuous, or on-demand dashboard** - the agent serves the app's end users, must watch something 24/7 (routines cannot: 1 hour minimum between runs), or must be triggered from an admin dashboard with full traceability. → Continue with Q2, this skill is the right tool.
 

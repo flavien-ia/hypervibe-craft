@@ -72,7 +72,7 @@ If the answer covers several, build the dominant one and say the others are one
 `MODELES` entry away.
 
 **Q2 - Who uses it?**
-- *Me only / my team* -> no rate limit needed, generous cap.
+- *Me only / my organisation* -> no rate limit needed, generous cap.
 - *My logged-in users* -> per-user rate limit, cap sized on the user count.
 - *Anyone, publicly* -> **warn explicitly**: a public AI endpoint is a public
   wallet. Per-IP rate limit, tight cap, and say so plainly.

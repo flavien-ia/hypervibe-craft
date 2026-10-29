@@ -1,6 +1,6 @@
 ---
 name: update-hypervibe
-description: Update the Hypervibe plugin to the latest published version. Detects how the plugin was installed - a marketplace install is updated natively by Claude Code (point to the command, change nothing), a manual zip upload in Claude Desktop is updated here (download, verify, swap with a backup). Use when the user says "/update-hypervibe", "update hypervibe", "update the plugin", "mets a jour hypervibe", "is there a new version?", or asks whether their plugin is up to date.
+description: Update the Hypervibe plugin to the latest published version. Detects how the plugin was installed - a marketplace install is updated natively by Claude Code (point to the command, change nothing), a manual zip upload in Claude Desktop is updated here (download, verify, swap with a backup). Use when the user says "/update-hypervibe", "update hypervibe", "update the plugin", "mets a jour hypervibe", "is there a new version?", "which version is running?", or asks whether their plugin is up to date.
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js 18+. No account and no API key: the plugin is open source, the published version is read from the public repository and the archive is downloaded without a token."
 ---
 
@@ -29,8 +29,8 @@ node "$PLUGIN_DIR/scripts/update/update-hypervibe.mjs" check
 Read the JSON:
 
 - `offline: true` → *"I cannot reach the update server right now, try again a little later."* **STOP.**
-- `mode: "marketplace"` → Claude Code owns the update. Report the versions, then give the command from `commandeNative` and explain it runs in Claude Code, not here. If `updateAvailable` is false, run Step 3d and Step 3f first. **STOP** (do not download anything).
-- `updateAvailable: false` → *"Your plugin is already up to date (version `localVersion`)."* Run Step 3d and Step 3f, then **STOP.**
+- `mode: "marketplace"` → Claude Code owns the update. Report the versions, then give the command from `commandeNative` and explain it runs in Claude Code, not here. If `updateAvailable` is false, run Step 3b (the rules), the hooks-chain step (Step 3c - Close the hooks chain), Step 3d and Step 3f first. **STOP** (do not download anything).
+- `updateAvailable: false` → *"Your plugin is already up to date (version `localVersion`)."* Run Step 3b (the rules), the hooks-chain step (Step 3c - Close the hooks chain), Step 3d and Step 3f, then **STOP.**
 - `updateAvailable: true` and `mode: "manuel"` → announce: *"A new version is available: `publishedVersion` (you have `localVersion`). Shall I download and install it?"* Wait for the yes.
 
 ## Step 2 - Download
@@ -55,12 +55,12 @@ node "$PLUGIN_DIR/scripts/update/update-hypervibe.mjs" install --zip "<file from
 
 The script unpacks the archive to a temporary folder and checks it is a complete plugin **before** touching the installation in place. Only then does it move the current folder aside as a backup and put the new one in its place. If anything fails at any point, the previous version is restored on its own.
 
-- `ok: true` → the JSON gives `version`, `oldVersion` and `backup`. Go to Step 3b.
+- `ok: true` → the JSON gives `version`, `oldVersion`, `backup`, `backupKept` and `desktop`. Go to Step 3b. Keep `backupKept` and `desktop` for Step 4.
 - `ok: false` → nothing was replaced, or the previous version was put back. Report the `message` honestly. **STOP.**
 
 ## Step 3b - Bring the rules in step
 
-The plugin writes a managed block of rules into `~/.claude/CLAUDE.md`. Until now it was only ever synced by `/start`, so an installed machine kept the rules of the day it was set up: a rule shipped with a mistake stayed wrong, and new rules never arrived. Run it here, right after a successful install:
+The plugin writes a managed block of rules into `~/.claude/CLAUDE.md`. Until now it was only ever synced by `/start`, so an installed machine kept the rules of the day it was set up: a rule shipped with a mistake stayed wrong, and new rules never arrived. Run it here, right after a successful install, and also when Step 1 finds the plugin already up to date (marketplace or manual): a plugin uploaded by hand in Claude Desktop, or updated natively by Claude Code, arrives without this step having run. The script is idempotent and safe to run again:
 
 ```bash
 PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
@@ -105,14 +105,14 @@ If the current folder is **not** itself a web project, do not stop at that: it m
 
 ## Step 3c - Close the hooks chain on this machine
 
-Until 3.1.4 the global git hooks written by `/start` ran the versioned `.hooks/pre-commit` and `.hooks/pre-push` of ANY repository, a clone included, which is exactly what git's own hooks are never versioned to prevent. The block now runs a checkout's hooks only after a local opt-in (`git config hypervibe.hooks true`, set by `/add-test`, never cloned). An installed machine keeps the old block until something rewrites it, so run this right after the install (idempotent, a few milliseconds):
+Until 3.1.4 the global git hooks written by `/start` ran the versioned `.hooks/pre-commit` and `.hooks/pre-push` of ANY repository, a clone included, which is exactly what git's own hooks are never versioned to prevent. The block now runs a checkout's hooks only after a local opt-in (`git config hypervibe.hooks true`, set by `/add-test`, never cloned). An installed machine keeps the old block until something rewrites it, so run this right after the install, and also when Step 1 finds the plugin already up to date (marketplace or manual: a plugin uploaded by hand or updated natively arrives without this step; idempotent, a few milliseconds):
 
 ```bash
 PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
 node "$PLUGIN_DIR/scripts/ensure-hooks-chain.mjs"
 ```
 
-`REFRESHED` means the old block was replaced in both global hooks; `OK` means the machine was already closed; `INSTALLED` means the pre-push chain was missing and is now in place; `FOREIGN` means a pre-push that is not Hypervibe's exists and was left alone (say so, in one sentence). Then, if the current folder is a repository equipped by `/add-test` (it has a `.hooks/pre-push`), tell the user that its hook is now inert on this machine until they opt in, and offer the command `git config hypervibe.hooks true`. Run it only if they agree: it is their decision, per checkout.
+`REFRESHED` means the old block was replaced in both global hooks; `OK` means the machine was already closed; `INSTALLED` means the pre-push chain was missing and is now in place; `FOREIGN` means a pre-push that is not Hypervibe's exists and was left alone (say so, in one sentence). `LOCAL` means this machine has no machine-wide git hooks (the secret scan was never installed by `/start`): there is nothing to close, and **nothing was written, nothing was trusted**. Say it in one plain sentence (*"this computer has no machine-wide git hooks, so there was nothing to close here"*), never as an unexpected result, and never as "the hooks of this repository were set up". Then, if the current folder is a repository equipped by `/add-test` (it has a `.hooks/pre-push`), tell the user that its hook is now inert on this machine until they opt in, and offer the command `git config hypervibe.hooks true`. Run it only if they agree: it is their decision, per checkout. After `LOCAL`, that opt-in alone runs nothing (no chain hook exists on this machine): offer `/start` instead, which installs the secret scan and the chain, or, for this repository only, `node "$PLUGIN_DIR/scripts/ensure-hooks-chain.mjs" --trust` (the guardrail asks first). Only with the user's agreement.
 
 ## Step 3d - Bring the shared clock in step
 
@@ -203,8 +203,14 @@ To finish, one sentence: this repair closes the admin space, and a complete audi
 
 > **Update installed (version `<version>`)! ✨**
 >
-> The guardrails and rules ship with this version: **close and reopen Claude Code** so they load.
->
-> One last thing: **close and reopen Claude Code** so it loads the new version. The previous one is kept as a backup (`hypervibe-backup-<old version>`): once you have confirmed everything works, you can ask me to delete it.
+> One last thing: **type `/reload-plugins`** (or open a new conversation) so Claude loads the new version, its guardrails and rules included.
 
-If a `hypervibe-backup-*` folder from an **earlier** update is still lying around and the current plugin works, offer to delete that one too.
+Then, depending on the JSON of Step 3:
+
+- `backupKept: true` → add: *"The previous version is kept as a backup (`hypervibe-backup-<old version>`): once you have confirmed everything works, you can ask me to delete it."* If a `hypervibe-backup-*` folder from an **earlier** update is still lying around and the current plugin works, offer to delete that one too.
+- `backupKept: false` → **never promise a backup.** The plugin does not live in a marketplace folder (on Claude Desktop, the registry of uploaded plugins deletes every folder it does not know a few minutes after an update, the backup included). The backup only served to undo the swap if it had failed. Say nothing about it, unless the user asks: then say exactly that.
+- `desktop: true` → add one sentence: *"Claude Desktop will keep showing the old number in its Plugins screen, that is normal: the version that runs is `<version>`."* (Desktop shows the version of the upload, never the one on disk.)
+
+## Which version is running?
+
+When the user asks which version of Hypervibe runs (*"quelle version tourne ?"*, *"which version do I have?"*), **never search the disk for a `plugin.json`**: other copies may lie around (an old bench, a download) and the Plugins screen of Claude Desktop shows the version of the upload, not the one that runs. Run Step 1 only and answer with its `localVersion` and its `pluginDir`: they are read in the very folder this skill was loaded from. If an update was installed earlier in this conversation without `/reload-plugins`, say that the conversation still runs the previous version until then. Then stop: offer the update only if `updateAvailable` is true, and install nothing without a yes.

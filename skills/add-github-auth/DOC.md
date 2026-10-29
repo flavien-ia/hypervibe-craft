@@ -43,5 +43,5 @@ GitHub supports only **one** callback URL per OAuth App, unlike Google which acc
 {{/callout}}
 
 {{callout:info|No test mode on GitHub}}
-Unlike Google, GitHub OAuth has no "test mode" with a user whitelist. As soon as your OAuth App is created, **any GitHub user can log in to it**. If you want to restrict access (for example to your team). You will have to handle that on the code side (email whitelist, roles, etc.).
+Unlike Google, GitHub OAuth has no "test mode" with a user whitelist. As soon as your OAuth App is created, **any GitHub user can log in to it**. If you want to restrict access (for example to your organisation). You will have to handle that on the code side (email whitelist, roles, etc.).
 {{/callout}}

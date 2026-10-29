@@ -137,7 +137,7 @@ for (let i = 0; i < args.length; i++) {
 if (!name || !description) {
   fail(
     'Usage: node bootstrap-init.mjs --name NAME --description "DESC" ' +
-      "[--locale fr_FR] [--private|--public] [--skip-deploy] [--skip-local-build] [--scope TEAM]",
+      "[--locale fr_FR] [--private|--public] [--skip-deploy] [--skip-local-build] [--scope <vercel-scope>]",
   );
 }
 if (!/^[a-z0-9][a-z0-9-]{0,48}[a-z0-9]$/.test(name)) {
@@ -1196,7 +1196,7 @@ function ghRepo() {
 // written here, so they inherit the resolved scope for free.
 //
 // On a single-scope account the bare call works and none of the recovery below
-// runs. On a multi-scope account (personal + one or more teams) the CLI refuses
+// runs. On a multi-scope account (personal + one or more Vercel teams) the CLI refuses
 // to pick one in non-interactive mode - a deliberate safety, not a bug - and
 // since v59 it then dies on a libuv assertion (exit 3221226505 on Windows)
 // right after printing a machine-readable diagnostic:
@@ -1212,12 +1212,12 @@ function ghRepo() {
 //   2. the CLI's own currentTeam - what a read command would have used
 //   3. the orgId shared by the sibling projects sitting next to this one
 // If none of those matches a choice we do NOT guess: picking between a personal
-// account and a company team is the user's call, so we exit with a structured
+// account and a company Vercel team is the user's call, so we exit with a structured
 // VERCEL_SCOPE_AMBIGUOUS message the SKILL turns into a plain question.
 
-// The CLI's current team comes from readCliCurrentTeam (_vercel-auth.mjs),
+// The CLI's current Vercel team comes from readCliCurrentTeam (_vercel-auth.mjs),
 // which also knows the xdg.data folder of CLI v59 and keeps the freshest
-// config file: reading the pre-v59 file first returned a team the CLI had
+// config file: reading the pre-v59 file first returned a Vercel team the CLI had
 // since left (seen on 2026-09-17, a file untouched for a month).
 
 /** orgId shared by the already-linked projects sitting next to this one, if unanimous. */

@@ -48,7 +48,7 @@ in the same commit.
    commit; then the GitHub API is asked whether it holds the tag's signature
    valid (`verification.verified` with `reason: valid`). Anything else is
    reported in the release summary.
-10. **What the release implies for the Team harnesses** (two proprietary
+10. **What the release implies for the Enterprise harnesses** (two proprietary
     variants that share most of this code) is classified file by file and
     recorded, so that a fix made here is not silently missing there.
 

@@ -5,7 +5,7 @@ Renews a secret key everywhere it lives, locally and online, in a single command
 ## When to use it
 
 - You **suspect a leak** of one of your keys (accidental commit to a public repo, shared screenshot, etc.)
-- A **collaborator is leaving** your team and you want to revoke their indirect access
+- A **collaborator is leaving** your organisation and you want to revoke their indirect access
 - You are doing a **periodic rotation** for security hygiene (every 3-6 months on critical services)
 
 ## How it works

@@ -2,7 +2,7 @@
 // --import): the vault's own tool (`bw`) never runs during a recette. A launch is refused, without
 // reaching anything, and written down; run-all.mjs then fails the suite that did it, naming it.
 //
-// Why: a recette never opens the vault (the promise of SECURITY.md and of the Team READMEs). Two
+// Why: a recette never opens the vault (the promise of SECURITY.md and of the Enterprise READMEs). Two
 // recettes did, unseen, until 04/10/2026: they ran a script with the machine's own home folder, and
 // that script read a key in the vault with the session of the day. It showed when the vault's tool
 // started keeping its sign-in in one folder on Windows (scripts/vault/bw-home.mjs): the first run of

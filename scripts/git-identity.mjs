@@ -3,7 +3,7 @@
 //
 // Every commit carries user.name and user.email in its header, and a push publishes that
 // header. On 22/09/2026 a machine had an email address in user.name and, in user.email,
-// what looked like a password: each commit would have carried it to GitHub, and the Team
+// what looked like a password: each commit would have carried it to GitHub, and the Enterprise
 // licence had already sent it to the server. So nothing here ever prints a value, not even
 // back to its owner: the check says what SHAPE each one has, and the fix writes what the
 // person gave, once it is known to be an address.
@@ -23,7 +23,7 @@
 
 import { spawnSync } from "node:child_process";
 
-/** The shape of an email address: the one the Team licence server and the organisation's
+/** The shape of an email address: the one the Enterprise licence server and the organisation's
  *  dashboard accept. */
 export const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

@@ -14,7 +14,13 @@
 //                            carries the same chain block (see chainBlock)
 //
 // and, when no global hooks path is configured at all (the gitleaks setup was
-// declined), falls back to the current repository's `.git/hooks/pre-push`.
+// declined), falls back to the current repository's `.git/hooks/pre-push`, but
+// ONLY with `--trust` (/add-test). Without it, that machine has nothing to
+// close: the script writes nothing, trusts nothing, and answers LOCAL.
+// Up to 3.4.20 / 2.4.19, the plain call of the updates wrote the hook into the
+// current repository AND opted it in, without anyone deciding (Desktop bench of
+// 28/10/2026, constat 6): run from a clone that ships a .hooks/pre-push, the
+// next push ran it.
 //
 // THE OPT-IN. `.hooks/*` files are versioned: they arrive with a clone. Git
 // does not version its own hooks precisely so that cloning a repository can
@@ -36,13 +42,16 @@
 // /add-test and /update-hypervibe all close the door on an existing machine.
 //
 //   node scripts/ensure-hooks-chain.mjs            prints OK / INSTALLED / REFRESHED / LOCAL / FOREIGN
-//   node scripts/ensure-hooks-chain.mjs --trust    also opts the current repository in (TRUSTED)
+//                                                  (LOCAL: no global hooks path, nothing written)
+//   node scripts/ensure-hooks-chain.mjs --trust    also opts the current repository in (TRUSTED);
+//                                                  without a global hooks path, writes the chain
+//                                                  into this repository's hooks (LOCAL TRUSTED)
 //
 // Exported for setup-gitleaks-global.mjs, which calls it at every /start.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { execSync } from "node:child_process";
 
 const IS_WIN = process.platform === "win32";
@@ -152,7 +161,9 @@ export function isTrusted(repoDir = process.cwd()) {
  *   OK        the global chain hook is already in place
  *   INSTALLED it was written (or refreshed) this run
  *   REFRESHED an older, ungated chain block was replaced in place
- *   LOCAL     no global hooks path: written into the current repo's .git/hooks
+ *   LOCAL     no global hooks path. Without `trust`: nothing written, nothing
+ *             trusted, the machine has nothing to close. With `trust`: the chain
+ *             is written into the current repository's hooks and it opts in.
  *   FOREIGN   a pre-push that is not ours exists; left untouched
  */
 export function ensureHooksChain({ repoDir = process.cwd(), trust = false } = {}) {
@@ -164,13 +175,18 @@ export function ensureHooksChain({ repoDir = process.cwd(), trust = false } = {}
     if (trust) trustRepo(repoDir);
     return state === "OK" && refreshed.length > 0 ? "REFRESHED" : state;
   }
-  const gitDir = run(`git -C "${repoDir}" rev-parse --git-dir`);
-  if (!gitDir) return "OK";
-  const localHooks = join(repoDir, gitDir, "hooks");
+  // No global hooks path. Only an explicit act in this checkout (--trust, from
+  // /add-test) writes into its hooks and opts it in: the updates call this
+  // script plainly, and must never decide trust for the person.
+  if (!trust) return "LOCAL";
+  // `--git-path hooks` names the folder git really reads: in a linked worktree
+  // the hooks live in the common directory, and from a subfolder git answers an
+  // absolute path. Joining `--git-dir` behind repoDir broke both (outside review).
+  const hooksRel = run(`git -C "${repoDir}" rev-parse --git-path hooks`);
+  if (!hooksRel) return "OK";
+  const localHooks = resolve(repoDir, hooksRel);
   if (!existsSync(localHooks)) mkdirSync(localHooks, { recursive: true });
   const state = writeIfNeeded(join(localHooks, "pre-push"), prePushHook());
-  // Writing into this repository's own .git/hooks is an explicit act in this
-  // checkout: it opts in as well.
   if (state !== "FOREIGN") trustRepo(repoDir);
   return state === "FOREIGN" ? "FOREIGN" : "LOCAL";
 }
