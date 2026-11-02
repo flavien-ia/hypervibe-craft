@@ -11,12 +11,12 @@ Invite ou retire des collaborateurs sur votre projet sans payer une place Vercel
 ## Comment ça se passe
 
 1. **Détection du setup** : la première fois que vous lancez `/add-collab` sur un projet, Hypervibe détecte que la chaîne de déploiement **GitHub Actions** n'est pas encore configurée. Elle la met en place automatiquement :
-  - Token Vercel généré (1 manip dans le dashboard Vercel, Hypervibe vous guide)
+  - Une clé Vercel **limitée à ce projet** est créée (1 manip dans le tableau de bord Vercel, Hypervibe vous guide), rangée dans votre coffre et vérifiée avant de partir chez GitHub : Hypervibe refuse une clé qui ouvre autre chose de votre compte Vercel
   - Les secrets nécessaires sont poussés sur GitHub
   - Un fichier de workflow est créé pour que chaque `git push` vers `main` redéploie en production, et chaque autre branche génère un déploiement de preview
   - **Un dernier réglage côté Vercel à faire vous-même** : suspendre l'intégration native Vercel sur GitHub pour éviter d'avoir deux déploiements en parallèle à chaque push. Hypervibe vous donne les clics exacts.
 
-   Cette mise en place ne se fait qu'**une fois par projet** : les fois suivantes, Hypervibe saute directement à la gestion des collaborateurs.
+   Cette mise en place ne se fait qu'**une fois par projet**. Les fois suivantes, Hypervibe revérifie la clé avant de passer à vos collaborateurs. Un projet équipé avant la version 3.4.22 déploie avec la clé de tout votre compte : Hypervibe vous le dit, et propose de la remplacer par une clé limitée à ce projet.
 
 2. **Liste actuelle** : Hypervibe affiche les collaborateurs en place avec leur rôle (admin / push / triage / read).
 
@@ -46,7 +46,15 @@ Par défaut, Vercel déploie via son intégration GitHub native, mais chaque col
 {{/callout}}
 
 {{callout:warning|Un push = un deploy}}
-Une fois la chaîne en place, **tout push** vers `main` (par n'importe quel collaborateur autorisé) déclenche un déploiement production. Les pushs sur d'autres branches créent des preview deployments. Si vous voulez bloquer ça pour certains contributeurs, utilisez les branch protection rules de GitHub (require PR review avant merge sur main).
+Une fois la chaîne en place, **tout push** vers `main` (par n'importe quel collaborateur autorisé) déclenche un déploiement production. Les pushs sur d'autres branches créent des preview deployments. Si vous voulez bloquer ça pour certains contributeurs, utilisez les règles de protection de branche de GitHub (relecture obligatoire avant fusion sur main) : sur un dépôt privé, elles demandent GitHub Pro ou une organisation payante.
+{{/callout}}
+
+{{callout:warning|Ce qu'un collaborateur peut atteindre}}
+Toute personne qui peut écrire dans votre dépôt peut lire la clé avec laquelle GitHub déploie. C'est pourquoi elle est limitée à ce projet : rien d'autre de votre compte Vercel n'est à sa portée. Mais une personne qui peut pousser du code peut toujours déployer du code qui lit toutes les variables de ce projet, même celles marquées **Sensitive** sur Vercel : n'invitez que des personnes à qui vous confieriez les secrets de ce projet. Marquer vos secrets Sensitive reste utile : la clé seule ne permet plus de les relire. Une fois une ancienne clé remplacée, supprimez-la sur votre page de clés Vercel ; gardez votre clé Vercel générale dans le coffre, d'autres commandes s'en servent.
+{{/callout}}
+
+{{callout:warning|La branche principale d'un dépôt privé sur un compte GitHub gratuit}}
+Sur un compte GitHub gratuit, la branche principale d'un dépôt privé ne peut pas être protégée : GitHub vous demande de passer à GitHub Pro. Un collaborateur qui a le droit d'écrire peut alors envoyer directement en production. Demandez à chacun de travailler sur sa propre branche et d'ouvrir une demande de fusion, que vous acceptez. GitHub Pro (ou une organisation payante) permet de protéger vraiment la branche principale.
 {{/callout}}
 
 {{callout:info|Retirer un collab ne rollback pas ses déploiements}}

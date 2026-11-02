@@ -1,6 +1,6 @@
 ---
 name: update-hypervibe
-description: Update the Hypervibe plugin to the latest published version. Detects how the plugin was installed - a marketplace install is updated natively by Claude Code (point to the command, change nothing), a manual zip upload in Claude Desktop is updated here (download, verify, swap with a backup). Use when the user says "/update-hypervibe", "update hypervibe", "update the plugin", "mets a jour hypervibe", "is there a new version?", "which version is running?", or asks whether their plugin is up to date.
+description: Update the Hypervibe plugin to the latest published version. Detects how the plugin was installed - a marketplace install is updated natively by Claude Code (point to the command, change nothing), a zip upload in Claude Desktop is updated here (download, verify, replace the installed copy). Use when the user says "/update-hypervibe", "update hypervibe", "mets a jour hypervibe", "is there a new version?", "which version is running?", or asks whether their plugin is up to date.
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js 18+. No account and no API key: the plugin is open source, the published version is read from the public repository and the archive is downloaded without a token."
 ---
 

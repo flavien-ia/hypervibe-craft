@@ -36,6 +36,7 @@ const SUITES = [
   ["shared resources never deleted with a project", join(ROOT, "scripts", "tests", "test-shared-exclusion.mjs")],
   ["the repository /delete-project lists is the one the folder pushes to", join(ROOT, "scripts", "tests", "test-delete-github.mjs")],
   ["what a skill does on the forge, it says only once the forge confirms it", join(ROOT, "scripts", "tests", "test-forge-gestures.mjs")],
+  ["the Vercel key /add-collab posts in the repository: limited to the project, checked before it is posted, never the vault's global VERCEL item, checked again at every run (3.4.22)", join(ROOT, "scripts", "tests", "test-vercel-project-token.mjs")],
   ["a project's own registration on the shared clock is never recorded shared", join(ROOT, "scripts", "tests", "test-manifest-shared.mjs")],
   ["agent template fences", join(ROOT, "scripts", "tests", "test-agent-template-tools.mjs")],
   ["a value of the .env for a shell variable, its prefix for a check", join(ROOT, "scripts", "tests", "test-env-value.mjs")],

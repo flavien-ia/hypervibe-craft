@@ -19,15 +19,19 @@ import path from "node:path";
 /**
  * @param {string} pluginRoot  the plugin's folder
  * @param {string} name        its name, from .claude-plugin/plugin.json
+ * @param {typeof path} [chemins]  the path module (the recette passes path.posix, to play macOS)
  * @returns {{place: "marketplace"|"desktop"|"hors_marketplace", backupKept: boolean, desktop: boolean}}
  */
-export function placeDuPlugin(pluginRoot, name) {
-  const racine = path.resolve(String(pluginRoot || ""));
-  const mp = path.dirname(racine);
-  if (path.basename(path.dirname(mp)) === "marketplaces" && path.basename(racine) === name) {
+export function placeDuPlugin(pluginRoot, name, chemins = path) {
+  const racine = chemins.resolve(String(pluginRoot || ""));
+  // Cut on both separators, whatever the system: path.basename only cuts on "/" under POSIX, and
+  // a Windows path read on macOS came back whole (recette red on a Mac, reported by Bastien, 3.4.22).
+  const brut = racine.split(/[\\/]+/).filter(Boolean);
+  const dernier = brut[brut.length - 1] ?? "";
+  if (brut[brut.length - 3] === "marketplaces" && dernier === name) {
     return { place: "marketplace", backupKept: true, desktop: false };
   }
-  const segments = racine.split(/[\\/]+/).map((s) => s.toLowerCase());
-  const desktop = segments.includes("rpm") && /^plugin_[a-z0-9]+$/i.test(path.basename(racine));
+  const segments = brut.map((s) => s.toLowerCase());
+  const desktop = segments.includes("rpm") && /^plugin_[a-z0-9]+$/i.test(dernier);
   return { place: desktop ? "desktop" : "hors_marketplace", backupKept: false, desktop };
 }

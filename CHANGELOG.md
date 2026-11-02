@@ -1,5 +1,26 @@
 # Changelog
 
+## v3.4.22 (2 novembre 2026)
+
+### Sécurité : la clé Vercel des projets partagés
+- **Jusqu'ici, `/add-collab` posait dans votre dépôt GitHub une clé Vercel valable pour tout votre compte.** Or toute personne qui peut écrire dans le dépôt peut lire cette clé. Inviter un collaborateur lui ouvrait donc tous vos projets Vercel et leurs variables, bien au-delà du projet partagé.
+- **Désormais, la clé est limitée au projet.** Hypervibe vous guide pour la créer dans le tableau de bord Vercel (Vercel ne permet pas de la créer autrement), la range dans votre coffre sous un nom propre au projet, puis vérifie auprès de Vercel qu'elle n'ouvre que ce projet. Une clé qui voit autre chose est refusée et n'est jamais envoyée à GitHub.
+- **Votre clé Vercel générale n'est plus touchée.** Avant, la mise en place l'écrasait dans le coffre. Elle y reste, pour les autres commandes qui s'en servent.
+- **Vos projets déjà partagés sont repérés.** À chaque `/add-collab`, la clé du projet est vérifiée avant toute invitation. Un projet équipé avant cette version déploie avec la clé de tout votre compte : Hypervibe vous le dit et propose de la remplacer. Une fois remplacée, pensez à supprimer l'ancienne sur votre page de clés Vercel.
+- **Deux mises en garde avant d'inviter quelqu'un.** Sur un compte GitHub gratuit, la branche principale d'un dépôt privé ne peut pas être protégée : un collaborateur peut publier directement en production. Mieux vaut que chacun travaille sur sa branche et passe par une demande de fusion. Et un collaborateur qui peut publier du code peut toujours faire lire au site les variables du projet partagé, même celles marquées « Sensitive » sur Vercel : n'invitez que des personnes à qui vous confieriez les secrets de ce projet.
+
+### Corrections
+- **Sous macOS, une recette du plugin échouait** sur un chemin de Claude Desktop écrit à la façon de Windows. Le plugin lit maintenant ces chemins de la même façon sur tous les systèmes, et la recette joue aussi ce cas sous Windows. Merci à Bastien pour le signalement.
+- **La description de `/update-hypervibe` ne promet plus de sauvegarde** : sous Claude Desktop, l'ancienne version n'est pas conservée.
+
+### Pour l'avoir
+- Lancez `/update-hypervibe`, puis tapez `/reload-plugins` (ou ouvrez une nouvelle conversation).
+- Si vous avez déjà partagé un projet avec `/add-collab`, relancez-le sur ce projet : il vous proposera de remplacer la clé.
+
+### Coulisses
+- La vérification de la clé a sa recette, jouée contre un faux Vercel : clé limitée, clé de compte, clé d'équipe, clé refusée, Vercel injoignable. La clé n'y apparaît jamais dans une sortie.
+- Le déploiement par GitHub demande désormais une version récente de l'outil Vercel, la seule qui accepte une clé limitée au projet.
+
 ## v3.4.21 (29 octobre 2026)
 
 ### Sécurité : un accord qui n'était demandé à personne

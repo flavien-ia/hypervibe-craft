@@ -47,6 +47,21 @@ console.log("── 1. Où vit le plugin ──");
   check("ailleurs (hors marketplace) : pas de sauvegarde promise, pas Desktop", ailleurs.place === "hors_marketplace" && ailleurs.backupKept === false && ailleurs.desktop === false, JSON.stringify(ailleurs));
   const mauvaisNom = placeDuPlugin("/home/x/.claude/plugins/marketplaces/m/autre-nom", "hypervibe");
   check("un dossier de marketplace qui ne porte pas le nom du plugin : hors marketplace (la règle de la migration Enterprise)", mauvaisNom.backupKept === false);
+  // Sous macOS et Linux, path ne coupe que sur "/" : la recette joue ce cas ici aussi, en passant
+  // path.posix, pour qu'une régression se voie sous Windows (recette rouge chez Bastien, 3.4.22).
+  const { default: path } = await import("node:path");
+  const rpmPosix = placeDuPlugin("C:\\Users\\x\\AppData\\Local\\Packages\\Claude\\LocalCache\\Roaming\\Claude\\Claude-Data\\rpm\\a859f234\\c851960e\\plugin_01E2Fc5UoFNisCLPWJVHhihQ", "hypervibe", path.posix);
+  check("le registre de Claude Desktop, chemin à barres inverses lu comme sous macOS : Desktop reconnu", rpmPosix.place === "desktop" && rpmPosix.desktop === true, JSON.stringify(rpmPosix));
+  const mpPosix = placeDuPlugin("C:\\Users\\x\\.claude\\plugins\\marketplaces\\local-desktop-app-uploads\\hypervibe", "hypervibe", path.posix);
+  check("un dossier de marketplace à barres inverses lu comme sous macOS : la sauvegarde tient", mpPosix.place === "marketplace" && mpPosix.backupKept === true, JSON.stringify(mpPosix));
+  const macos = placeDuPlugin("/Users/x/Library/Application Support/Claude/Claude-Data/rpm/a1/b2/plugin_01MAC", "hypervibe", path.posix);
+  check("le registre de Claude Desktop sous macOS (barres obliques) : Desktop reconnu", macos.place === "desktop", JSON.stringify(macos));
+  // La description de /update-hypervibe ne promet plus de sauvegarde (Desktop ne la garde pas), et
+  // tient dans la limite du dialogue de Desktop (3.4.22).
+  const desc = /^description: (.*)$/m.exec(lire("skills/update-hypervibe/SKILL.md").replace(/\r\n/g, "\n"))?.[1] ?? "";
+  check("la description de /update-hypervibe ne promet aucune sauvegarde, et tient entre 100 et 500 caractères", !/backup|sauvegarde/i.test(desc) && desc.length >= 100 && desc.length <= 500 && !/[<>]/.test(desc), `${desc.length} : ${desc.slice(0, 120)}`);
+  const mpWin = placeDuPlugin("/home/x/.claude/plugins/marketplaces/m/hypervibe/", "hypervibe", path.win32);
+  check("un dossier de marketplace à barres obliques lu comme sous Windows, barre finale comprise : la sauvegarde tient", mpWin.place === "marketplace", JSON.stringify(mpWin));
 }
 
 console.log("\n── 2. Une vraie installation, dans des dossiers jetables ──");

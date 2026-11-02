@@ -39,48 +39,81 @@ If `.vercel/project.json` does not exist, the project must be linked first. Tell
 
 Then exit. Otherwise continue.
 
-## Step 2 - Get a Vercel token
+## Step 2 - Get a Vercel key limited to THIS project
 
-Vercel tokens **cannot** be created via CLI - the user must generate one manually.
+The key goes into the repository's secrets (`VERCEL_TOKEN`), and **anyone who can write to the repository can read a repository secret**, by changing a workflow. An account-wide key there hands every collaborator all the Vercel projects of the account and their variables (this is what 3.4.21 and earlier did). The key is therefore **limited to this project alone**, kept in a vault item of its own, and checked before it is posted.
 
-Tell the user:
-> So that GitHub Actions can deploy to Vercel on your behalf, it needs a **Vercel token**.
->
-> 1. Go to https://vercel.com/account/tokens
-> 2. Click **Create Token**
-> 3. Give it a meaningful name (for example: `github-actions-{project-name}`)
-> 4. Choose whatever expiration you want (`No expiration` is fine for a personal project)
-> 5. Click **Create** and **copy the token immediately** (you will not be able to see it again afterward)
-> 6. A small window will then open on your machine: paste the token in there, not in our conversation, so it never gets written into this chat.
->
-> ⚠️ This token will have your Vercel account's permissions. Keep it secret and do not commit it.
+**Never read, write or replace the `VERCEL` item of the vault here**: it is the person's global key, other skills use it, and it has nothing to do in a repository.
 
-This token is account-wide, not project-specific, so it belongs in the **vault**. Follow `_collect-secret`, then (after `_ensure-vault`):
-
-```bash
-node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> \
-  --name VERCEL --service Vercel --fields "api_token:secret"
-```
-
-**Do not continue until the command returns 0.** A non-zero exit means the user cancelled and there is no token to work with.
-
-## Step 3 - Read project info from `.vercel/project.json`
+### 2a - Read the project and name its vault item
 
 ```bash
 cat .vercel/project.json
 ```
 
-Extract `orgId` and `projectId`. They are needed for the workflow.
+Note `orgId`, `projectId` and `projectName`. The vault item of this project is `<PROJECT>_VERCEL_GH`, field `api_token`, where `<PROJECT>` is the project's name in capitals, every character outside `A-Z`, `0-9` and `_` replaced by `_` (the same rule as the `<PROJECT>_2FA` item of `/add-2fa`). Print it, and use that exact name in every command below:
+
+```bash
+node -e 'const fs=require("fs");let n="";try{n=JSON.parse(fs.readFileSync(".vercel/project.json","utf8")).projectName||""}catch{}if(!n)n=require("path").basename(process.cwd());console.log(n.toUpperCase().replace(/[^A-Z0-9_]/g,"_")+"_VERCEL_GH")'
+```
+
+### 2b - The person creates the key in Vercel's dashboard
+
+Vercel refuses to create a key from the CLI (it answers 403): the person makes it in the dashboard. Tell the user (in their language, plain words):
+> So that GitHub can deploy this project, it needs a Vercel key. We make one that only opens **this project**: a collaborator who could read it would reach nothing else of your Vercel account.
+>
+> 1. Open https://vercel.com/account/settings/tokens
+> 2. Click **Create Token**
+> 3. **Scope**: choose the Vercel team (or your account) that holds the project, then **this project only** (`{projectName}`)
+> 4. Name: `gh-actions-{projectName}`
+> 5. Expiration: **1 year** (put a reminder in your calendar: deployments stop the day it expires, and `/add-collab` will help you make a new one)
+> 6. Click **Create**, and copy the key at once (it starts with `vcp_`; Vercel will not show it again)
+> 7. A small window will then open on your machine: paste the key in there, never in our conversation.
+
+### 2c - Collect it in the project's own vault item
+
+Follow `_collect-secret`, then (after `_ensure-vault`):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> \
+  --name <PROJECT>_VERCEL_GH --service "Vercel (GitHub deploy of <projectName>)" --fields "api_token:secret"
+```
+
+**Do not continue until the command returns 0.** A non-zero exit means the user cancelled and there is no key to work with.
+
+### 2d - Check that the key is limited to this project
+
+The key goes to the check on its standard input, never as an argument and never printed. The check reads `.vercel/project.json`, asks Vercel for this project (it must answer), for the project list (this project alone), and for the account and the team (both must be refused):
+
+```bash
+VTOK=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get <PROJECT>_VERCEL_GH api_token) && [ -n "$VTOK" ] \
+  || { echo "The vault is closed, or holds no <PROJECT>_VERCEL_GH api_token: nothing was checked."; exit 1; }
+printf '%s' "$VTOK" | node "${CLAUDE_SKILL_DIR}/../../scripts/vercel/check-project-token.mjs" --project-dir .
+```
+
+It prints one JSON line; read its `verdict`:
+- `"verdict":"limitee"` (exit 0): the key sees this project and nothing else. Continue.
+- `"verdict":"trop-large"` (exit 2): the key sees other projects, the account or the whole team. **Never post it.** Tell the person the key opens more than this project, ask them to delete it on https://vercel.com/account/settings/tokens and to make a new one with the scope of step 2b (this project only), then go back to 2c.
+- `"verdict":"invalide"` (exit 3): Vercel refuses it on this project (mistyped, expired, or limited to another project). Not posted; back to 2b.
+- `"verdict":"injoignable"` (exit 4) or `"indeterminee"` (exit 5): nothing could be proved. Not posted; say so and offer to try again in a moment.
+
+A closed vault stops the command before anything is checked: open it (`node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>`), then run the same command again.
+
+## Step 3 - Read project info from `.vercel/project.json`
+
+`orgId` and `projectId`, read in step 2a. They are needed for the workflow.
 
 ## Step 4 - Store the 3 secrets in GitHub
 
-`orgId` and `projectId` are identifiers, not secrets, so `--body` is fine for those. The **token is a secret**: putting it in `--body` would write it into the command line, which lands in the conversation exactly like a chat paste. `gh secret set` reads the value from **stdin** when `--body` is omitted: read it from the vault into a variable, check it, then send it on stdin, never printed:
+`orgId` and `projectId` are identifiers, not secrets, so `--body` is fine for those. The **key is a secret**: putting it in `--body` would write it into the command line, which lands in the conversation exactly like a chat paste. `gh secret set` reads the value from **stdin** when `--body` is omitted. The key is checked again in the same command, so that only a key limited to this project can reach GitHub:
 
 ```bash
 gh secret set VERCEL_ORG_ID --body "<orgId from .vercel/project.json>"
 gh secret set VERCEL_PROJECT_ID --body "<projectId from .vercel/project.json>"
-VTOK=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get VERCEL api_token) && [ -n "$VTOK" ] \
-  || { echo "The vault is closed, or holds no VERCEL api_token: nothing was sent to GitHub."; exit 1; }
+VTOK=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get <PROJECT>_VERCEL_GH api_token) && [ -n "$VTOK" ] \
+  || { echo "The vault is closed, or holds no <PROJECT>_VERCEL_GH api_token: nothing was sent to GitHub."; exit 1; }
+printf '%s' "$VTOK" | node "${CLAUDE_SKILL_DIR}/../../scripts/vercel/check-project-token.mjs" --project-dir . >/dev/null \
+  || { echo "The key is not limited to this project (or could not be checked): nothing was sent to GitHub."; exit 1; }
 printf '%s' "$VTOK" | gh secret set VERCEL_TOKEN
 ```
 
@@ -89,7 +122,18 @@ Verify all 3 are set:
 gh secret list
 ```
 
-You should see `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_TOKEN` listed. If one is missing, re-run the corresponding `gh secret set`. A closed vault stops the token's command before anything is sent (piped directly, the vault's exit 2 printed nothing and GitHub received an empty value: outside review, 3.3.4): open it (`node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>`), then run the same command again.
+You should see `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and `VERCEL_TOKEN` listed. If one is missing, re-run the corresponding `gh secret set`. A closed vault stops the key's command before anything is sent (piped directly, the vault's exit 2 printed nothing and GitHub received an empty value: outside review, 3.3.4): open it, then run the same command again.
+
+When this step **replaces** a key posted earlier (the account-wide one of a project set up before 3.4.22, or a key that turned out too broad), tell the person:
+> The new key, limited to this project, is in place. Two things left for you:
+> - **delete the old key** on https://vercel.com/account/settings/tokens (it still opens your whole account until you do);
+> - your general Vercel key, kept in your vault, is no longer used by your repositories. Keep it: other commands of Hypervibe use it.
+
+Never delete the `VERCEL` item of the vault, whatever the person answers.
+
+### What the limited key does not cover
+
+Tell the person once, plainly: the key now reaches **this project only**. But anyone who can push code to the repository can deploy code that reads **every** variable of THIS project at build or run time, Sensitive ones included: inviting someone with write access means trusting them with this project's secrets. Marking secrets **Sensitive** on Vercel (Settings, Environment Variables) still helps: the key alone can no longer read them back, and the workflow below is made to work with them. Never claim Sensitive variables are out of a collaborator's reach.
 
 ## Step 5 - Create the workflow file
 
@@ -137,7 +181,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Vercel CLI
-        run: npm install -g vercel
+        # 65 or later: CLI 59 first asks for the account (/v2/user), which a key limited to the
+        # project is refused, and stops on "Could not retrieve Project Settings" (seen 02/11/2026).
+        run: npm install -g "vercel@>=65"
 
       - name: Deploy preview
         id: deploy
@@ -167,7 +213,9 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Vercel CLI
-        run: npm install -g vercel
+        # 65 or later: CLI 59 first asks for the account (/v2/user), which a key limited to the
+        # project is refused, and stops on "Could not retrieve Project Settings" (seen 02/11/2026).
+        run: npm install -g "vercel@>=65"
 
       - name: Deploy production
         env:

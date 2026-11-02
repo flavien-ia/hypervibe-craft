@@ -56,6 +56,8 @@ const FICHIERS_VERCEL = new Set([
   "scripts/tests/test-vercel-auth.mjs",
   "scripts/vercel-plan.mjs",
   "scripts/vercel/plan.mjs",
+  "scripts/vercel/check-project-token.mjs",
+  "scripts/tests/test-vercel-project-token.mjs",
   "scripts/tests/test-vercel-plan.mjs",
   "scripts/delete-project/discover-resources.mjs",
   "scripts/delete-project/execute-deletions.mjs",
