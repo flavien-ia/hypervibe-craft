@@ -111,13 +111,15 @@ try {
 
   // ── The repair (repairRedirects), called by /update-hypervibe through repair-admin-gate.mjs ──
   // The six templates as 3.4.18 published them (scripts/tests/fixtures/redirect-3418/), repaired:
-  // each must become, to the byte, the template of this version.
+  // each must become, to the byte, the template of 3.4.19. For the three sign-in forms that is the
+  // form 3.4.19 to 3.4.22 published (scripts/tests/fixtures/login-3422/): 3.4.23 changed their lines
+  // of the sign-in itself, which login-limit.mjs repairs (test-login-limit.mjs).
   const FIX = join(ROOT, "scripts", "tests", "fixtures", "redirect-3418");
   const PAIRES_GABARITS = [
-    ["admin-signin.tsx.txt", "templates/auth/admin/pages/signin.tsx"],
+    ["admin-signin.tsx.txt", "scripts/tests/fixtures/login-3422/admin-signin.tsx.txt"],
     ["2fa-signin-page.tsx.txt", "templates/2fa/signin-page.tsx"],
-    ["auth-signin-plain.tsx.txt", "templates/auth-signin/plain.tsx"],
-    ["auth-signin-i18n.tsx.txt", "templates/auth-signin/i18n.tsx"],
+    ["auth-signin-plain.tsx.txt", "scripts/tests/fixtures/login-3422/auth-signin-plain.tsx.txt"],
+    ["auth-signin-i18n.tsx.txt", "scripts/tests/fixtures/login-3422/auth-signin-i18n.tsx.txt"],
     ["notification-bell.tsx.txt", "templates/notif-center/notification-bell.tsx"],
     ["sw-push-handlers.ts.txt", "templates/push/sw-push-handlers.ts"],
   ];
@@ -126,7 +128,7 @@ try {
     for (const [vieux, neuf] of PAIRES_GABARITS) {
       const avant = readFileSync(join(FIX, vieux), "utf8");
       const r = F.repairRedirects(avant);
-      check(`${neuf} de la 3.4.18, réparé : identique à l'octet au gabarit de cette version`, r.text === lireHarnais(neuf) && r.fixed.length === 1 && r.manual.length === 0, r.text === null ? JSON.stringify(r) : "différent");
+      check(`${neuf} de la 3.4.18, réparé : identique à l'octet au gabarit de la 3.4.19`, r.text === lireHarnais(neuf) && r.fixed.length === 1 && r.manual.length === 0, r.text === null ? JSON.stringify(r) : "différent");
       check(`... puis relancé sur le fichier réparé : rien ne change`, r.text !== null && F.repairRedirects(r.text).text === null && F.repairRedirects(r.text).fixed.length === 0);
       const crlf = avant.replace(/\n/g, "\r\n");
       const rc = F.repairRedirects(crlf);

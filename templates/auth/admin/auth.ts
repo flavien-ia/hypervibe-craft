@@ -1,6 +1,7 @@
-import NextAuth, { type DefaultSession } from "next-auth";
+import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { verifyPassword, getAdminPasswordHash } from "~/lib/password";
+import { checkRateLimit } from "~/lib/rate-limit";
 
 // Module augmentation: NextAuth's default Session.User has `id?: string`. We
 // know `id` is always set (we set it in the jwt → session callbacks below),
@@ -13,6 +14,17 @@ declare module "next-auth" {
   }
 }
 
+/**
+ * Too many sign-in attempts from one address (at most 5 in 15 minutes, ~/lib/rate-limit).
+ * Thrown by authorize(): Auth.js answers the sign-in form as it answers a wrong
+ * password, with `code: "too_many_attempts"`, and the form says so. The limit lives
+ * here and not in the API route: a 429 sent by the route broke next-auth's client
+ * signIn() and froze the form (reported on 02/11/2026).
+ */
+class TooManyAttempts extends CredentialsSignin {
+  code = "too_many_attempts";
+}
+
 // hypervibe:auth-modes admin
 export const { auth, handlers, signIn, signOut } = NextAuth({
   session: { strategy: "jwt" },
@@ -22,7 +34,10 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         username: { label: "Username", type: "text" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
+        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+        if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
+
         const username = credentials?.username as string | undefined;
         const password = credentials?.password as string | undefined;
         if (!username || !password) return null;

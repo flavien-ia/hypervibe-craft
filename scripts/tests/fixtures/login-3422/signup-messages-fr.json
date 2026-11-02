@@ -1,0 +1,15 @@
+{
+  "signup": {
+    "title": "Créer un compte",
+    "description": "Inscris-toi pour accéder à toutes les fonctionnalités.",
+    "emailLabel": "Email",
+    "nameLabel": "Nom (optionnel)",
+    "passwordLabel": "Mot de passe (8 caractères minimum)",
+    "submit": "Créer mon compte",
+    "submitPending": "Création en cours…",
+    "alreadyHaveAccount": "Déjà un compte ?",
+    "signinLink": "Se connecter",
+    "errorAutoSigninFailed": "Compte créé, mais la connexion automatique a échoué. Connecte-toi manuellement.",
+    "errorGeneric": "Erreur lors de la création du compte."
+  }
+}

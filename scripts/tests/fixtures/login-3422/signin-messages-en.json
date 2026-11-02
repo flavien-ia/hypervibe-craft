@@ -1,0 +1,13 @@
+{
+  "signin": {
+    "title": "Sign in",
+    "description": "Enter your credentials to access your account.",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "submit": "Sign in",
+    "submitPending": "Signing in…",
+    "createAccountLink": "Create an account",
+    "forgotPasswordLink": "Forgot your password?",
+    "errorInvalidCredentials": "Incorrect email or password."
+  }
+}

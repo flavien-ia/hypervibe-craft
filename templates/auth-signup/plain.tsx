@@ -31,12 +31,20 @@ export default function SignUpPage() {
       });
 
       // Auto-signin after successful signup
+      // A failure (the network, an unexpected answer) is said as a refusal: the
+      // account exists, the person signs in from the sign-in page.
       const res = await signIn("credentials", {
         email,
         password,
         redirect: false,
-      });
-      if (res?.error) {
+      }).catch(() => null);
+      // Too many attempts: the code authorize() gives (TooManyAttempts, src/server/auth.ts).
+      if (res?.code === "too_many_attempts") {
+        toast.error("Compte créé, mais trop de tentatives de connexion. Réessaie de te connecter dans quelques minutes.");
+        router.push("/signin");
+        return;
+      }
+      if (!res || res.error) {
         toast.error("Compte créé, mais la connexion automatique a échoué. Connecte-toi manuellement.");
         router.push("/signin");
         return;

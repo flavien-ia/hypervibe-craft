@@ -1,0 +1,13 @@
+{
+  "signin": {
+    "title": "Connexion",
+    "description": "Entre tes identifiants pour accéder à ton compte.",
+    "emailLabel": "Email",
+    "passwordLabel": "Mot de passe",
+    "submit": "Se connecter",
+    "submitPending": "Connexion en cours…",
+    "createAccountLink": "Créer un compte",
+    "forgotPasswordLink": "Mot de passe oublié ?",
+    "errorInvalidCredentials": "Email ou mot de passe incorrect."
+  }
+}

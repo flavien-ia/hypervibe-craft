@@ -211,7 +211,7 @@ async function preflight() {
   if (!existsSync(join(WEB_DIR, "src/lib/rate-limit.ts"))) {
     warn(
       "src/lib/rate-limit.ts not found - bootstrap usually creates it via setup-security.mjs. " +
-        "The API route template imports `checkRateLimit` from ~/lib/rate-limit, so the build " +
+        "authorize() in the auth.ts template imports `checkRateLimit` from ~/lib/rate-limit, so the build " +
         "will fail until you create that utility.",
     );
   }
@@ -752,7 +752,8 @@ console.log(`
    auth.ts:        src/server/auth.ts (with marker // hypervibe:auth-modes users)
    password.ts:    src/lib/password.ts
    tRPC router:    src/server/api/routers/auth.ts (registered as 'auth' in root.ts)
-   API route:      src/app/api/auth/[...nextauth]/route.ts (with rate limiting)
+   API route:      src/app/api/auth/[...nextauth]/route.ts (NextAuth's handlers)
+   Sign-in limit:  5 attempts per address in 15 minutes, in authorize() (src/server/auth.ts)
    Pages:          ${pageList}
    DB tables:      users, accounts, sessions, verificationTokens${state.emailOk ? ", password_reset_tokens" : ""}
    Env vars:       AUTH_SECRET

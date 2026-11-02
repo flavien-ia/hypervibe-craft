@@ -201,7 +201,7 @@ try {
   check("... sa page qui contrôle elle-même la session n'est pas citée, sa page client non plus", statut(d, "src/app/(espace)/tableau/page.tsx") === null && statut(d, "src/app/(espace)/panier/page.tsx") === null);
   check("une page qu'aucun layout ne garde (l'accueil) n'est pas citée", statut(d, "src/app/page.tsx") === null);
   check("un dossier privé (_composants) n'est pas une route : ignoré", !d.pages.some((p) => p.file.includes("_composants")));
-  check("les comptes : 3 to-fix, 3 manual, 1 review, 2 checked, 1 client", JSON.stringify(d.counts) === JSON.stringify({ checked: 2, client: 1, toFix: 3, manual: 3, review: 1, redirect: 0 }), JSON.stringify(d.counts));
+  check("les comptes : 3 to-fix, 3 manual, 1 review, 2 checked, 1 client", JSON.stringify(d.counts) === JSON.stringify({ checked: 2, client: 1, toFix: 3, manual: 3, review: 1, redirect: 0, login: 0 }), JSON.stringify(d.counts));
   const app = d.apps[0];
   check("le mode d'authentification : isAdmin exporté par ~/server/auth, requireAdmin() utilisable", app?.auth?.isAdmin === true && app.requireAdmin === "usable" && JSON.stringify(app.auth.modes) === JSON.stringify(["admin"]), JSON.stringify(app));
   check("le contrôle et la barrière, comme admin-gate.mjs --check les dirait : would-write, src/middleware.ts (Next.js 15)", app?.helper?.status === "would-write" && app.middleware?.status === "would-write" && app.middleware.file === "src/middleware.ts", JSON.stringify(app));
@@ -838,7 +838,7 @@ try {
     check("... une ligne retouchée à la main : manual, jamais comptée à réparer", parFichier("src/components/notification-bell.tsx")?.fix === "manual", JSON.stringify(avec.openRedirect));
     check("... hors d'un dépôt : uncommitted null (inconnu), jamais [] (propre)", avec.uncommitted === null, JSON.stringify(avec.uncommitted));
     const rAvec = R.repair(filtres, { withRedirects: true });
-    check("la réparation : la page de connexion devient le gabarit de cette version, à l'octet", rAvec.ok === true && lire(filtres, "src/app/admin/signin/page.tsx") === lireHarnais("templates/auth/admin/pages/signin.tsx"), JSON.stringify(rAvec).slice(0, 300));
+    check("la réparation : la page de connexion devient le gabarit de la 3.4.19, à l'octet (sa connexion elle-même est l'affaire de --login-limit)", rAvec.ok === true && lire(filtres, "src/app/admin/signin/page.tsx") === lireHarnais("scripts/tests/fixtures/login-3422/admin-signin.tsx.txt"), JSON.stringify(rAvec).slice(0, 300));
     check("... nommée dans commit et dans redirects", rAvec.commit?.includes("src/app/admin/signin/page.tsx") && rAvec.redirects?.some((x) => x.file === "src/app/admin/signin/page.tsx"), JSON.stringify(rAvec.commit));
     check("... la ligne retouchée laissée telle quelle, renvoyée à /security (remaining, kind: redirect)", lire(filtres, "src/components/notification-bell.tsx") === retouchee && rAvec.remaining.some((x) => x.kind === "redirect" && x.file === "src/components/notification-bell.tsx" && /\/security/.test(x.reason)), JSON.stringify(rAvec.remaining));
     const encore = R.diagnose(filtres, { withRedirects: true });
@@ -854,7 +854,7 @@ try {
     check("dans un dépôt : le fichier de l'ancien filtre qui porte du travail non enregistré est nommé (uncommitted)", JSON.stringify(dDepot.uncommitted) === JSON.stringify(["src/app/admin/signin/page.tsx"]), JSON.stringify(dDepot.uncommitted));
     const rDepot = R.repair(depotFiltre, { withRedirects: true });
     const repare = lire(depotFiltre, "src/app/admin/signin/page.tsx");
-    check("... la réparation le redit (uncommittedBefore), garde le CRLF et le travail en cours", JSON.stringify(rDepot.uncommittedBefore) === JSON.stringify(["src/app/admin/signin/page.tsx"]) && repare === `${lireHarnais("templates/auth/admin/pages/signin.tsx").replace(/\n/g, "\r\n")}// en cours\r\n`, JSON.stringify(rDepot.uncommittedBefore));
+    check("... la réparation le redit (uncommittedBefore), garde le CRLF et le travail en cours", JSON.stringify(rDepot.uncommittedBefore) === JSON.stringify(["src/app/admin/signin/page.tsx"]) && repare === `${lireHarnais("scripts/tests/fixtures/login-3422/admin-signin.tsx.txt").replace(/\n/g, "\r\n")}// en cours\r\n`, JSON.stringify(rDepot.uncommittedBefore));
     check("le scan avec --redirects compte dans needed un projet qui n'a que l'ancien filtre à réparer", (() => {
       const p2 = projet("filtres-scan", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion } });
       const sc = R.scan({ cwd: p2, home: join(s, "profil-vide"), withRedirects: true });
@@ -863,7 +863,7 @@ try {
     })());
     const cliFiltre = projet("cli-filtre", { pages: sansAdmin(), fichiers: { "src/app/admin/signin/page.tsx": vieilleConnexion } });
     const wCli = spawnSync(process.execPath, [SCRIPT, "--project-dir", cliFiltre, "--write", "--redirects"], { encoding: "utf8", windowsHide: true });
-    check("la commande : --project-dir <dossier> --write --redirects répare, sortie 0", wCli.status === 0 && lire(cliFiltre, "src/app/admin/signin/page.tsx") === lireHarnais("templates/auth/admin/pages/signin.tsx"), `${wCli.stdout}${wCli.stderr}`.slice(0, 300));
+    check("la commande : --project-dir <dossier> --write --redirects répare, sortie 0", wCli.status === 0 && lire(cliFiltre, "src/app/admin/signin/page.tsx") === lireHarnais("scripts/tests/fixtures/login-3422/admin-signin.tsx.txt"), `${wCli.stdout}${wCli.stderr}`.slice(0, 300));
   }
 
   console.log("\n── La commande ──");

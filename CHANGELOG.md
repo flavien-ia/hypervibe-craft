@@ -1,5 +1,29 @@
 # Changelog
 
+## v3.4.23 (2 novembre 2026)
+
+### Sécurité : la double authentification des comptes
+- **Un compte protégé par la double authentification pouvait être ouvert avec son seul mot de passe dans certains projets.** Cela concerne les projets où vos utilisateurs peuvent activer la double authentification sur leur compte.
+- **Corrigé** : les consignes que suit Claude pour mettre en place cette protection sont réécrites, et leur essai de bout en bout vérifie ce cas. `/security` sait désormais le repérer et propose la correction.
+- **Si l'un de vos projets propose la double authentification à ses utilisateurs, relancez `/security` dans ce projet.** La double authentification de l'espace administrateur n'est pas concernée.
+
+### Correction : la connexion se figeait après cinq essais
+- **Le défaut, signalé par Henri** : après cinq essais de connexion manqués en un quart d'heure, le bouton « Se connecter » restait bloqué, sans aucun message. La personne croyait le site en panne.
+- **D'où ça venait** : la limite des essais était bien en place, mais le site répondait au sixième d'une façon que la page de connexion ne savait pas lire.
+- **Désormais**, la limite est vérifiée là où la connexion sait la comprendre. La page affiche « Trop de tentatives. Réessaie dans quelques minutes. » et le bouton revient toujours, même quand le réseau lâche. La limite elle-même reste la même : 5 essais par adresse en 15 minutes.
+- **Avec la double authentification** (`/add-2fa`), une connexion réussie n'est jamais comptée deux fois, et un essai qui contourne la page de connexion reste compté.
+- **Vos projets existants** : `/update-hypervibe` les repère et propose de les réparer, dans le même passage que les réparations précédentes, projet par projet et avec votre accord. Il ne modifie que les fichiers restés tels que le plugin les avait écrits. Un fichier retouché à la main est nommé, et `/security` dans ce projet le corrige. `/security` signale aussi l'ancien fonctionnement.
+- Merci à Henri, qui a trouvé le défaut, proposé la correction et l'a éprouvée sur cinq applications.
+
+### Pour l'avoir
+- Lancez `/update-hypervibe`, puis tapez `/reload-plugins` (ou ouvrez une nouvelle conversation).
+- Relancez ensuite `/update-hypervibe` une fois : la mise à jour qui installe cette version suit encore le texte de la précédente, et c'est le passage suivant qui vous propose la réparation de vos projets.
+- Un projet réparé est protégé en ligne une fois publié à nouveau.
+
+### Coulisses
+- La correction est éprouvée sur le code réel de la bibliothèque de connexion : l'ancienne réponse faisait planter la page, la nouvelle lui apporte son message.
+- Chaque fichier écrit par une version précédente, une fois réparé, redevient à l'octet celui de cette version. Un fichier retouché n'est jamais réécrit.
+
 ## v3.4.22 (2 novembre 2026)
 
 ### Sécurité : la clé Vercel des projets partagés

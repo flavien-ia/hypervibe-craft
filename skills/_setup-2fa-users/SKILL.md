@@ -189,14 +189,38 @@ Style: reuse the project's shadcn/ui components (Card, Button, Input, toast). Im
 The users flow logs in via `signIn("credentials", …)`. Add a 2FA step **only for accounts that enabled it**. Recommended approach (mirror of admin mode):
 
 1. Create a **server action** `loginAction({ email, password, code? })` in `src/app/signin/actions.ts`:
-   - rate-limit (see `~/lib/rate-limit`),
+   - rate-limit with the key `login:<ip>` (see `~/lib/rate-limit`), the key `authorize()` counts on too,
    - check email + password (DB lookup + `verifyPassword`) → if KO `bad_credentials`,
    - if `isTwoFactorEnabled(userId)`: require `code` (`2fa_required` if absent), check `verifyTotp(secret, code) || consumeUserBackupCode(userId, code)` → `invalid_code` otherwise,
    - emit a **signed proof** (HMAC `AUTH_SECRET`, like admin mode: create a reduced `src/lib/auth-2fa.ts` with `createLoginProof`/`verifyLoginProof`) and call `signIn("credentials", { email, proof, redirect: false })`.
-2. Adapt the **Credentials provider** in `src/server/auth.ts`: a `proof` field instead of (or in addition to) `password`; `authorize` rechecks the password **or** validates the proof `verifyLoginProof`. Keep the user DB lookup (id, email…).
+2. Adapt the **Credentials provider** in `src/server/auth.ts`: a `proof` field in addition to `password`. **A password alone must never open an account that enabled 2FA**: the sign-in route (`/api/auth/callback/credentials`) can be called directly, without the action, so `authorize()` accepts the password ONLY for an account that has NOT enabled 2FA (`isTwoFactorEnabled(user.id)` false); for an account that enabled it, only a valid signed proof (`verifyLoginProof`) opens the session, and the password alone gives `null`. Never "the password OR the proof" for everyone: that lets anyone who knows the password skip the second factor. Keep the user DB lookup (id, email…). Keep the limit (`TooManyAttempts`), with one change, as `${CLAUDE_SKILL_DIR}/../../templates/2fa/auth.ts` does: a request that carries a valid proof is not counted (the action has already counted it, under the same key), any other request is. A forged proof then never buys more attempts, and a sign-in in two steps never counts twice. The shape to write (with the imports of the users template, `verifyLoginProof` from `~/lib/auth-2fa` and `isTwoFactorEnabled` from `~/lib/user-2fa`):
+
+   ```ts
+   async authorize(credentials, request) {
+     const email = credentials?.email as string | undefined;
+     const password = credentials?.password as string | undefined;
+     const proof = credentials?.proof as string | undefined;
+     // A proof signed by loginAction: the password and the second factor were checked there,
+     // and the attempt counted. It alone opens an account that enabled 2FA.
+     if (email && proof && verifyLoginProof(email, proof)) {
+       const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+       return user ? { id: user.id, email: user.email, name: user.name, image: user.image } : null;
+     }
+     // Anything else counts: a forged proof, a password.
+     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+     if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
+     if (!email || !password || proof) return null;
+     const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+     if (!user?.passwordHash) return null;
+     const ok = await verifyPassword(password, user.passwordHash);
+     // A password alone never opens an account that enabled 2FA, whoever calls the route.
+     if (!ok || (await isTwoFactorEnabled(user.id))) return null;
+     return { id: user.id, email: user.email, name: user.name, image: user.image };
+   }
+   ```
 3. Adapt `src/app/signin/page.tsx`: 2 steps (email+password → if `2fa_required`, a code field), reusing the admin signin pattern (`credentials`/`2fa` states).
 
-> This is the only part that touches the core of the auth. Implement it carefully, check the build, and **test end to end**: enable 2FA on a test account, log out, log back in (the code must be requested), test a wrong code, test a backup code, and verify that an account WITHOUT 2FA still logs in with password only.
+> This is the only part that touches the core of the auth. Implement it carefully, check the build, and **test end to end**: enable 2FA on a test account, log out, log back in (the code must be requested), test a wrong code, test a backup code, and verify that an account WITHOUT 2FA still logs in with password only. Then the direct route, the case that matters most: from the browser's console on the sign-in page (the person types the test password there, never in the chat), `const { csrfToken } = await (await fetch("/api/auth/csrf")).json(); const r = await fetch("/api/auth/callback/credentials", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Auth-Return-Redirect": "1" }, body: new URLSearchParams({ email: "<test account>", password: "<its password>", csrfToken }) }); (await r.json()).url` with the right password of the account WITH 2FA must be REFUSED (the address it gives carries `error=CredentialsSignin`, and no session opens); the same call for the account without 2FA succeeds. If the account with 2FA gets a session, `authorize()` still accepts the password alone: fix it before going on.
 
 ---
 

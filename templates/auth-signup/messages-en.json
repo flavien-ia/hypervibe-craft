@@ -10,6 +10,7 @@
     "alreadyHaveAccount": "Already have an account?",
     "signinLink": "Sign in",
     "errorAutoSigninFailed": "Account created, but automatic sign-in failed. Please sign in manually.",
-    "errorGeneric": "Error creating account."
+    "errorGeneric": "Error creating account.",
+    "errorTooManyAttempts": "Account created, but too many sign-in attempts. Please sign in again in a few minutes."
   }
 }

@@ -8,6 +8,7 @@
     "submitPending": "Connexion en cours…",
     "createAccountLink": "Créer un compte",
     "forgotPasswordLink": "Mot de passe oublié ?",
-    "errorInvalidCredentials": "Email ou mot de passe incorrect."
+    "errorInvalidCredentials": "Email ou mot de passe incorrect.",
+    "errorTooManyAttempts": "Trop de tentatives. Réessaie dans quelques minutes."
   }
 }

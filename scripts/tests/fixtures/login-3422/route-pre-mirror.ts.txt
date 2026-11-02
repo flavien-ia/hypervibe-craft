@@ -1,0 +1,32 @@
+import { type NextRequest, NextResponse } from "next/server";
+import { handlers } from "~/server/auth";
+import { checkRateLimit } from "~/lib/rate-limit";
+
+export const GET = handlers.GET;
+
+export async function POST(req: NextRequest) {
+  const url = new URL(req.url);
+
+  // Appliquer le rate limit uniquement sur la route de login credentials
+  if (url.pathname.includes("/callback/credentials")) {
+    const ip =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+      req.headers.get("x-real-ip") ??
+      "unknown";
+
+    const { allowed, retryAfterMs } = checkRateLimit(ip);
+
+    if (!allowed) {
+      const retryAfterSec = Math.ceil((retryAfterMs ?? 0) / 1000);
+      return NextResponse.json(
+        { error: "Trop de tentatives de connexion. Réessaie dans quelques minutes." },
+        {
+          status: 429,
+          headers: { "Retry-After": String(retryAfterSec) },
+        },
+      );
+    }
+  }
+
+  return handlers.POST(req);
+}

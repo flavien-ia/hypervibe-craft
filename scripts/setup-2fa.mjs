@@ -115,7 +115,7 @@ async function preflight() {
   }
   if (!existsSync(join(WEB_DIR, "src/lib/password.ts"))) fail("src/lib/password.ts not found - expected from /add-auth admin mode.");
   if (existsSync(join(WEB_DIR, "src/lib/auth-2fa.ts"))) fail("src/lib/auth-2fa.ts already exists - 2FA seems already installed.");
-  // loginAction imports checkRateLimit from ~/lib/rate-limit. Bootstrap creates
+  // loginAction and authorize() (auth.ts) import checkRateLimit from ~/lib/rate-limit. Bootstrap creates
   // it via setup-security; a standalone /add-auth doesn't. If absent, writeCode
   // drops a minimal in-memory limiter so the build doesn't break.
   state.needsRateLimit = !existsSync(join(WEB_DIR, "src/lib/rate-limit.ts"));
@@ -166,7 +166,7 @@ async function writeCode() {
     writeFileSync(dest, render(tpl, vars));
   }
   // Fallback rate limiter when the project lacks one (standalone /add-auth):
-  // loginAction won't compile without ~/lib/rate-limit.
+  // loginAction and authorize() won't compile without ~/lib/rate-limit.
   if (state.needsRateLimit) {
     const rl = join(WEB_DIR, "src/lib/rate-limit.ts");
     mkdirSync(dirname(rl), { recursive: true });

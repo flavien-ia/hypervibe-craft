@@ -8,6 +8,7 @@
     "submitPending": "Signing in…",
     "createAccountLink": "Create an account",
     "forgotPasswordLink": "Forgot your password?",
-    "errorInvalidCredentials": "Incorrect email or password."
+    "errorInvalidCredentials": "Incorrect email or password.",
+    "errorTooManyAttempts": "Too many attempts. Please try again in a few minutes."
   }
 }

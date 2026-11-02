@@ -16,6 +16,8 @@
 //   node repair-admin-gate.mjs --scan [--cwd <dir>]          the projects of this machine, each
 //                                                            diagnosed; nothing is written
 //                                 [--collab]                 the collaborator's order of the copies
+//   [--redirects] [--login-limit]  on any of these: the return address (3.4.19) and the limit of
+//                                  sign-in attempts (3.4.23) counted in `needed` and repaired
 //
 // The diagnosis, for each Next.js app of the project (its root, or the apps/* of a monorepo):
 //   - every page of an admin/(protected)/ folder of src/app, at any depth (a project translated by
@@ -71,6 +73,17 @@
 // (the collaborator's /update-hypervibe-enterprise), in a project of the organisation
 // (.github/workflows/deploy.yml), the copy on the work branch `collab/<login>` is offered first.
 //
+// 3.4.23: the limit of sign-in attempts (login-limit.mjs). Up to 3.4.22 the API route of NextAuth
+// answered the sixth attempt itself with a 429 in JSON, which next-auth's client signIn() cannot
+// read: the sign-in form stayed frozen, with no message (reported on 02/11/2026). The diagnosis
+// names what concerns it (`loginLimit`: the route, authorize() of src/server/auth.ts, the sign-in
+// forms, each `fix: "auto"` when still the templates' own, word for word, `manual` otherwise), and
+// with --login-limit counts it in `needed` (`counts.login`) and --write repairs the `auto` ones:
+// the limit into authorize(), the route given back to NextAuth's handlers (never before authorize()
+// has the limit), the forms that read `code: "too_many_attempts"` and give the button back, and the
+// key of the translated forms' message in their messages files. Without the flag (the text of 3.4.22
+// runs this script right after installing 3.4.23), it is only said, and nothing of it is written.
+//
 // One JSON line. Exit 0, or 1 when a step failed (`step` says which).
 
 import { spawnSync } from "node:child_process";
@@ -80,6 +93,7 @@ import { basename, dirname, join, parse, relative, resolve, sep } from "node:pat
 import { HELPER_FILE, ensureAdminMiddleware, ensureRequireAdmin } from "./admin-gate.mjs";
 import { detect, fromGitBashPath } from "./detect-projects-dir.mjs";
 import { findRedirectFilters, repairRedirects } from "./redirect-filter.mjs";
+import { filesToWrite, findLoginLimit, repairLoginLimit } from "./login-limit.mjs";
 
 // ─── The rules of the project's CLAUDE.md ─────────────────────────────────────
 // Each rule as it arrives in a project's CLAUDE.md (the skill's backticks unescaped): the one the
@@ -1193,7 +1207,7 @@ function spacePage(src, guard, ctx) {
  * The diagnosis of one project. Writes nothing. `git: true` also asks git which of the files the
  * repair would write already have changes not committed.
  */
-export function diagnose(dir, { git = false, run = spawnSync, withRedirects = false } = {}) {
+export function diagnose(dir, { git = false, run = spawnSync, withRedirects = false, withLoginLimit = false } = {}) {
   const abs = resolve(dir);
   let stat = null;
   try {
@@ -1310,11 +1324,22 @@ export function diagnose(dir, { git = false, run = spawnSync, withRedirects = fa
       return plan.fixed.includes(f.line) ? { ...f, fix: "auto" } : { ...f, fix: "manual", ...(plan.reason ? { reason: plan.reason } : {}) };
     });
   counts.redirect = openRedirect.filter((f) => f.fix === "auto").length;
-  const needed = counts.toFix + counts.manual + counts.review > 0 || rulesNeeded || (withRedirects && counts.redirect > 0);
-  const result = { dir: abs, name, needed, counts, pages, apps: appsOut, claudeMd, openRedirect, unreadable };
+  // The limit of sign-in attempts (login-limit.mjs, 3.4.23): the same rule as the filter above. It
+  // counts in `needed` (counts.login) only with `withLoginLimit` (--login-limit), which only the
+  // text of /update-hypervibe that announces this repair passes: the first pass after installing
+  // 3.4.23 is still run by the text of 3.4.22, and nothing of it is written then.
+  const login = findLoginLimit(abs);
+  for (const u of login.unreadable) if (!unreadable.some((x) => x.path === u.path)) unreadable.push(u);
+  // What /security alone reads (`fix: "read"`, an authorize() that names no limiter) is not the
+  // update's: it is left out here.
+  const loginLimit = login.found.filter((f) => f.fix !== "read");
+  counts.login = loginLimit.filter((f) => f.fix === "auto").length;
+  const needed = counts.toFix + counts.manual + counts.review > 0 || rulesNeeded || (withRedirects && counts.redirect > 0) || (withLoginLimit && counts.login > 0);
+  const result = { dir: abs, name, needed, counts, pages, apps: appsOut, claudeMd, openRedirect, loginLimit, unreadable };
   if (git) {
     const redirectFiles = withRedirects ? [...new Set(openRedirect.filter((f) => f.fix === "auto").map((f) => f.file))] : [];
-    const toWrite = [...pages.filter((p) => p.status === "to-fix").map((p) => p.file), ...claudeMd.filter((c) => c.admin === "outdated" || c.role === "outdated").map((c) => c.file), ...redirectFiles];
+    const loginFiles = withLoginLimit ? filesToWrite(loginLimit) : [];
+    const toWrite = [...new Set([...pages.filter((p) => p.status === "to-fix").map((p) => p.file), ...claudeMd.filter((c) => c.admin === "outdated" || c.role === "outdated").map((c) => c.file), ...redirectFiles, ...loginFiles])];
     result.uncommitted = uncommittedFiles(abs, toWrite, run);
   }
   return result;
@@ -1394,8 +1419,8 @@ export function uncommittedFiles(dir, files, run = spawnSync) {
 }
 
 /** The repair of one project: only what the diagnosis named. */
-export function repair(dir, { run = spawnSync, withRedirects = false } = {}) {
-  const before = diagnose(dir, { git: true, run, withRedirects });
+export function repair(dir, { run = spawnSync, withRedirects = false, withLoginLimit = false } = {}) {
+  const before = diagnose(dir, { git: true, run, withRedirects, withLoginLimit });
   if (before.ok === false) return before;
   if (!before.needed) return { ok: true, dir: before.dir, name: before.name, needed: false, written: false, commit: [], remaining: [] };
   const abs = before.dir;
@@ -1465,9 +1490,20 @@ export function repair(dir, { run = spawnSync, withRedirects = false } = {}) {
       }
       for (const f of before.openRedirect.filter((x) => x.fix === "manual")) remaining.push({ file: f.file, line: f.line, status: "manual", kind: "redirect", form: f.form, reason: f.form === "unfiltered" ? "the return address followed as it came: /security fixes it" : `the old filter, not the templates' own lines (${f.reason ?? "changed by hand"}): /security fixes it` });
     }
-    const after = diagnose(abs, { withRedirects });
+    // The limit of sign-in attempts, with --login-limit only: the files that are still the
+    // templates' own, read again from the disk as they are now (a sign-in page whose return
+    // address was just repaired above is read after that repair).
+    let loginFixed = [];
+    if (withLoginLimit) {
+      step = "login-limit";
+      const r = repairLoginLimit(abs, before.loginLimit, { write });
+      loginFixed = r.written;
+      for (const l of r.left) remaining.push({ file: l.file, status: "manual", kind: "login-limit", reason: `${l.reason}: /security fixes it` });
+      for (const f of before.loginLimit.filter((x) => x.fix === "manual")) remaining.push({ file: f.file, status: "manual", kind: "login-limit", form: f.form, reason: `${f.reason ?? "changed by hand"}: /security fixes it` });
+    }
+    const after = diagnose(abs, { withRedirects, withLoginLimit });
     const uncommittedBefore = before.uncommitted === null ? null : commit.filter((f) => before.uncommitted.includes(f));
-    return { ok: true, dir: abs, name: before.name, written: commit.length > 0, commit, fixed, rules, redirects: redirectsFixed, apps, remaining, uncommittedBefore, needed: after.needed };
+    return { ok: true, dir: abs, name: before.name, written: commit.length > 0, commit, fixed, rules, redirects: redirectsFixed, loginLimit: loginFixed, apps, remaining, uncommittedBefore, needed: after.needed };
   } catch (e) {
     return { ok: false, step, dir: abs, detail: String(e?.message ?? e).slice(0, 300), commit };
   }
@@ -1750,7 +1786,7 @@ export function scan(options = {}) {
   const { projects, holders, unreadable } = findProjects(options);
   const unread = [...unreadable];
   const results = groupCopies(projects, { collab: Boolean(options.collab) }).map(({ copies, production, first: offered, workBranches }) => {
-    const diagnosed = copies.map((c) => ({ copy: c, d: diagnose(c.dir, { withRedirects: Boolean(options.withRedirects) }) }));
+    const diagnosed = copies.map((c) => ({ copy: c, d: diagnose(c.dir, { withRedirects: Boolean(options.withRedirects), withLoginLimit: Boolean(options.withLoginLimit) }) }));
     for (const { d } of diagnosed) for (const u of d.unreadable ?? []) unread.push({ path: join(d.dir, u.path), error: u.error });
     const [first, ...others] = diagnosed;
     const r = { ...first.d };
@@ -1760,7 +1796,7 @@ export function scan(options = {}) {
     r.productionFrom = production.from;
     if (others.length) {
       // Every working copy, the first one included, each with its own count.
-      r.copies = diagnosed.map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, production: Boolean(production.branch) && copy.branch === production.branch, needed: d.needed, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length }));
+      r.copies = diagnosed.map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, production: Boolean(production.branch) && copy.branch === production.branch, needed: d.needed, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length, loginLimit: (d.loginLimit ?? []).length }));
       // The project's `needed` stays its first copy's (r is that copy's diagnosis): the repair is
       // offered there only. The other copies that still need it are said apart, with their state.
       r.firstCopy = offered;
@@ -1768,18 +1804,20 @@ export function scan(options = {}) {
       const reference = production.branch ?? first.copy.branch;
       r.otherCopies = others
         .filter(({ d }) => d.needed)
-        .map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length, ...copyState(copy.dir, reference, { common: copy.common ?? null, run: options.run }) }));
+        .map(({ copy, d }) => ({ dir: d.dir, branch: copy.branch, counts: d.counts ?? null, openRedirect: (d.openRedirect ?? []).length, loginLimit: (d.loginLimit ?? []).length, ...copyState(copy.dir, reference, { common: copy.common ?? null, run: options.run }) }));
     }
     return r;
   });
   const needed = results.filter((r) => r.needed);
-  const brief = ({ dir, name, needed: n, reason, branch, productionBranch, firstCopy, workBranches, otherCopies, copies, openRedirect }) => ({ dir, name, needed: n, ...(reason ? { reason } : {}), ...(firstCopy ? { firstCopy } : {}), ...(workBranches ? { workBranches } : {}), ...(otherCopies ? { otherCopies } : {}), branch, productionBranch, ...(copies ? { copies } : {}), openRedirect: openRedirect ?? [] });
+  const brief = ({ dir, name, needed: n, reason, branch, productionBranch, firstCopy, workBranches, otherCopies, copies, openRedirect, loginLimit }) => ({ dir, name, needed: n, ...(reason ? { reason } : {}), ...(firstCopy ? { firstCopy } : {}), ...(workBranches ? { workBranches } : {}), ...(otherCopies ? { otherCopies } : {}), branch, productionBranch, ...(copies ? { copies } : {}), openRedirect: openRedirect ?? [], loginLimit: loginLimit ?? [] });
   const withRedirect = (r) => (r.openRedirect ?? []).length > 0 || (r.copies ?? []).some((c) => c.openRedirect > 0);
+  const withLogin = (r) => (r.loginLimit ?? []).length > 0 || (r.copies ?? []).some((c) => c.loginLimit > 0);
   return {
     scanned: holders,
     needed: needed.length,
     otherCopies: results.filter((r) => (r.otherCopies ?? []).length > 0).length,
     openRedirect: results.filter(withRedirect).length,
+    loginLimit: results.filter(withLogin).length,
     projects: [...needed, ...results.filter((r) => !r.needed).map(brief)],
     unreadable: unread,
   };
@@ -1812,11 +1850,12 @@ if (launchedDirectly()) {
   if (args.includes("--scan")) {
     out = args.includes("--write")
       ? { ok: false, step: "args", detail: "--scan never writes: repair one project at a time, with --project-dir <dir> --write" }
-      : scan({ cwd: value("--cwd") ?? process.cwd(), home: value("--home") ?? null, withRedirects: args.includes("--redirects"), collab: args.includes("--collab") });
+      : scan({ cwd: value("--cwd") ?? process.cwd(), home: value("--home") ?? null, withRedirects: args.includes("--redirects"), withLoginLimit: args.includes("--login-limit"), collab: args.includes("--collab") });
   } else {
     const dir = resolve(fromGitBashPath(value("--project-dir") ?? process.cwd()));
     const withRedirects = args.includes("--redirects");
-    out = args.includes("--write") ? repair(dir, { withRedirects }) : diagnose(dir, { git: true, withRedirects });
+    const withLoginLimit = args.includes("--login-limit");
+    out = args.includes("--write") ? repair(dir, { withRedirects, withLoginLimit }) : diagnose(dir, { git: true, withRedirects, withLoginLimit });
   }
   console.log(JSON.stringify(out));
   process.exitCode = out.ok === false ? 1 : 0;

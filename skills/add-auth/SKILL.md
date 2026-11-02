@@ -132,7 +132,7 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/users/{auth.ts, p
 Steps (all driven by Claude):
 
 1. `_check-deps db` (DB required) ; `_check-deps email` (optional for reset).
-2. **Build the hybrid `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `DrizzleAdapter`, schema tables, `eq`, `db`. Module augmentation `Session.user.id`. `authorize()`: admin path FIRST (check `email === ADMIN_USERNAME`, `getAdminPasswordHash`), users path as FALLBACK (`db.query.users.findFirst` → `verifyPassword`). Keep `isAdmin()`. Add jwt/session callbacks.
+2. **Build the hybrid `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `DrizzleAdapter`, schema tables, `eq`, `db`. Module augmentation `Session.user.id`. `authorize(credentials, request)`: the limit on sign-in attempts FIRST, before both paths (the `TooManyAttempts` class and its two lines, as both templates write them: never in the API route, whose 429 freezes the sign-in form), then the admin path (check `email === ADMIN_USERNAME`, `getAdminPasswordHash`), users path as FALLBACK (`db.query.users.findFirst` → `verifyPassword`). Keep `isAdmin()`. Add jwt/session callbacks.
 3. **Extend `password.ts`**: add `hashPassword()` (from the users template). Keep `getAdminPasswordHash` + `verifyPassword`.
 4. **Patch schema.ts** - like `setup-auth-users.mjs` does in the `patchSchema` step: add the missing imports (`text, integer, primaryKey, index, timestamp` pg-core, `sql` drizzle-orm, `AdapterAccount` type next-auth/adapters), append the 4 NextAuth tables (+ `password_reset_tokens` if email_ok).
 5. **`pnpm db:push`**, after `node "${CLAUDE_SKILL_DIR}/../../scripts/neon/schema-drift.mjs"` from `<WEB_DIR>` (read-only): `--force` only on exit `0`; on exit `3` stop and show the user what the push would delete.
@@ -153,7 +153,7 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, p
 1. **Hash the DEV password and push it**: `H=$(printf '%s' "Admin1234!" | node "<path>/hash-password.mjs") && [ -n "$H" ] && printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD_HASH_DEV=%s\n' "$H" | node "<path>/push-env-vars.mjs" --target=all --stdin`.
 2. **The PROD password, never in the conversation**: `node "<path>/admin-password.mjs" rotate --project-dir <app folder>`. It generates it, writes it with the identifier and the sign-in page in a file of the user's downloads folder, and pushes only `ADMIN_PASSWORD_HASH_PROD`. Its JSON gives the file's path (`file`), never the password: never read that file. Never `hash-password.mjs --generate` here: it prints the password where you read it.
 3. **Extend `password.ts`** - add `getAdminPasswordHash()` from the admin template. Keep `hashPassword` + `verifyPassword`.
-4. **Patch `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `getAdminPasswordHash` from `~/lib/password`. In `authorize()`, BEFORE the DB lookup, add the admin path:
+4. **Patch `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `getAdminPasswordHash` from `~/lib/password`. In `authorize()`, after the limit on sign-in attempts (its first lines, kept as they are) and BEFORE the DB lookup, add the admin path:
    ```ts
    if (process.env.ADMIN_USERNAME && email === process.env.ADMIN_USERNAME) {
      const hash = getAdminPasswordHash();

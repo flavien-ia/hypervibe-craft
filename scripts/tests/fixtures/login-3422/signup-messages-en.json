@@ -1,0 +1,15 @@
+{
+  "signup": {
+    "title": "Create an account",
+    "description": "Sign up to access all features.",
+    "emailLabel": "Email",
+    "nameLabel": "Name (optional)",
+    "passwordLabel": "Password (8 characters minimum)",
+    "submit": "Create my account",
+    "submitPending": "Creating…",
+    "alreadyHaveAccount": "Already have an account?",
+    "signinLink": "Sign in",
+    "errorAutoSigninFailed": "Account created, but automatic sign-in failed. Please sign in manually.",
+    "errorGeneric": "Error creating account."
+  }
+}

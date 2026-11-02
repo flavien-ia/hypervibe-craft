@@ -52,14 +52,22 @@ function SignInForm() {
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setPending(true);
+    // The button always comes back: .catch() turns a failure (the network, an
+    // unexpected answer) into the general error, .finally() gives the button back.
     const res = await signIn("credentials", {
       email,
       password,
       redirect: false,
-    });
-    setPending(false);
+    })
+      .catch(() => null)
+      .finally(() => setPending(false));
 
-    if (res?.error) {
+    // Too many attempts: the code authorize() gives (TooManyAttempts, src/server/auth.ts).
+    if (res?.code === "too_many_attempts") {
+      toast.error("Trop de tentatives. Réessaie dans quelques minutes.");
+      return;
+    }
+    if (!res || res.error) {
       toast.error("Email ou mot de passe incorrect.");
       return;
     }

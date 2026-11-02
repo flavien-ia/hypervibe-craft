@@ -203,12 +203,13 @@ async function preflight() {
   }
 
   // rate-limit.ts is created by setup-security.mjs in bootstrap. If absent (standalone
-  // /add-auth), warn - the API route template imports from ~/lib/rate-limit and won't compile.
+  // /add-auth), warn - authorize() in the auth.ts template imports from ~/lib/rate-limit (the
+  // limit on sign-in attempts lives there since 3.4.23) and won't compile.
   const rateLimitPath = join(WEB_DIR, "src/lib/rate-limit.ts");
   if (!existsSync(rateLimitPath)) {
     warn(
       "src/lib/rate-limit.ts not found - bootstrap usually creates it via setup-security.mjs. " +
-        "The generated src/app/api/auth/[...nextauth]/route.ts imports `checkRateLimit` from " +
+        "The generated src/server/auth.ts imports `checkRateLimit` from " +
         "~/lib/rate-limit, so the build will fail until you create that utility (see " +
         "scripts/setup-security.mjs for reference).",
     );
@@ -289,7 +290,7 @@ async function writeAuthTs() {
   ok("auth.ts written (mode: admin)");
 }
 
-// ─── Step 7: write API route with rate limiting ───────────────────────
+// ─── Step 7: write API route (NextAuth's handlers; the limit is in authorize()) ───
 async function writeApiRoute() {
   log("Writing src/app/api/auth/[...nextauth]/route.ts");
   const dest = join(WEB_DIR, "src/app/api/auth/[...nextauth]/route.ts");
@@ -395,7 +396,8 @@ console.log(`
    Mode:           admin (single hardcoded admin via env vars, no DB)
    auth.ts:        src/server/auth.ts
    password.ts:    src/lib/password.ts
-   API route:      src/app/api/auth/[...nextauth]/route.ts (with rate limiting)
+   API route:      src/app/api/auth/[...nextauth]/route.ts (NextAuth's handlers)
+   Sign-in limit:  5 attempts per address in 15 minutes, in authorize() (src/server/auth.ts)
    Pages:          /admin/signin (signin form) + /admin (protected dashboard placeholder)
                    Route group (protected) isolates the gate from the signin page (no redirect loop)
                    Every page of the group starts with await requireAdmin() (src/server/require-admin.ts)

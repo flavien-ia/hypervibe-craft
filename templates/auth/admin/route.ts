@@ -1,27 +1,9 @@
-import { type NextRequest, NextResponse } from "next/server";
 import { handlers } from "~/server/auth";
-import { checkRateLimit } from "~/lib/rate-limit";
 
-export const GET = handlers.GET;
-
-/**
- * NextAuth POST handler with IP-based rate limiting on the credentials callback.
- * Other NextAuth POST endpoints (CSRF token, signout, etc.) bypass the limiter.
- */
-export async function POST(req: NextRequest) {
-  const url = new URL(req.url);
-  if (url.pathname.includes("/callback/credentials")) {
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-    const { allowed, retryAfterMs } = checkRateLimit(ip);
-    if (!allowed) {
-      return NextResponse.json(
-        { error: "Trop de tentatives. Réessaie dans quelques minutes." },
-        {
-          status: 429,
-          headers: { "Retry-After": String(Math.ceil((retryAfterMs ?? 0) / 1000)) },
-        },
-      );
-    }
-  }
-  return handlers.POST(req);
-}
+// NextAuth's own handlers, as they come. The limit on sign-in attempts lives in
+// authorize() (src/server/auth.ts), not here: a route that answered the sixth
+// attempt itself, with a 429 in JSON, broke next-auth's client signIn(), which
+// reads the `url` of every answer. The sign-in button stayed frozen and no
+// message appeared (reported on 02/11/2026). Thrown from authorize(), the
+// refusal comes back to the form as `code: "too_many_attempts"`.
+export const { GET, POST } = handlers;
