@@ -181,9 +181,10 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Vercel CLI
-        # 65 or later: CLI 59 first asks for the account (/v2/user), which a key limited to the
-        # project is refused, and stops on "Could not retrieve Project Settings" (seen 02/11/2026).
-        run: npm install -g "vercel@>=65"
+        # A fixed version, the one proven with a key limited to the project (preview and production,
+        # 02/11/2026): this job holds the key, so it must not install whatever was published last.
+        # Never below 65: CLI 59 first asks for the account (/v2/user), which such a key is refused.
+        run: npm install -g vercel@65.9.0
 
       - name: Deploy preview
         id: deploy
@@ -213,9 +214,10 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Install Vercel CLI
-        # 65 or later: CLI 59 first asks for the account (/v2/user), which a key limited to the
-        # project is refused, and stops on "Could not retrieve Project Settings" (seen 02/11/2026).
-        run: npm install -g "vercel@>=65"
+        # A fixed version, the one proven with a key limited to the project (preview and production,
+        # 02/11/2026): this job holds the key, so it must not install whatever was published last.
+        # Never below 65: CLI 59 first asks for the account (/v2/user), which such a key is refused.
+        run: npm install -g vercel@65.9.0
 
       - name: Deploy production
         env:

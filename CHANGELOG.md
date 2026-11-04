@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.4.24 (4 novembre 2026)
+
+### Améliorations
+- **Mise en ligne par GitHub** : le workflow installe maintenant une version précise de l'outil de déploiement de Vercel, la 65.9.0, celle qui a été éprouvée avec une clé limitée au projet, au lieu de la dernière version publiée. L'étape qui détient la clé n'exécute plus un outil que personne n'a vérifié. Les nouveaux projets en profitent dès leur mise en place ; un workflow déjà écrit garde sa ligne d'installation tant qu'on ne le régénère pas.
+- **Mise à jour des projets** : quand un projet a ses formulaires de connexion réparés mais une route de connexion retouchée à la main, `/update-hypervibe` le dit. Jusqu'à ce que `/security` corrige cette route, la page rendra bien la main après cinq essais, mais en disant que l'identifiant ou le mot de passe est faux au lieu de « trop de tentatives ».
+
 ## v3.4.23 (2 novembre 2026)
 
 ### Sécurité : la double authentification des comptes

@@ -196,9 +196,11 @@ const SETUP = {
     /printf '%s' "\$VTOK" \| node "[^"]*check-project-token\.mjs"/.test(t) && /printf '%s' "\$VTOK" \| gh secret set VERCEL_TOKEN/.test(t) &&
     // Chaque commande qui verifie ou pose la cle s'arrete d'abord sur un coffre ferme.
     blocsBash(t).filter((b) => /check-project-token\.mjs|gh secret set VERCEL_TOKEN/.test(b)).every((b) => /api_token\) && \[ -n "\$VTOK" \] \\\n\s*\|\| \{[^}]*exit 1; \}/.test(b)),
-  "le workflow impose une CLI Vercel recente (65 ou plus)": (t) => {
+  // Une version fixee, jamais un plancher : le travail detient la cle, il ne doit pas installer la
+  // derniere CLI publiee (remarque de Bastien du 03/11/2026 sur la 3.4.22). 65 au moins : la 59 echoue.
+  "le workflow fixe la CLI Vercel a une version exacte, 65 ou plus": (t) => {
     const installs = [...t.matchAll(/run: npm install -g (.+)/g)].map((m) => m[1].trim());
-    return installs.length === 2 && installs.every((i) => i === '"vercel@>=65"');
+    return installs.length === 2 && installs.every((i) => /^vercel@(\d+)\.\d+\.\d+$/.test(i) && Number(i.match(/^vercel@(\d+)/)[1]) >= 65);
   },
 };
 for (const [name, rule] of Object.entries(SETUP)) check(name, rule(setup));
