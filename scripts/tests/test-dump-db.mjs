@@ -31,11 +31,16 @@ function check(label, ok, detail = "") {
 
 const FAKE_PG = `
 const tables = JSON.parse(process.env.FAKE_TABLES || "[]");
+const catalog = process.env.FAKE_CATALOG ?? "0";
 exports.Client = class {
   constructor(opts) { this.opts = opts; }
   async connect() {}
   async end() {}
   async query(text) {
+    if (/pg_catalog\\.pg_class/.test(text)) {
+      if (catalog === "illisible") throw new Error("permission denied for pg_class");
+      return { rows: [{ n: Number(catalog) }] };
+    }
     if (/information_schema\\.tables/.test(text)) return { rows: tables.map((t) => ({ table_schema: "public", table_name: t })) };
     if (/information_schema\\.columns/.test(text)) return { rows: [] };
     const m = /FROM "public"\\."([^"]+)"/.exec(text);
@@ -54,14 +59,14 @@ function project() {
   return dir;
 }
 
-function dump(tables, { viaArgument = false } = {}) {
+function dump(tables, { viaArgument = false, catalog = "0" } = {}) {
   const dir = project();
   const out = join(dir, "db");
   const args = [SCRIPT, "--out-dir", out, "--project-dir", dir];
   if (viaArgument) args.push("--conn-string", CONN);
   const r = spawnSync(process.execPath, args, {
     encoding: "utf8",
-    env: { ...process.env, DUMP_DB_CONN: viaArgument ? "" : CONN, FAKE_TABLES: JSON.stringify(tables) },
+    env: { ...process.env, DUMP_DB_CONN: viaArgument ? "" : CONN, FAKE_TABLES: JSON.stringify(tables), FAKE_CATALOG: catalog },
   });
   let payload = null;
   try {
@@ -96,6 +101,18 @@ console.log("\n── Aucune table lisible : ce n'est pas une sauvegarde ──"
   const { r, payload } = dump(["refusee_a", "refusee_b"]);
   check("statut error, exit 1 (avant : ok, 0 ligne)", payload?.status === "error" && r.status === 1, `${payload?.status} / exit ${r.status}`);
   check("les deux tables sont nommees", payload?.failedTables?.length === 2);
+}
+
+console.log("\n── Une base sans table, et des tables que le role ne voit pas (banc du 04/11/2026) ──");
+{
+  const vide = dump([], { catalog: "0" });
+  check("base sans aucune table : statut ok, emptyDatabase, exit 0", vide.payload?.status === "ok" && vide.payload?.tableCount === 0 && vide.payload?.emptyDatabase === true && vide.r.status === 0, JSON.stringify(vide.payload));
+  const cachees = dump([], { catalog: "3" });
+  check("tables invisibles au role : erreur qui le dit, exit 1, jamais emptyDatabase", cachees.payload?.status === "error" && !cachees.payload?.emptyDatabase && /3 table\(s\) exist/.test(cachees.payload?.reason ?? "") && cachees.r.status === 1, JSON.stringify(cachees.payload));
+  const muet = dump([], { catalog: "illisible" });
+  check("catalogue illisible : rien n'est conclu (ok sans emptyDatabase)", muet.payload?.status === "ok" && muet.payload?.tableCount === 0 && !muet.payload?.emptyDatabase, JSON.stringify(muet.payload));
+  const src = readFileSync(join(ROOT, "scripts", "save-project", "build-snapshot.mjs"), "utf8");
+  check("/save-project ne passe une base vide en skipped que sur emptyDatabase", /tableCount \?\? 0\) === 0 && payload\.emptyDatabase === true\)\s*\{\s*logStep\("db-dump", "skipped"/.test(src));
 }
 
 console.log("\n── L'ancien passage par argument reste accepte, avec son avertissement ──");

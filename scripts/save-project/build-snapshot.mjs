@@ -312,6 +312,13 @@ function stepDbDump() {
     logStep("db-dump", "error", { error: payload.reason || (r.stderr || "").slice(0, 200) });
     return;
   }
+  // A database that holds no table yet (its /add-db created it and nothing else) has nothing to
+  // back up: a deliberate skip, which the run reports as such. The export tells it from tables its
+  // role cannot see by the catalog (dump-db.mjs, emptyDatabase), never by the count alone.
+  if ((payload.tableCount ?? 0) === 0 && payload.emptyDatabase === true) {
+    logStep("db-dump", "skipped", { reason: "the database is reachable and holds no table yet: nothing to back up" });
+    return;
+  }
   // Loud failure: a DATABASE_URL was found, so finding no table means the dump
   // silently produced nothing. Never report that as a success.
   if ((payload.tableCount ?? 0) === 0) {

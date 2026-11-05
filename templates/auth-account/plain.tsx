@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
+import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
@@ -16,7 +16,18 @@ import {
 } from "~/components/ui/dialog";
 import { toast } from "sonner";
 
+// The page brings its own SessionProvider: useSession() needs one, and nothing else in the project
+// is sure to provide it (the header's user menu, which brought it, is only added when the site has a
+// header). Without it, `next build` failed prerendering /account (bench of the solo harness, 04/11/2026).
 export default function AccountPage() {
+  return (
+    <SessionProvider>
+      <AccountContent />
+    </SessionProvider>
+  );
+}
+
+function AccountContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);

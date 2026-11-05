@@ -141,7 +141,7 @@ Show a clear recap:
 > |---|---|---|
 > | Code + history | ✅ ok | <bundleBytes in MB>, uncommitted changes: <yes/no> |
 > | Env variables | ✅ ok | <production: X vars, preview: Y, dev: Z> |
-> | Database | <✅ ok / ⚠️ partial> | <driver>, <tableCount> tables, <totalRows> rows in total<, NOT READ: N tables> |
+> | Database | <✅ ok / ⚠️ partial / ➖ skipped> | <driver>, <tableCount> tables, <totalRows> rows in total<, NOT READ: N tables>; when `db-dump` is `skipped` because the database holds no table yet, say just that: there is nothing to back up there, which is normal right after `/add-db` |
 > | Cloudflare R2 | <✅ ok / ⚠️ partial / ➖ skipped> | <bucketsScanned> buckets, <totalObjects> objects (<totalSize>)<, MISSING: N objects> |
 > | Claude memory | ✅ ok | <matchedDirs> memory folder(s) copied |
 > | Configs | ✅ ok | <captured> |

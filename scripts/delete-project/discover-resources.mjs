@@ -329,6 +329,33 @@ async function scanR2() {
 // could not be read is said in `error`, never taken for a zone without the project's records.
 const cloudflareJson = (url) => httpJson(url, { headers: { Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` } });
 
+// A zone of the account this machine's key has no right to read: the harness writes with that key,
+// so it wrote nothing there, and the name scan has nothing to find. Said, never an error: a key
+// scoped to a few zones made every deletion of a project without a domain look like a failed scan,
+// which the deletion then refused to validate (bench of 04/11/2026). A zone the project's manifest
+// records stays an error when refused: something of the project may be there.
+function recordedZones() {
+  try {
+    const fichier = manifestExistant(PROJECT_DIR);
+    const resources = fichier ? JSON.parse(readFileSync(fichier, "utf8"))?.resources : null;
+    if (!Array.isArray(resources)) return new Set();
+    return new Set(
+      resources
+        .map((r) => (r?.kind === "dns-zone" ? r.name : r?.kind === "email-route" ? (r.zone ?? String(r.name ?? "").split("@")[1]) : null))
+        .filter(Boolean)
+        .map((z) => String(z).toLowerCase()),
+    );
+  } catch {
+    return new Set();
+  }
+}
+const refusedRead = (error) => /^HTTP 403\b/.test(String(error ?? ""));
+function outOfReachNote(outOfReach) {
+  return outOfReach.size
+    ? { outOfReach: [...outOfReach].sort(), outOfReachNote: `${outOfReach.size} zone(s) of the account this machine's key has no right to read: the harness writes with this key, so it left nothing there` }
+    : {};
+}
+
 async function scanDns() {
   if (!CLOUDFLARE_API_TOKEN) return { found: false, error: missingKey("CLOUDFLARE_API_TOKEN"), ...noAccountIf(CLOUDFLARE_KEY) };
   try {
@@ -337,10 +364,13 @@ async function scanDns() {
     const zones = listed.items;
     const allRecords = [];
     const unread = [];
+    const recorded = recordedZones();
+    const outOfReach = new Set();
     await Promise.all(
       zones.map(async (z) => {
         const recs = await cloudflareAll(`/zones/${z.id}/dns_records`, 100, cloudflareJson);
-        if (recs.error) unread.push(`${z.name}: ${recs.error}`);
+        if (recs.error && refusedRead(recs.error) && !recorded.has(String(z.name).toLowerCase())) outOfReach.add(z.name);
+        else if (recs.error) unread.push(`${z.name}: ${recs.error}`);
         for (const r of recs.items) {
           const nameMatches = tokenMatches(PROJECT_LOWER, r.name);
           const contentMatches = tokenMatches(PROJECT_LOWER, r.content || "");
@@ -357,7 +387,7 @@ async function scanDns() {
         }
       }),
     );
-    return { found: allRecords.length > 0, records: allRecords, zonesScanned: zones.length, ...(unread.length ? { error: `records not read in ${unread.join(" | ")}` } : {}) };
+    return { found: allRecords.length > 0, records: allRecords, zonesScanned: zones.length, ...outOfReachNote(outOfReach), ...(unread.length ? { error: `records not read in ${unread.join(" | ")}` } : {}) };
   } catch (e) {
     return { found: false, error: String(e) };
   }
@@ -540,11 +570,14 @@ async function scanEmailRouting() {
     const zones = listed.items;
     const rules = [];
     const unread = [];
+    const recorded = recordedZones();
+    const outOfReach = new Set();
     await Promise.all(
       zones.map(async (z) => {
         // Cloudflare serves these rules 50 at a time, whatever size is asked.
         const data = await cloudflareAll(`/zones/${z.id}/email/routing/rules`, 50, cloudflareJson);
-        if (data.error) unread.push(`${z.name}: ${data.error}`);
+        if (data.error && refusedRead(data.error) && !recorded.has(String(z.name).toLowerCase())) outOfReach.add(z.name);
+        else if (data.error) unread.push(`${z.name}: ${data.error}`);
         for (const r of data.items) {
           const matchersStr = JSON.stringify(r.matchers || []);
           const actionsStr = JSON.stringify(r.actions || []);
@@ -568,7 +601,7 @@ async function scanEmailRouting() {
         }
       }),
     );
-    return { found: rules.length > 0, rules, ...(unread.length ? { error: `routing rules not read in ${unread.join(" | ")}` } : {}) };
+    return { found: rules.length > 0, rules, ...outOfReachNote(outOfReach), ...(unread.length ? { error: `routing rules not read in ${unread.join(" | ")}` } : {}) };
   } catch (e) {
     return { found: false, error: String(e) };
   }

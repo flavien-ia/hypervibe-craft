@@ -98,5 +98,24 @@ console.log("── L'inventaire s'en sert pour les zones, leurs enregistrements
   check("... a routing rule kept with its identifier when Cloudflare no longer sends `tag`", /tag: r\.tag \?\? r\.id/.test(routing));
 }
 
+console.log("── Une zone que la clé n'a pas le droit de lire n'est pas une analyse en échec (banc du 04/11/2026) ──");
+{
+  const src = readFileSync(join(ROOT, "scripts", "delete-project", "discover-resources.mjs"), "utf8");
+  const body = (name) => {
+    const at = src.indexOf(`async function ${name}(`);
+    return at < 0 ? "" : src.slice(at, src.indexOf("\n}\n", at));
+  };
+  const dns = body("scanDns");
+  const routing = body("scanEmailRouting");
+  const m = /const refusedRead = \(error\) => (\/.+\/)\.test/.exec(src);
+  const refused = m ? new Function(`return ${m[1]}`)() : null;
+  check("a refusal is an HTTP 403, and only that", !!refused && refused.test("HTTP 403") && !refused.test("HTTP 404") && !refused.test("HTTP 500") && !refused.test("API returned success:false"), m?.[1]);
+  check("... a refused zone the manifest does not record goes to outOfReach, not to the errors", /refusedRead\(recs\.error\) && !recorded\.has\(/.test(dns) && /outOfReach\.add\(z\.name\)/.test(dns) && /refusedRead\(data\.error\) && !recorded\.has\(/.test(routing) && /outOfReach\.add\(z\.name\)/.test(routing));
+  check("... both scans say it, in one line", /\.\.\.outOfReachNote\(outOfReach\)/.test(dns) && /\.\.\.outOfReachNote\(outOfReach\)/.test(routing));
+  check("... the recorded zones come from the manifest's dns-zone and email-route", /r\?\.kind === "dns-zone" \? r\.name : r\?\.kind === "email-route"/.test(src));
+  const skill = readFileSync(join(ROOT, "skills", "delete-project", "SKILL.md"), "utf8");
+  check("... and the skill tells it apart from a failed scan", /`dns\.outOfReach`[^\n]*is not one/.test(skill) && /never ask what to do about it/.test(skill));
+}
+
 console.log(`\n${checks - failures}/${checks} checks passed`);
 process.exitCode = failures ? 1 : 0;

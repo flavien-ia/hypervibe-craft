@@ -135,6 +135,32 @@ try {
     ORDER BY table_schema, table_name
   `);
 
+  // No table listed. information_schema only lists the tables the role holds a right on, so the
+  // catalog says which it is: a database that holds no table yet (a project whose /add-db created
+  // the database and nothing else, bench of 04/11/2026), or tables this role cannot read, which is
+  // no backup at all. A catalog that cannot be read decides nothing: the caller keeps its own rule.
+  let emptyDatabase = false;
+  if (tables.length === 0) {
+    let inCatalog = null;
+    try {
+      const [row] = await qfn.query(`
+        SELECT count(*)::int AS n
+        FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace s ON s.oid = c.relnamespace
+        WHERE c.relkind IN ('r', 'p')
+          AND s.nspname NOT IN ('pg_catalog', 'information_schema') AND s.nspname NOT LIKE 'pg_toast%'
+      `);
+      inCatalog = Number(row?.n);
+    } catch {
+      inCatalog = null;
+    }
+    if (inCatalog > 0) {
+      console.log(JSON.stringify({ status: "error", driver: qfn.driver, tableCount: 0, totalRows: 0, reason: `${inCatalog} table(s) exist in the database, but the role this connection uses can read none of them` }));
+      process.exitCode = 1;
+      throw Object.assign(new Error("reported"), { reported: true });
+    }
+    emptyDatabase = inCatalog === 0;
+  }
+
   // Columns metadata
   const columns = await qfn.query(`
     SELECT table_schema, table_name, column_name, data_type, is_nullable, column_default, ordinal_position
@@ -185,6 +211,7 @@ try {
     driver: qfn.driver,
     tableCount: tables.length,
     totalRows,
+    ...(emptyDatabase ? { emptyDatabase: true } : {}),
     ...(failed.length
       ? {
           failedTables: failed,
@@ -194,8 +221,10 @@ try {
   }));
   if (status === "error") process.exitCode = 1;
 } catch (e) {
-  console.log(JSON.stringify({ status: "error", reason: e.message }));
-  process.exit(1);
+  if (!e?.reported) {
+    console.log(JSON.stringify({ status: "error", reason: e.message }));
+    process.exitCode = 1;
+  }
 } finally {
   try { await qfn.end(); } catch {}
 }

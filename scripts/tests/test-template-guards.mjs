@@ -274,5 +274,13 @@ check("la même fonction dans tous les gabarits (seul window ou self change)", c
   check("chaque commande Stripe de /add-stripe porte le profil du projet", commandes.length >= 3 && sansProfil.length === 0, sansProfil.join(" | "));
 }
 
+// ── La page du compte porte son SessionProvider ──
+// useSession() sans fournisseur fait échouer `next build` au pré-rendu de /account, et rien d'autre
+// dans un projet n'est sûr de le fournir (banc solo du 04/11/2026, un site sans en-tête).
+for (const f of ["plain", "i18n"]) {
+  const t = lire(`templates/auth-account/${f}.tsx`);
+  check(`templates/auth-account/${f}.tsx : la page enveloppe son contenu dans un SessionProvider, et useSession n'est lu que dessous`, /export default function AccountPage\(\)\s*\{\s*return \(\s*<SessionProvider>\s*<AccountContent \/>\s*<\/SessionProvider>/.test(t) && t.indexOf("= useSession()") > t.indexOf("function AccountContent()"), t.slice(0, 300));
+}
+
 console.log(`\n${checks - failures}/${checks} verifications`);
 process.exitCode = failures ? 1 : 0;

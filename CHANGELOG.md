@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.4.25 (5 novembre 2026)
+
+### Corrections
+- **Page « Mon compte »** : sur un site sans en-tête, la mise en ligne échouait juste après `/add-auth` en mode utilisateurs, parce que la page du compte attendait un élément que seul le menu de l'en-tête apportait. Elle l'apporte désormais elle-même. Un projet déjà touché se répare en reprenant la page du compte depuis le modèle, ou en demandant à Claude de l'envelopper dans son propre fournisseur de session.
+- **Sauvegarde d'un projet** : juste après `/add-db`, la base existe mais ne contient encore aucune table. `/save-project` y voyait une sauvegarde ratée ; il dit maintenant qu'il n'y a rien à sauvegarder là, ce qui est normal à ce stade. Une base dont les tables existent mais restent invisibles pour la connexion utilisée reste une erreur, et le message le dit.
+- **Suppression d'un projet** : avec une clé Cloudflare limitée à quelques domaines, `/delete-project` comptait chaque domaine hors de sa portée comme une analyse en échec, et refusait qu'on valide la liste. Ces domaines sont maintenant cités en une ligne : la clé n'y a aucun droit, donc le harnais n'y a rien laissé. Un domaine que le projet a déclaré reste vérifié comme avant.
+
 ## v3.4.24 (4 novembre 2026)
 
 ### Améliorations
