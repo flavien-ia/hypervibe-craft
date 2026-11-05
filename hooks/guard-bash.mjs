@@ -3,13 +3,16 @@
 // run and either lets it through, asks the user, or refuses it with the
 // correct alternative.
 //
-// Two tools run a shell: Bash, and Monitor (a background watcher whose
-// `command` is a shell script too). A guard that only watched Bash left the
-// other door open (outside review, 3.0.4): hooks.json matches both, and this
-// file accepts both. Same input field, same decision.
+// Four tools run a command line: Bash, Monitor (a background watcher whose
+// `command` is a shell script too), PowerShell (Claude Code's shell on Windows,
+// where it is the primary one), and the desktop app's terminal. A guard that
+// only watched Bash left the other doors open (Monitor: outside review, 3.0.4;
+// PowerShell and the terminal: 3.4.26): hooks.json matches all four, and this
+// file reads each line the way its shell runs it (SHELL_TOOLS).
 //
 // Contract (Claude Code):
-//   stdin  {"tool_name":"Bash"|"Monitor","tool_input":{"command":"..."},...}
+//   stdin  {"tool_name":"Bash"|"Monitor"|"PowerShell"|"mcp__terminal__run_in_terminal",
+//           "tool_input":{"command":"...",...},"cwd":"...",...}
 //   stdout {"hookSpecificOutput":{"hookEventName":"PreToolUse",
 //           "permissionDecision":"deny"|"ask","permissionDecisionReason":"..."}}
 //   exit 0 with no output = no decision, the normal permission flow applies.
@@ -28,9 +31,32 @@
 // instead of this file's own line (outside review, 3.2.6).
 
 import { execFileSync } from "node:child_process";
+import { homedir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 
-/** The tools whose `command` is executed by a shell. */
-const SHELL_TOOLS = new Set(["Bash", "Monitor"]);
+// 2.5.3 / 3.4.26 : four tools run a command line, not two. PowerShell is Claude Code's shell on
+// Windows (the primary one there), and the desktop app's terminal types the line into the person's
+// own shell: a guard that watched only Bash and Monitor let a push through PowerShell without a
+// question (bench of 21/10/2026). Each line is read the way its shell runs it: `posix` by rules.mjs,
+// `powershell` by powershell.mjs, `both` for the terminal (PowerShell on Windows, a login shell over
+// SSH). The command is in `command` for all four.
+const SHELL_TOOLS = new Map([
+  ["Bash", "posix"],
+  ["Monitor", "posix"],
+  ["PowerShell", "powershell"],
+  ["mcp__terminal__run_in_terminal", "both"],
+]);
+
+/** The folder a terminal's command runs in: its own `cwd` (absolute, `~`, or relative to the
+ *  session's folder), or the session's. */
+function folderOf(payload) {
+  const base = typeof payload?.cwd === "string" && payload.cwd ? payload.cwd : undefined;
+  const own = payload?.tool_input?.cwd;
+  if (typeof own !== "string" || !own) return base;
+  if (own === "~" || own.startsWith("~/") || own.startsWith("~\\")) return join(homedir(), own.slice(1));
+  if (isAbsolute(own)) return own;
+  return base ? resolve(base, own) : undefined;
+}
 
 // ─── The commits a push sends (3.4.16 / 2.4.15) ───────────────────────────────
 // On 21/10/2026, a "yes, push" given for one commit also sent two commits that another session
@@ -221,15 +247,36 @@ function read() {
 try {
   const raw = await read();
   const payload = JSON.parse(raw);
-  if (!SHELL_TOOLS.has(payload?.tool_name)) process.exit(0);
+  const reading = SHELL_TOOLS.get(payload?.tool_name);
+  if (!reading) process.exit(0);
 
+  const command = payload?.tool_input?.command;
+  if (typeof command !== "string") {
+    process.stderr.write(`[Hypervibe] guard-bash found no command in this ${payload.tool_name} call, letting it through.\n`);
+    process.exit(0);
+  }
   const { decide, PUSH_REASON } = await import("./rules.mjs");
-  const command = payload?.tool_input?.command ?? "";
-  const verdict = decide(command);
+  let verdict;
+  if (reading === "posix") verdict = decide(command);
+  else {
+    // Without powershell.mjs (a hooks/ folder copied in part), the line is read as POSIX shell, which
+    // reads a `git push` the same, and that is said.
+    let decidePowerShell = null;
+    try {
+      ({ decidePowerShell } = await import("./powershell.mjs"));
+    } catch (e) {
+      process.stderr.write(
+        `[Hypervibe] the PowerShell reading of the guard is off, hooks/powershell.mjs could not be loaded (${
+          e instanceof Error ? e.message : String(e)
+        }): this line is read as POSIX shell.\n`,
+      );
+    }
+    verdict = decidePowerShell ? decidePowerShell(command, decide, { posix: reading === "both" }) : decide(command);
+  }
   if (!verdict) process.exit(0);
 
   // A push's question names the commits that leave, when this file can read them for sure.
-  const outgoing = verdict.decision === "ask" && PUSH_REASON && verdict.reason === PUSH_REASON ? outgoingCommits(command, payload?.cwd) : null;
+  const outgoing = verdict.decision === "ask" && PUSH_REASON && verdict.reason === PUSH_REASON ? outgoingCommits(command, folderOf(payload)) : null;
 
   process.stdout.write(
     JSON.stringify({

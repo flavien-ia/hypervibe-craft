@@ -184,8 +184,8 @@ check(
   const pre = h.hooks?.PreToolUse ?? [];
   check("un hook PreToolUse est declare", pre.length >= 1);
   check(
-    "il cible Bash et Monitor, les deux outils qui executent un shell",
-    pre.every((e) => e.matcher === "Bash|Monitor"),
+    "il cible les quatre outils qui lancent une ligne de commande : Bash, Monitor, PowerShell et le terminal de l'application (3.4.26 / 2.5.3)",
+    pre.every((e) => e.matcher === "Bash|Monitor|PowerShell|mcp__terminal__run_in_terminal"),
     pre.map((e) => e.matcher).join(", "),
   );
   check(
@@ -194,8 +194,9 @@ check(
     JSON.stringify(pre.map((e) => (e.hooks ?? []).map((x) => x.timeout))),
   );
   check(
-    "guard-bash.mjs accepte les deux outils",
-    /SHELL_TOOLS = new Set\(\["Bash", "Monitor"\]\)/.test(lire("hooks/guard-bash.mjs")),
+    "guard-bash.mjs accepte les quatre outils, PowerShell lu par powershell.mjs",
+    /\["Bash", "posix"\],\s*\["Monitor", "posix"\],\s*\["PowerShell", "powershell"\],\s*\["mcp__terminal__run_in_terminal", "both"\]/.test(lire("hooks/guard-bash.mjs")) &&
+      /import\("\.\/powershell\.mjs"\)/.test(lire("hooks/guard-bash.mjs")),
   );
   check(
     "les regles ne voient jamais la tete brute d'une commande (normalise)",

@@ -76,8 +76,9 @@ can stop at any point.
 ## Guardrails
 
 Irreversible operations are guarded mechanically, not merely discouraged in
-prose. A `PreToolUse` hook, on `Bash` and on `Monitor` (the other tool that
-runs shell commands), refuses a sweeping `git add -A` and destructive SQL, and
+prose. A `PreToolUse` hook, on the four tools that run a command line (`Bash`,
+`Monitor`, `PowerShell`, read the way PowerShell runs it, and the desktop
+app's terminal; 3.4.26), refuses a sweeping `git add -A` and destructive SQL, and
 asks for your confirmation before a push, a direct production deploy, a worker
 deploy (also when one of the plugin's own scripts would do it), a schema push,
 cloud deletions, a change of a domain at its registrar (its nameservers, or the

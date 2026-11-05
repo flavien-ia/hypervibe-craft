@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.26 (5 novembre 2026)
+
+### Sécurité
+- **Le garde-fou surveille aussi PowerShell** : sous Windows, Claude Code lance souvent ses commandes par PowerShell, et le garde-fou ne regardait que les deux autres outils de commande. Un envoi vers le dépôt ou une mise en ligne passait par là sans question. Il lit désormais aussi les commandes PowerShell, comme PowerShell les exécute, et celles du terminal de l'application de bureau. Ce qu'il ne sait pas lire, par exemple une commande encodée, lui fait demander confirmation.
+
 ## v3.4.25 (5 novembre 2026)
 
 ### Corrections

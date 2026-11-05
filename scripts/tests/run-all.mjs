@@ -21,6 +21,7 @@ const SUITES = [
   ["the rule on database reads: columns named in findFirst too, the read cached rather than the page, both plans, an untouched copy updated (3.4.16)", join(ROOT, "scripts", "tests", "test-db-reads-rule.mjs")],
   ["global block size", join(ROOT, "scripts", "rules", "measure.mjs")],
   ["bash guardrails", join(ROOT, "hooks", "test-hooks.mjs")],
+  ["the guard reads PowerShell and the desktop app's terminal too (3.4.26 / 2.5.3)", join(ROOT, "scripts", "tests", "test-guard-powershell.mjs")],
   ["no skill tells Claude to run a command its guard refuses", join(ROOT, "scripts", "tests", "test-skills-guard.mjs")],
   ["the plugin's paths and the organisation's name are set by the skill that uses them", join(ROOT, "scripts", "tests", "test-skill-variables.mjs")],
   ["git hooks chain (a clone never runs its hooks)", join(ROOT, "scripts", "tests", "test-hooks-chain.mjs")],
