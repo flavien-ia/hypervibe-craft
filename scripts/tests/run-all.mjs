@@ -62,6 +62,7 @@ const SUITES = [
   ["skill commands and texts per host", join(ROOT, "scripts", "tests", "test-skill-commands.mjs")],
   ["AI model selection", join(ROOT, "scripts", "tests", "test-ai-models.mjs")],
   ["AI secret containment", join(ROOT, "scripts", "tests", "test-ai-secret.mjs")],
+  ["the cap of a project's AI key resets every month (or every day on request), never a cap for life", join(ROOT, "scripts", "tests", "test-ai-cap.mjs")],
   ["vercel deploy URL parsing", join(ROOT, "scripts", "tests", "test-vercel-deploy-output.mjs")],
   ["vercel plan before taking payments", join(ROOT, "scripts", "tests", "test-vercel-plan.mjs")],
   ["vercel projects in the right team", join(ROOT, "scripts", "tests", "test-vercel-projects.mjs")],

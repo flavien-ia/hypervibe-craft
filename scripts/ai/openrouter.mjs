@@ -323,7 +323,10 @@ export async function creerCleProjet({
     body: JSON.stringify({
       name: nom,
       limit: plafondUsd,
-      ...(resetQuotidien ? { limit_reset: "daily" } : {}),
+      // Un plafond MENSUEL par défaut, comme les skills le présentent : sans limit_reset, OpenRouter
+      // ne remet jamais le compteur à zéro, et la clé s’arrêtait pour de bon au premier plafond
+      // atteint (relevé au banc Enterprise, 06/11/2026). Remise à zéro le 1er du mois, minuit UTC.
+      limit_reset: resetQuotidien ? "daily" : "monthly",
     }),
   });
   const corps = await res.text();

@@ -1,5 +1,10 @@
 # Changelog
 
+## v3.4.27 (6 novembre 2026)
+
+### Corrections
+- **Le budget de la clé d'IA d'un projet repart chaque mois** : `/add-ai` présente le plafond de la clé comme un budget mensuel, mais la clé était créée sans remise à zéro. Une fois le plafond atteint, elle restait bloquée pour toujours, et l'IA du site s'arrêtait sans prévenir. Les nouvelles clés repartent à zéro le premier de chaque mois (ou chaque jour, si on l'a demandé). Une clé déjà créée garde son ancien réglage.
+
 ## v3.4.26 (5 novembre 2026)
 
 ### Sécurité
