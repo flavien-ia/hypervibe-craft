@@ -1,5 +1,12 @@
 # Changelog
 
+## v3.4.28 (7 novembre 2026)
+
+### Corrections
+- **Les notifications push s'installent de nouveau** : la version 4 de la bibliothèque d'envoi des notifications a changé sa façon de se charger, et le code qu'écrit `/add-push-notification` ne démarrait plus sur un projet neuf. La skill installe désormais la version 3, qui fonctionne. Un projet déjà touché se répare en relançant `/add-push-notification`.
+- **Des modèles d'IA de la génération actuelle** : `/add-ai` proposait en premier des modèles d'une génération précédente, dont un qui n'existe plus. Il met maintenant en avant les modèles actuels de chaque grand fournisseur, à gamme et à prix égaux, et ne propose plus de modèle spécialisé dans le code pour une conversation.
+- **La page de contact reste stable** : la bibliothèque de validation des formulaires installée par la page de contact est désormais fixée à sa version actuelle, pour qu'une future version ne casse pas le formulaire.
+
 ## v3.4.27 (6 novembre 2026)
 
 ### Corrections

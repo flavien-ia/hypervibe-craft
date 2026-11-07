@@ -36,6 +36,9 @@ const CATALOGUE = [
   M("un-labo/petit-modele:free", 0, 0, 32000),
   M("autre-labo/mini:free", 0, 0, 16000),
   // Éco.
+  M("anthropic/claude-haiku-5.5", 0.1, 0.5, 1000000),
+  M("anthropic/claude-haiku-4.5", 1, 5, 200000),
+  M("google/gemini-3.1-flash-lite", 0.25, 1.5, 1048000),
   M("google/gemini-2.5-flash-lite", 0.1, 0.4, 1048000),
   M("openai/gpt-5-nano", 0.05, 0.4, 400000),
   M("openai/gpt-4.1-mini", 0.4, 1.6, 1047000),
@@ -44,6 +47,9 @@ const CATALOGUE = [
   M("anthropic/claude-sonnet-5", 2, 10, 1000000),
   M("anthropic/claude-sonnet-4.5", 3, 15, 1000000),
   M("google/gemini-2.5-pro", 1.25, 10, 1048000),
+  M("google/gemini-3.5-flash", 1.5, 9, 1048000),
+  M("openai/gpt-5.1-codex-max", 1.25, 10, 400000),
+  M("openai/gpt-5.1", 1.25, 10, 400000),
   M("openai/gpt-4.1", 2, 8, 1047000),
   // Pièges : variantes inutilisables en conversation.
   M("openai/o3-pro:batch", 20, 80, 200000),
@@ -112,8 +118,19 @@ try {
   console.log("\n- Ordre de préférence");
   verifier(
     "Éco propose une famille connue en premier",
-    ids(eco)[0] === "google/gemini-2.5-flash-lite",
+    ids(eco)[0] === "anthropic/claude-haiku-5.5",
     `obtenu ${ids(eco)[0]}`,
+  );
+  verifier(
+    "une génération d'avant ne passe pas devant la courante, même moins chère",
+    ids(eco).indexOf("google/gemini-3.1-flash-lite") >= 0 &&
+      ids(eco).indexOf("google/gemini-3.1-flash-lite") < ids(eco).indexOf("google/gemini-2.5-flash-lite"),
+    ids(eco).join(", "),
+  );
+  verifier(
+    "un modèle spécialisé dans le code ne passe pas devant le modèle général",
+    ids(qualite).includes("openai/gpt-5.1") && !ids(qualite).includes("openai/gpt-5.1-codex-max"),
+    ids(qualite).join(", "),
   );
   verifier(
     "Qualité propose Sonnet en premier",

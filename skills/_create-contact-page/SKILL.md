@@ -128,7 +128,8 @@ grep -qE '"(react-hook-form|@hookform/resolvers|zod)"' "<WEB_DIR>/package.json"
 If any of the three is missing, install:
 
 ```bash
-cd <WEB_DIR> && pnpm add react-hook-form @hookform/resolvers "zod@^3"
+# Majors pinned: this skill writes the code that calls them (zodResolver, zod 3 schemas).
+cd <WEB_DIR> && pnpm add react-hook-form "@hookform/resolvers@^7" "zod@^3"
 ```
 
 > **Why `zod@^3` and not a bare `zod`.** The create-t3-app scaffold ships

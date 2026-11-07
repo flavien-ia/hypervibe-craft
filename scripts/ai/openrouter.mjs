@@ -113,13 +113,14 @@ export const GAMMES = {
     maxEntree: 1e-6,
     maxSortie: 5e-6,
     contexteMin: 32000,
+    // Préfixes de génération (gemini-3, gpt-5) ou de famille : chacun ramène son membre le moins
+    // cher dans la bande, donc un préfixe trop large (google/gemini) ramènerait une génération
+    // d'avant restée bon marché. Relus sur le catalogue du 07/11/2026.
     familles: [
-      "google/gemini-2.5-flash-lite",
-      "openai/gpt-5-nano",
-      "google/gemini-2.5-flash",
-      "openai/gpt-4.1-mini",
-      "deepseek/deepseek-chat",
-      "anthropic/claude-3-haiku",
+      "anthropic/claude-haiku",
+      "google/gemini-3",
+      "openai/gpt-5",
+      "deepseek/deepseek",
     ],
     usage:
       "Classification, extraction, résumé, gros volumes : la qualité suffit largement et le coût reste marginal.",
@@ -135,9 +136,8 @@ export const GAMMES = {
     contexteMin: 100000,
     familles: [
       "anthropic/claude-sonnet",
-      "google/gemini-2.5-pro",
-      "openai/gpt-4.1",
-      "anthropic/claude-haiku-4",
+      "google/gemini-3",
+      "openai/gpt-5",
     ],
     usage:
       "Conversation exposée aux clients, rédaction qui porte la marque, raisonnement sur des cas complexes.",
@@ -145,7 +145,9 @@ export const GAMMES = {
 };
 
 /** Variantes qui ne sont pas des modèles de conversation utilisables ici. */
-const EXCLUS = /:batch|-image|-tts|-audio|whisper|embed|-search|-preview$/;
+// -codex : spécialisés dans le code, à égalité de prix avec le modèle général de la même
+// génération, ils passaient devant lui (gpt-5.1-codex-max en Qualité, le 07/11/2026).
+const EXCLUS = /:batch|-image|-tts|-audio|whisper|embed|-search|-codex|-preview$/;
 
 function dansLaBande(m, g, gamme) {
   if (gamme === "gratuit") return m.gratuit;

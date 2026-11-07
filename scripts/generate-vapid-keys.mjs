@@ -29,7 +29,7 @@ try {
   console.error(
     JSON.stringify({
       error:
-        "web-push not found in the current project. Run from the project root, after : pnpm add web-push",
+        "web-push not found in the current project. Run from the project root, after : pnpm add \"web-push@^3.6.7\"",
     }),
   );
   process.exit(1);

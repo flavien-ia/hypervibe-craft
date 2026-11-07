@@ -25,7 +25,13 @@ Detect whether push is already in place: the `hypervibe:push` marker at the top 
 test -f "<WEB_DIR>/src/server/push.ts" && grep -q "hypervibe:push" "<WEB_DIR>/src/server/push.ts" && echo present || echo absent
 ```
 
-- **present** → menu: (1) reinstall the enable button, (2) regenerate the VAPID keys (warning: invalidates existing subscriptions), (3) resend a test notification. Handle it, then skip to the summary.
+- **present** → first, the version of `web-push` the project carries. A project set up while this skill installed it unpinned may have web-push 4, which `src/server/push.ts` cannot load (no default export): sending fails at run time.
+
+  ```bash
+  node -e "const v=require('<WEB_DIR>/node_modules/web-push/package.json').version;console.log(v.split('.')[0]==='3'?'ok':'v'+v)" 2>/dev/null || echo missing
+  ```
+
+  Anything but `ok`: run `cd <WEB_DIR> && pnpm add "web-push@^3.6.7" && pnpm add -D "@types/web-push@^3.6.4"` and tell the user in one sentence that the push library goes back to version 3, the one the app's code is written for. Then the menu: (1) reinstall the enable button, (2) regenerate the VAPID keys (warning: invalidates existing subscriptions), (3) resend a test notification. Handle it, then skip to the summary.
 - **absent** → Step 1.
 
 ---
@@ -63,8 +69,11 @@ Templates/scripts path: `${CLAUDE_SKILL_DIR}/../../templates/push/` and `${CLAUD
 ## Step 2: Install web-push
 
 ```bash
-pnpm add web-push
-pnpm add -D @types/web-push
+# Major 3 pinned: web-push 4 is ESM with no default export, and templates/push/server-push.ts
+# imports it by default (`import webpush`). `import * as webpush` is not the way out yet: it fails at
+# run time on 3.x (CommonJS). Move to 4 when server-push.ts and @types/web-push (3.6.x today) both follow it.
+pnpm add "web-push@^3.6.7"
+pnpm add -D "@types/web-push@^3.6.4"
 ```
 
 ---
