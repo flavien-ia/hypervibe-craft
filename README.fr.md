@@ -4,7 +4,7 @@
 
 Un plugin Claude Code qui crée des projets web complets (stack T3) avec des addons modulaires. Conçu pour les non-techs qui veulent créer et déployer des apps web en décrivant ce qu'ils veulent en français.
 
-Le plugin est né de [Hypervibe](https://hypervibe.fr), la formation au vibe coding avec Claude Code.
+Découvrez tout l’univers Hypervibe sur [hypervibe.fr](https://hypervibe.fr).
 
 > 📘 **Première fois ? Suivez le [guide d'installation pas à pas](https://hypervibe.fr/plugin/installation).** Il couvre les prérequis, les comptes à créer et votre premier projet, de bout en bout.
 
