@@ -452,6 +452,9 @@ async function doCollectEnv() {
   try {
     // First, in every window: what it is, and that nothing here can go wrong.
     console.log(t("reassure"));
+    // A window that waits for a key is open while the person is on the provider's page: the moment
+    // they get stuck. Not for signing in or unlocking, which ask for the vault's own password.
+    if (cmd === "add" || cmd === "collect-env") console.log(t("stuckOnPage"));
     // collect-env writes to the project, not to the vault - so it must NOT
     // require bw to be installed. Handle it before the bw self-heal.
     if (cmd === "collect-env") {

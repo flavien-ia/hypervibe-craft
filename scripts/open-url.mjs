@@ -6,7 +6,7 @@
 //
 // Behavior:
 //   - macOS  : `open <url>`
-//   - Windows: `cmd /c start "" <url>`
+//   - Windows: `rundll32 url.dll,FileProtocolHandler <url>` (never through cmd: see below)
 //   - Linux  : `xdg-open <url>` (fallback `sensible-browser`, then `gio open`)
 //
 // Exit codes:
@@ -29,9 +29,13 @@ if (p === "darwin") {
   cmd = "open";
   args = [url];
 } else if (p === "win32") {
-  // cmd /c start "" <url> - the empty title is intentional so `start` doesn't parse the URL as a title
-  cmd = "cmd";
-  args = ["/c", "start", "", url];
+  // Never `cmd /c start`: cmd reads the address as a command line and cuts it at its first "&",
+  // so a page that carries several parameters (Cloudflare's pre-filled token page, 3.4.29) would
+  // arrive in the browser without most of them. Seen on 11/11/2026: the browser
+  // received the address up to its first "&" through cmd, and whole through url.dll, which hands
+  // it to the default browser with no command line in between (and no %VARIABLE% expansion).
+  cmd = "rundll32.exe";
+  args = ["url.dll,FileProtocolHandler", url];
 } else {
   // Linux / *BSD / others
   cmd = "xdg-open";

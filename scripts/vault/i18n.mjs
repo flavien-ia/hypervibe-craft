@@ -23,6 +23,9 @@ const STRINGS = {
     // Said first, in every window: a black window that asks for passwords is what frightens
     // people who have never seen one (a tester of 08/10/2026, during the preparation).
     reassure: "This window is expected: it is here, and only here, that you type your passwords and keys.\nClaude sees nothing of what you type, and nothing here can break: a typo is undone by starting again. When it is done, simply go back to Claude.\n",
+    // Said when the window waits for a key: the person is on the provider's page at that very
+    // moment, which is where people get stuck (pre-training sessions, November 2026).
+    stuckOnPage: "Stuck on the page where you get this key, or it does not look like what Claude described? Take a screenshot and paste it in Claude: it will guide you. This window waits for you.\n",
     pressEnter: "\nPress Enter to close...",
     installing: "Vault tool not found, running automatic installation...\n",
     bwMissing: "The vault tool was not found and automatic installation failed. Check your connection, or install it manually: https://bitwarden.com/help/cli/",
@@ -89,6 +92,9 @@ const STRINGS = {
   },
 
   fr: {
+    // Words that need no accent: the window's terminal does not show them on Windows, and a word
+    // with its accent dropped reads wrong (Flavien, 11/11/2026).
+    stuckOnPage: "La page du service ne ressemble pas aux instructions de Claude, ou tu ne trouves pas quoi faire ? Fais une capture de la page (un screenshot) et colle-la dans Claude : il te guide. Laisse ce cadre ouvert pendant ce temps.\n",
     reassure: "Cette fenetre est normale : c'est ici, et seulement ici, que tu tapes tes mots de passe et tes cles.\nClaude ne voit rien de ce que tu y tapes, et tu ne peux rien casser : une faute de frappe se rattrape en recommencant. Quand c'est fini, reviens simplement dans Claude.\n",
     pressEnter: "\nAppuie sur Entree pour fermer...",
     installing: "Outil de coffre introuvable, installation automatique en cours...\n",

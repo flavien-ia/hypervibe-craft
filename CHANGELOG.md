@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.4.29 (11 novembre 2026)
+
+### Corrections
+- **La clé Cloudflare se crée en deux clics** : `/start` faisait ajouter treize permissions une par une, et c'est là que les participants bloquaient. Il ouvre désormais la page de Cloudflare avec tout déjà coché : on vérifie, on clique sur « Continue to summary » puis sur « Create Token ». La liste reste écrite en secours, au cas où la page ne se remplirait pas. Sous Windows, la page s'ouvre par un autre chemin, qui transmet son adresse en entier : l'ancien la coupait au premier « & ».
+- **Une capture d'écran au moment où l'on bloque** : chaque fois qu'une page est ouverte pour aller chercher une clé, et dans la fenêtre où on la colle, la même invitation revient : si la page ne ressemble pas à ce qui est décrit, une capture d'écran collée dans Claude suffit pour être guidé. Cela vaut pour toutes les clés (Cloudflare, Neon, Resend, Brevo, OVH...).
+
 ## v3.4.28 (7 novembre 2026)
 
 ### Corrections

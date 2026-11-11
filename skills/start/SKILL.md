@@ -283,34 +283,45 @@ Present a clear report:
 
 ⚠️ The Cloudflare token must be configured **before** running the CLIs script, because `wrangler` detects the env var at install/usage time. If the token is missing or invalid, ask first:
 
-> For Cloudflare, I need an **API token** (a single one, used for DNS, Workers, R2, and Email Routing). Here is how to generate it for me in 2 minutes:
+The token is made on a page that Cloudflare fills in from its address, every permission already ticked: the person checks and clicks, instead of adding thirteen lines one by one (that list is where people got stuck, pre-training sessions of November 2026). The page and its fallback list come from one place, `scripts/cloudflare-token-page.mjs`, whose keys were read at the source:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/cloudflare-token-page.mjs" account
+```
+
+It prints `url` (the pre-filled page) and `lines` (the same permissions, in the dashboard's words, for the fallback below). Cloudflare drops the pre-filled part when it has to ask for a sign-in first: so the person signs in BEFORE the page is opened. Say, in the person's language:
+
+> For Cloudflare, I need an **API token** (a single one, used for DNS, Workers, R2 and Email Routing). It takes a minute: I open the page with everything already filled in, you check and click.
 >
-> **0. First, log in to Cloudflare**
-> Go to **https://dash.cloudflare.com** - if you do not have an account, create one (free, ~1 min). Otherwise, log in.
+> **1.** Log in to **https://dash.cloudflare.com** (no account yet? create one, it is free and takes a minute). Tell me when you are logged in.
+
+Once they say so, open the page (`url`, as the script printed it):
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/open-url.mjs" "<url>"
+```
+
+> **2.** On the page that just opened, the token is already named `Claude Code`, with its permissions in three groups (Zone, Account, User). Click **Continue to summary**, check the list, then click **Create Token**.
+> **3.** Copy the token shown: **a window opens for you to paste it** (I never see it).
 >
-> **1. Generate the token**
-> Once logged in, go to **https://dash.cloudflare.com/profile/api-tokens**
->
-> 2. Click **"Create Token"** → **"Create Custom token"** → **"Get started"**
-> 3. **Token name**: `Claude Code`
-> 4. **Permissions** (click "+ Add more" for each additional line):
->    - Account · Workers Scripts · Edit
->    - Account · Workers R2 Storage · Edit
->    - Account · Workers AI · Read
->    - Account · Email Routing Addresses · Edit
->    - Account · Account Settings · Read
->    - Account · Account Analytics · Read
->    - User · User Details · Read
->    - User · Memberships · Read
->    - Zone · Zone · Edit
->    - Zone · DNS · Edit
->    - Zone · Email Routing Rules · Edit
->    - Zone · Bot Management · Read
->    - Zone · Cache Purge · Purge
-> 5. **Account Resources**: Include All accounts
-> 6. **Zone Resources**: Include All zones
-> 7. Click **"Continue to summary"** → **"Create Token"**
-> 8. Copy the displayed token - **a window will open for you to paste it** (I never see it)
+> If the page does not look like this, take a screenshot and paste it here: I'll guide you.
+
+Always show the `url` in plain text as well: some setups do not open it. **The page shows the list of tokens instead of a form** (the person was not logged in yet, or logged in on the way): open it again, once. **The form is there but some lines are missing, or the page no longer fills itself in** (Cloudflare changed it): fall back to the manual recipe, with the screenshot if the person sent one: **Create Token** → **Create Custom token** → **Get started**, name `Claude Code`, then one line per permission below (`lines`, the same list; **+ Add more** for each additional line), **Account Resources**: Include All accounts, **Zone Resources**: Include All zones, then **Continue to summary** → **Create Token**.
+
+Fallback list (the same as `lines`: a recette holds the two together):
+- Account · Workers Scripts · Edit
+- Account · Workers R2 Storage · Edit
+- Account · Workers AI · Read
+- Account · Email Routing Addresses · Edit
+- Account · Account Settings · Read
+- Account · Account Analytics · Read
+- User · User Details · Read
+- User · Memberships · Read
+- Zone · Zone · Edit
+- Zone · DNS · Edit
+- Zone · Email Routing Rules · Edit
+- Zone · Bot Management · Read
+- Zone · Cache Purge · Purge
 
 Store it in the vault (masked input in a window, outside Claude's context):
 ```bash

@@ -96,7 +96,11 @@ Always prefix with 🌐 so the user sees at a glance that something is expected 
 >
 > **For a secret, add:** A small window will then open on your machine. Paste the value in there, not in our conversation, so it never gets written into this chat.
 >
+> If this page does not look like what I describe, take a screenshot and paste it here: I'll guide you.
+>
 > <⚠️ warning if the value is one-shot - see below>
+
+Say the screenshot sentence every time a page is opened for a key, in the person's language, even if it was said earlier in the session: people get stuck on the provider's page, and by then the advice given at the start is forgotten (pre-training sessions, November 2026). The masked window repeats it while it waits.
 
 ### Step 2 - Open the browser
 

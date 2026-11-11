@@ -109,6 +109,8 @@ const SUITES = [
   ["/delete-project reads every page of the Cloudflare zones, records and routing rules it looks through (3.4.12)", join(ROOT, "scripts", "tests", "test-delete-cloudflare-pages.mjs")],
   ["/geo: the dated list of AI robots, the robots.txt rules built from it, a page as AI robots receive it, a skill that names no robot (3.4.12)", join(ROOT, "scripts", "tests", "test-geo.mjs")],
   ["/geo reads whether Cloudflare turns AI robots away, read only (3.4.12)", join(ROOT, "scripts", "tests", "test-geo-cloudflare.mjs")],
+  ["the page of a key: its whole address reaches the browser (never cut by cmd), and the screenshot to send when it looks different (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-key-pages.mjs")],
+  ["Cloudflare's token page with its permissions already ticked, its keys read at the source, and the same list as the skills' fallback (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-cloudflare-token-page.mjs")],
 ];
 
 // The vault's tool never runs during a recette (_no-real-vault.mjs): every Node process of a suite

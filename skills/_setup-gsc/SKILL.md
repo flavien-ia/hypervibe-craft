@@ -72,6 +72,8 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/open-url.mjs" "https://console.cloud.goo
 > 4. **Service account name**: `claude-code-gsc` → **CREATE AND CONTINUE** → roles empty (skip) → **DONE**
 > 5. Click the created service account → **KEYS** tab → **ADD KEY** → **Create new key** → **JSON** → **CREATE**
 > 6. A `.json` file downloads (often into `~/Downloads/`)
+>
+> If a page does not look like what I describe, take a screenshot and paste it here: I'll guide you.
 
 Ask for the path:
 
