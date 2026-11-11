@@ -4,6 +4,8 @@
 
 A Claude Code plugin that bootstraps full-stack T3 projects with modular addons. Built for non-technical users who want to create and deploy web apps by describing what they want in plain language.
 
+The plugin was born from [Hypervibe](https://hypervibe.fr/en), the vibe coding course with Claude Code.
+
 > 📘 **First time? Follow the [step-by-step installation guide](https://hypervibe.fr/plugin/installation).** It walks you through the prerequisites, the accounts to create, and your first project, end to end.
 
 ## Installation
