@@ -43,6 +43,29 @@ function check(name, ok, detail = "") {
 const lf = (t) => String(t).replace(/\r\n/g, "\n");
 const tpl = (rel) => lf(readFileSync(join(ROOT, "templates", rel), "utf8"));
 const fix = (name) => readFileSync(join(FIX, name), "utf8");
+// 3.4.30 (retours de Manuel Ferreira, 12/11/2026) changed two templates OUTSIDE what this repair
+// rewrites: the account check of the jwt callback (auth/users/auth.ts) and the type assertion of the
+// sign-up's error (auth-signup). A 3.4.22 project repaired here gets this version's authorize() and
+// forms, not those (/security, 1b, and the project's lint catch them). What the repair must give is
+// this version's template with those pieces as 3.4.22 wrote them: each one is found, or this fails.
+const HORS_REPARATION = {
+  "auth/users/auth.ts": [
+    [/^import \{ cache \} from "react";\n/m, ""],
+    [/\n\/\*\*\n \* Is the session still worth something\?[\s\S]*?\n\);\n/, ""],
+    [
+      / {4}\/\/ At sign-in, persist the user id[\s\S]*?\n {6}return token;\n {4}\},\n/,
+      "    // Persist the user id in the JWT - needed because we use jwt strategy without\n    // the sessions table; the default callback drops `id` otherwise.\n    jwt({ token, user }) {\n      if (user) token.id = user.id;\n      return token;\n    },\n",
+    ],
+  ],
+  "auth-signup/plain.tsx": [[/String\(err\.message\)/, "String((err as { message: unknown }).message)"]],
+  "auth-signup/i18n.tsx": [[/String\(err\.message\)/, "String((err as { message: unknown }).message)"]],
+};
+/** This version's template as the repair of a 3.4.22 file gives it (HORS_REPARATION put back). */
+const tplRepare = (rel) =>
+  (HORS_REPARATION[rel] ?? []).reduce((t, [re, back]) => {
+    if (!re.test(t)) throw new Error(`HORS_REPARATION: ${re} introuvable dans ${rel}`);
+    return t.replace(re, back);
+  }, tpl(rel));
 const FROZEN = /await\s+signIn\(\s*["']credentials["'][\s\S]{0,600}?\}\s*\)\s*;\s*\r?\n\s*setPending\(\s*false\s*\)/;
 
 check("scripts/login-limit.mjs existe", existsSync(LL));
@@ -153,10 +176,10 @@ console.log("\n── Les gabarits de la 3.4.22, réparés ──");
   check("... et la nouvelle route est le gabarit de cette version", L.newRoute() === tpl("auth/users/route.ts") && L.newRoute("a\r\nb").includes("\r\n"));
   for (const [name, rel] of [["auth-users.ts.txt", "auth/users/auth.ts"], ["auth-admin.ts.txt", "auth/admin/auth.ts"], ["auth-2fa.ts.txt", "2fa/auth.ts"]]) {
     const r = L.repairAuthorize(fix(name));
-    check(`${name} réparé : le gabarit de cette version, à l'octet`, r.text === tpl(rel), r.reason ?? "différent");
+    check(`${name} réparé : le gabarit de cette version, à l'octet`, r.text === tplRepare(rel), r.reason ?? "différent");
     check("... relancé : rien ne change", r.text !== null && L.repairAuthorize(r.text).text === null);
     const c = L.repairAuthorize(lf(fix(name)).replace(/\n/g, "\r\n"));
-    check("... en CRLF : le même, en CRLF", c.text === tpl(rel).replace(/\n/g, "\r\n"));
+    check("... en CRLF : le même, en CRLF", c.text === tplRepare(rel).replace(/\n/g, "\r\n"));
   }
   const google = fix("auth-users.ts.txt").replace('import Credentials from "next-auth/providers/credentials";', 'import Credentials from "next-auth/providers/credentials";\nimport Google from "next-auth/providers/google";').replace("  providers: [\n", "  providers: [\n    Google,\n");
   const rg = L.repairAuthorize(google);
@@ -167,10 +190,10 @@ console.log("\n── Les gabarits de la 3.4.22, réparés ──");
   check("deux marqueurs de mode : jamais réécrit", L.repairAuthorize(hybride).text === null);
   for (const [name, rel] of [["admin-signin.tsx.txt", "auth/admin/pages/signin.tsx"], ["auth-signin-plain.tsx.txt", "auth-signin/plain.tsx"], ["auth-signin-i18n.tsx.txt", "auth-signin/i18n.tsx"], ["auth-signup-plain.tsx.txt", "auth-signup/plain.tsx"], ["auth-signup-i18n.tsx.txt", "auth-signup/i18n.tsx"]]) {
     const r = L.repairForm(fix(name));
-    check(`${name} réparé : le gabarit de cette version, à l'octet`, r.text === tpl(rel), r.reason ?? "différent");
+    check(`${name} réparé : le gabarit de cette version, à l'octet`, r.text === tplRepare(rel), r.reason ?? "différent");
     check("... relancé : rien ne change", r.text !== null && L.repairForm(r.text).text === null);
     const c = L.repairForm(lf(fix(name)).replace(/\n/g, "\r\n"));
-    check("... en CRLF : le même, en CRLF, sans une fin de ligne LF", c.text === tpl(rel).replace(/\n/g, "\r\n") && !/[^\r]\n/.test(c.text));
+    check("... en CRLF : le même, en CRLF, sans une fin de ligne LF", c.text === tplRepare(rel).replace(/\n/g, "\r\n") && !/[^\r]\n/.test(c.text));
   }
   const avant3311 = join(ROOT, "scripts", "tests", "fixtures", "redirect-3418");
   for (const name of ["admin-signin.tsx.txt", "auth-signin-plain.tsx.txt", "auth-signin-i18n.tsx.txt"]) {
@@ -339,7 +362,7 @@ try {
     check("avec --login-limit : compté dans needed (counts.login)", avec.needed === true && avec.counts.login === 4);
     check("... hors d'un dépôt : uncommitted null (inconnu), jamais [] (propre)", avec.uncommitted === null, JSON.stringify(avec.uncommitted));
     const r = R.repair(p, { withLoginLimit: true });
-    check("la réparation : authorize(), la route, la connexion et l'inscription deviennent les gabarits de cette version, à l'octet", r.ok === true && lire(p, "src/server/auth.ts") === tpl("auth/users/auth.ts") && lire(p, "src/app/api/auth/[...nextauth]/route.ts") === tpl("auth/users/route.ts") && lire(p, "src/app/signin/page.tsx") === tpl("auth-signin/plain.tsx").replace("{{FORGOT_PASSWORD_LINK}}", "<span></span>") && lire(p, "src/app/signup/page.tsx") === tpl("auth-signup/plain.tsx"), JSON.stringify(r).slice(0, 400));
+    check("la réparation : authorize(), la route, la connexion et l'inscription deviennent les gabarits de cette version, à l'octet", r.ok === true && lire(p, "src/server/auth.ts") === tplRepare("auth/users/auth.ts") && lire(p, "src/app/api/auth/[...nextauth]/route.ts") === tpl("auth/users/route.ts") && lire(p, "src/app/signin/page.tsx") === tpl("auth-signin/plain.tsx").replace("{{FORGOT_PASSWORD_LINK}}", "<span></span>") && lire(p, "src/app/signup/page.tsx") === tplRepare("auth-signup/plain.tsx"), JSON.stringify(r).slice(0, 400));
     check("... authorize() écrit avant la route (commit, loginLimit)", r.commit.indexOf("src/server/auth.ts") >= 0 && r.commit.indexOf("src/server/auth.ts") < r.commit.indexOf("src/app/api/auth/[...nextauth]/route.ts") && r.loginLimit.length === 4, JSON.stringify(r.commit));
     const encore = R.repair(p, { withLoginLimit: true });
     check("... relancée : plus rien à réparer, rien d'écrit", encore.written === false && R.diagnose(p, { withLoginLimit: true }).counts.login === 0, JSON.stringify(encore));
@@ -354,7 +377,7 @@ try {
     const rt = R.repair(t, { withLoginLimit: true });
     const fr = JSON.parse(lire(t, "messages/fr.json"));
     const en = JSON.parse(lire(t, "messages/en.json"));
-    check("un projet traduit : les formulaires deviennent les gabarits traduits, à l'octet", rt.ok === true && lire(t, "src/app/[locale]/signin/page.tsx") === tpl("auth-signin/i18n.tsx").replace("{{FORGOT_PASSWORD_LINK}}", "<span></span>") && lire(t, "src/app/[locale]/signup/page.tsx") === tpl("auth-signup/i18n.tsx"), JSON.stringify(rt).slice(0, 300));
+    check("un projet traduit : les formulaires deviennent les gabarits traduits, à l'octet", rt.ok === true && lire(t, "src/app/[locale]/signin/page.tsx") === tpl("auth-signin/i18n.tsx").replace("{{FORGOT_PASSWORD_LINK}}", "<span></span>") && lire(t, "src/app/[locale]/signup/page.tsx") === tplRepare("auth-signup/i18n.tsx"), JSON.stringify(rt).slice(0, 300));
     check("... les messages fr et en reçoivent la phrase des gabarits, le reste intact", fr.signin.errorTooManyAttempts === JSON.parse(tpl("auth-signin/messages-fr.json")).signin.errorTooManyAttempts && en.signup.errorTooManyAttempts === JSON.parse(tpl("auth-signup/messages-en.json")).signup.errorTooManyAttempts && fr.common.hello === "Bonjour" && rt.commit.includes("messages/fr.json"), JSON.stringify(rt.commit));
 
     // The page of 3.4.18 with both flags: the return address AND the sign-in, the template of today.
@@ -382,7 +405,7 @@ try {
     const rd = R.repair(d, { withLoginLimit: true });
     const signin = readFileSync(join(d, "src/app/signin/page.tsx"), "utf8");
     check("... la réparation le redit (uncommittedBefore), garde le CRLF et le travail en cours", JSON.stringify(rd.uncommittedBefore) === JSON.stringify(["src/app/signin/page.tsx"]) && signin === `${tpl("auth-signin/plain.tsx").replace("{{FORGOT_PASSWORD_LINK}}", "<span></span>").replace(/\n/g, "\r\n")}// en cours\r\n`, JSON.stringify(rd.uncommittedBefore));
-    check("... et authorize() reste en CRLF", readFileSync(join(d, "src/server/auth.ts"), "utf8") === tpl("auth/users/auth.ts").replace(/\n/g, "\r\n"));
+    check("... et authorize() reste en CRLF", readFileSync(join(d, "src/server/auth.ts"), "utf8") === tplRepare("auth/users/auth.ts").replace(/\n/g, "\r\n"));
 
     // Something changed between the diagnosis and the repair: the route never goes alone.
     const course = projet("r-course");

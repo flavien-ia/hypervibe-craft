@@ -1,3 +1,4 @@
+import { cache } from "react";
 import NextAuth, { CredentialsSignin, type DefaultSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
@@ -29,6 +30,21 @@ class TooManyAttempts extends CredentialsSignin {
   code = "too_many_attempts";
 }
 
+/**
+ * Is the session still worth something? The session is a signed cookie valid 30 days: its
+ * signature alone says nothing of an account deleted since (by the person on another device, or
+ * by the site's administrator), nor of a password changed since (a reset ends the sessions opened
+ * before it). Read once per request (React's cache), by primary key, two columns: the jwt callback
+ * below calls it every time the session is read, so every `await auth()` and every
+ * protectedProcedure checks it, never the signature alone (report of 12/11/2026).
+ */
+const accountOf = cache(async (id: string) =>
+  db.query.users.findFirst({
+    columns: { id: true, passwordChangedAt: true },
+    where: eq(users.id, id),
+  }),
+);
+
 // hypervibe:auth-modes users
 //
 // Drizzle adapter is wired even though session strategy is "jwt" (NextAuth doesn't
@@ -57,8 +73,12 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
 
-        const user = await db.query.users.findFirst({ where: eq(users.email, email) });
-        if (!user || !user.passwordHash) return null;
+        // Only the columns this check uses (the project's rule on database reads).
+        const user = await db.query.users.findFirst({
+          columns: { id: true, email: true, name: true, image: true, passwordHash: true },
+          where: eq(users.email, email),
+        });
+        if (!user?.passwordHash) return null;
 
         const ok = await verifyPassword(password, user.passwordHash);
         if (!ok) return null;
@@ -73,10 +93,22 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
     }),
   ],
   callbacks: {
-    // Persist the user id in the JWT - needed because we use jwt strategy without
-    // the sessions table; the default callback drops `id` otherwise.
-    jwt({ token, user }) {
-      if (user) token.id = user.id;
+    // At sign-in, persist the user id in the JWT - needed because we use jwt strategy without
+    // the sessions table; the default callback drops `id` otherwise - and when the session opened.
+    // Then, on every later read of the session, check that the account still exists and that the
+    // session was opened after its last password change: otherwise `null` ends it (Auth.js deletes
+    // the cookie, and auth() answers no session).
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = user.id;
+        token.signedInAt = Date.now();
+        return token;
+      }
+      if (typeof token.id !== "string") return null;
+      const account = await accountOf(token.id);
+      if (!account) return null;
+      const signedInAt = typeof token.signedInAt === "number" ? token.signedInAt : 0;
+      if (account.passwordChangedAt && signedInAt < account.passwordChangedAt.getTime()) return null;
       return token;
     },
     session({ session, token }) {

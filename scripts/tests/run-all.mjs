@@ -85,6 +85,7 @@ const SUITES = [
   ["/delete-project on a folder without cloud infrastructure: where its code stands in git, and whether deleting it would lose it (3.4.16)", join(ROOT, "scripts", "tests", "test-delete-local-git.mjs")],
   ["what the templates let through of an address that came from elsewhere", join(ROOT, "scripts", "tests", "test-template-guards.mjs")],
   ["an address from outside still read by a pattern on its raw text, or followed as it came, found in a project for /security (3.4.19)", join(ROOT, "scripts", "tests", "test-redirect-filter.mjs")],
+  ["the sign-in a project receives: lint-clean, its reads column-limited, a session that ends with its account, a deletion that asks for the password, the admin sign-out, the 2FA that never rewrites a combined sign-in (Manuel's report, 3.4.30)", join(ROOT, "scripts", "tests", "test-auth-templates.mjs")],
   ["the admin space's gate: requireAdmin() on the first line of every page, the middleware under the name each Next.js reads and never over an existing one, the rule said to Claude (3.4.17)", join(ROOT, "scripts", "tests", "test-admin-gate.mjs")],
   ["the admin space's gate on a real Next.js 15 and 16: without a session, no page leaves with a redirect (3.4.17; skipped without HV_RECETTE_NEXT=1, played before every release)", join(ROOT, "scripts", "tests", "test-admin-gate-next.mjs")],
   ["the admin space of a project built before 3.4.17, closed on a yes: each page diagnosed, requireAdmin() first and nothing else, never over a middleware, the old rule of the CLAUDE.md replaced in its place, the projects of the machine found without walking the disk (3.4.18)", join(ROOT, "scripts", "tests", "test-repair-admin-gate.mjs")],
@@ -111,6 +112,7 @@ const SUITES = [
   ["/geo reads whether Cloudflare turns AI robots away, read only (3.4.12)", join(ROOT, "scripts", "tests", "test-geo-cloudflare.mjs")],
   ["the page of a key: its whole address reaches the browser (never cut by cmd), and the screenshot to send when it looks different (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-key-pages.mjs")],
   ["Cloudflare's token page with its permissions already ticked, its keys read at the source, and the same list as the skills' fallback (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-cloudflare-token-page.mjs")],
+  ["every script of the plugin imports only files the plugin ships (3.4.30 / 2.5.9)", join(ROOT, "scripts", "tests", "test-local-imports.mjs")],
 ];
 
 // The vault's tool never runs during a recette (_no-real-vault.mjs): every Node process of a suite

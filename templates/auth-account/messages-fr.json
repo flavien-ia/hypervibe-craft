@@ -14,6 +14,7 @@
     "deleteButton": "Supprimer mon compte",
     "deleteDialogTitle": "Supprimer ton compte ?",
     "deleteDialogDescription": "Cette action est irréversible. Toutes tes données seront effacées.",
+    "deletePasswordLabel": "Ton mot de passe actuel",
     "cancel": "Annuler",
     "confirmDelete": "Confirmer la suppression",
     "deletePending": "Suppression…",

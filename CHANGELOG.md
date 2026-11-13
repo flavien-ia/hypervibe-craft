@@ -1,5 +1,15 @@
 # Changelog
 
+## v3.4.30 (13 novembre 2026)
+
+### Corrections
+- **La mise en ligne ne s'arrête plus sur les pages de connexion** : les pages d'inscription et de réinitialisation du mot de passe, et la connexion des comptes, étaient refusées par la vérification du code que lance chaque mise en ligne. Elles la passent désormais.
+- **La connexion lit moins en base** : chaque lecture d'un compte ne demande plus que ce dont elle a besoin.
+- **Le bouton « Se déconnecter » de l'espace admin ferme vraiment la session** : on revenait connecté après avoir cliqué. La déconnexion passe maintenant par le navigateur, et la page de connexion s'affiche ensuite.
+- **Un compte supprimé perd son accès tout de suite** : il gardait l'espace connecté jusqu'à 30 jours. Un mot de passe réinitialisé ferme aussi les sessions ouvertes avant. Sur un site déjà construit, l'audit de sécurité le repère et propose le correctif.
+- **Supprimer son compte demande le mot de passe actuel**, vérifié par le serveur : une session restée ouverte ne suffit plus à effacer un compte.
+- **La double authentification ne peut plus effacer la connexion des utilisateurs** : sur un site qui a à la fois un administrateur et des comptes, l'ajout demande à qui la donner, l'administrateur en premier, et refuse de réécrire une connexion qui n'est pas celle de l'administrateur seul.
+
 ## v3.4.29 (11 novembre 2026)
 
 ### Corrections

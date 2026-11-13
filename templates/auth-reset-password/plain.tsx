@@ -26,7 +26,7 @@ function ResetPasswordForm() {
     } catch (err) {
       const message =
         err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
+          ? String(err.message)
           : "Lien invalide ou expiré.";
       toast.error(message);
     }

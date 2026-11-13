@@ -56,7 +56,7 @@ console.log("── Les gabarits ──");
   const lignes = premieresLignes(page);
   check("la page admin appelle requireAdmin() en PREMIÈRE ligne, avant toute lecture", lignes[0] === "await requireAdmin();" && /import \{ requireAdmin \} from "~\/server\/require-admin";/.test(page), lignes.slice(0, 2).join(" | "));
   const actions = [...page.matchAll(/"use server";\n\s*([^\n]*)/g)].map((m) => m[1].trim());
-  check("chaque action \"use server\" de la page commence par son propre contrôle", actions.length > 0 && actions.every((a) => a === "if (!(await isAdmin())) return;"), JSON.stringify(actions));
+  check("chaque action \"use server\" de la page commence par son propre contrôle (la déconnexion n'en est plus une : un bouton client, 12/11/2026)", actions.every((a) => a === "if (!(await isAdmin())) return;"), JSON.stringify(actions));
 
   const layout = lire("templates/auth/admin/pages/protected-layout.tsx");
   check("le layout garde son contrôle, en plus", premieresLignes(layout)[0] === "await requireAdmin();", premieresLignes(layout)[0]);

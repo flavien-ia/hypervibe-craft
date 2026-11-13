@@ -313,6 +313,8 @@ async function writeAdminPages() {
     ["src/app/admin/signin/page.tsx", "auth/admin/pages/signin.tsx"],
     ["src/app/admin/(protected)/layout.tsx", "auth/admin/pages/protected-layout.tsx"],
     ["src/app/admin/(protected)/page.tsx", "auth/admin/pages/protected-page.tsx"],
+    // A client signOut(): the server action it replaces left the session open (12/11/2026).
+    ["src/app/admin/(protected)/sign-out-button.tsx", "auth/admin/pages/sign-out-button.tsx"],
   ];
 
   for (const [relDest, tplPath] of targets) {

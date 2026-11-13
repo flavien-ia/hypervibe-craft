@@ -132,7 +132,7 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/users/{auth.ts, p
 Steps (all driven by Claude):
 
 1. `_check-deps db` (DB required) ; `_check-deps email` (optional for reset).
-2. **Build the hybrid `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `DrizzleAdapter`, schema tables, `eq`, `db`. Module augmentation `Session.user.id`. `authorize(credentials, request)`: the limit on sign-in attempts FIRST, before both paths (the `TooManyAttempts` class and its two lines, as both templates write them: never in the API route, whose 429 freezes the sign-in form), then the admin path (check `email === ADMIN_USERNAME`, `getAdminPasswordHash`), users path as FALLBACK (`db.query.users.findFirst` → `verifyPassword`). Keep `isAdmin()`. Add jwt/session callbacks.
+2. **Build the hybrid `auth.ts`**: marker → `// hypervibe:auth-modes admin, users`. Import `DrizzleAdapter`, schema tables, `eq`, `db`. Module augmentation `Session.user.id`. `authorize(credentials, request)`: the limit on sign-in attempts FIRST, before both paths (the `TooManyAttempts` class and its two lines, as both templates write them: never in the API route, whose 429 freezes the sign-in form), then the admin path (check `email === ADMIN_USERNAME`, `getAdminPasswordHash`), users path as FALLBACK (`db.query.users.findFirst` → `verifyPassword`). Keep `isAdmin()`. Add jwt/session callbacks: the users template's ones, with its account check (the session ends when the account is gone or its password changed after sign-in), the admin let through before that read (`if (token.id === "admin") return token;`: the admin has no row in the database, and the check would end its session at once).
 3. **Extend `password.ts`**: add `hashPassword()` (from the users template). Keep `getAdminPasswordHash` + `verifyPassword`.
 4. **Patch schema.ts** - like `setup-auth-users.mjs` does in the `patchSchema` step: add the missing imports (`text, integer, primaryKey, index, timestamp` pg-core, `sql` drizzle-orm, `AdapterAccount` type next-auth/adapters), append the 4 NextAuth tables (+ `password_reset_tokens` if email_ok).
 5. **`pnpm db:push`**, after `node "${CLAUDE_SKILL_DIR}/../../scripts/neon/schema-drift.mjs"` from `<WEB_DIR>` (read-only): `--force` only on exit `0`; on exit `3` stop and show the user what the push would delete.
@@ -161,7 +161,7 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, p
      return null;
    }
    ```
-   Add `export async function isAdmin() { return (await auth())?.user?.id === "admin"; }`.
+   Add `export async function isAdmin() { return (await auth())?.user?.id === "admin"; }`. In the `jwt` callback, let the admin through before the account check of the users template (`if (token.id === "admin") return token;` right after the sign-in branch): the admin has no row in the database, and the check would end its session at once.
 4b. **The admin gate**: `node "${CLAUDE_SKILL_DIR}/../../scripts/admin-gate.mjs" --web-dir <WEB_DIR>`. It writes `src/server/require-admin.ts`, the check every admin page calls on its first line, and the middleware in front of `/admin` (`src/middleware.ts`, or `src/proxy.ts` from Next.js 16), never over a middleware the project already has: with `"status":"existing"` in its last line, merge by hand when that is safe or tell the person, as `_setup-auth-admin` says. Every admin page created later starts with `await requireAdmin()`: a check in a layout alone lets the page's content leave with its redirect.
 5. **Update CLAUDE.md** - add the admin section (the conventions of `_setup-auth-admin` Step 2, its "Admin structure" line included) in addition to the users sections.
 6. **`pnpm tsc --noEmit`** - check.
@@ -169,7 +169,8 @@ Reference templates: `${CLAUDE_SKILL_DIR}/../../templates/auth/admin/{auth.ts, p
 
 ### Case C - Enable password reset on an existing `users` (email already OK)
 
-1. **Append `password_reset_tokens`** to schema.ts from `${CLAUDE_SKILL_DIR}/../../templates/auth/users/schema-additions-reset-tokens.ts`.
+1. **The `passwordChangedAt` column**: if the `users` table of schema.ts has none (a project made before this version), add it from `${CLAUDE_SKILL_DIR}/../../templates/auth/users/schema-additions.ts` (the reset router writes it, and the build fails without it), and the account check of the `jwt` callback from `${CLAUDE_SKILL_DIR}/../../templates/auth/users/auth.ts` if `src/server/auth.ts` lacks it.
+1b. **Append `password_reset_tokens`** to schema.ts from `${CLAUDE_SKILL_DIR}/../../templates/auth/users/schema-additions-reset-tokens.ts`.
 2. **`pnpm db:push`**.
 3. **Replace `src/server/api/routers/auth.ts`** with the `auth-router-with-reset-{resend,brevo}.ts` template (depending on the detected provider).
 4. **Create `/forgot-password/page.tsx` and `/reset-password/page.tsx`** from the templates.

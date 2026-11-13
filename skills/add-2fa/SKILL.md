@@ -45,8 +45,17 @@ Read the marker:
   Depending on the answer:
   - **admin** or **users** → read and execute `add-auth` (telling it the chosen mode). Once it's done, **re-read the marker** (`grep` above), recompute `MODE`, and continue to Step 2.
   - **no** → stop cleanly ("OK, come back whenever: `/add-2fa` once the auth is in place").
-- **Marker = `admin`** → `MODE = admin`.
-- **Marker contains `users`** (`users` or `admin, users`) → `MODE = users`. (For `admin, users`, we handle the **user** 2FA: that's the flow that concerns the accounts; the optional admin login keeps its password.)
+- **Marker = `admin`** (that word alone) → `MODE = admin`.
+- **Marker = `users`** → `MODE = users`.
+- **Marker = `admin, users`** (a combined sign-in: the admin login AND user accounts in one `auth.ts`) → ask before anything, admin first, since it is the most sensitive account. **Use the askUser tool**:
+  > Your site has two kinds of sign-in, the administrator's and your users' accounts. Which one gets the 6-digit code?
+  - "The administrator" (listed first)
+  - "My users' accounts (each one can turn it on from their account page)"
+  - "Both"
+
+  - **Users' accounts** → `MODE = users`.
+  - **The administrator** (or the admin part of "Both"): NOT available on a combined sign-in, and say so plainly. The admin 2FA (`_setup-2fa-admin`) rewrites the whole `auth.ts` in admin-only mode, which would remove the users' sign-in: its script refuses a combined file and leaves it untouched (exit 1), never run it here, never work around that refusal. Patching only the admin path of the combined `authorize()` is not done either: the admin has no row in the database (its id is `"admin"`), so it would need its own secret, codes, proof and two-step sign-in page alongside the users' one, which no template or script provides yet. Offer what holds instead: a long, unique admin password (`/add-auth`, "Change the admin password"), and the users' 2FA if they want it ("Both" → continue with `MODE = users` after saying the admin part is not covered).
+- **Any other marker** → stop: say the sign-in was not recognized and nothing was changed.
 - **Already installed**: if `<WEB_DIR>/src/lib/auth-2fa.ts` (admin) or a per-user 2FA table already exists → say so and offer to regenerate rather than re-running.
 
 ---

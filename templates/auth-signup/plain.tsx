@@ -55,7 +55,7 @@ export default function SignUpPage() {
       // tRPC throws TRPCClientErrorLike which extends Error and exposes `message`.
       const message =
         err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
+          ? String(err.message)
           : "Erreur lors de la création du compte.";
       toast.error(message);
       setPending(false);

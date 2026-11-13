@@ -28,6 +28,7 @@ import { randomBytes, scryptSync } from "node:crypto";
 import { render } from "./_render.mjs";
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 import { putItem } from "./vault/vault.mjs";
+import { adminOnlyRefusal } from "./auth-modes.mjs";
 
 ensureToolsInPath();
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -110,9 +111,12 @@ async function preflight() {
   if (!deps.next) fail(`${WEB_DIR} isn't a Next.js project.`);
   const authPath = join(WEB_DIR, "src/server/auth.ts");
   if (!existsSync(authPath)) fail("src/server/auth.ts not found - run /add-auth (admin mode) first.");
-  if (!/hypervibe:auth-modes\s+admin\b/.test(readFileSync(authPath, "utf8"))) {
-    fail("Auth isn't in hypervibe admin mode (marker `// hypervibe:auth-modes admin` not found).");
-  }
+  // writeCode REPLACES src/server/auth.ts with the admin-only 2FA version: only over the admin-only
+  // file /add-auth writes. A combined sign-in (`// hypervibe:auth-modes admin, users`) passed the old
+  // check (`admin\b`), and the rewrite removed the users' sign-in without a word (report of
+  // 12/11/2026). Anything else is refused, the file left as it is.
+  const refusal = adminOnlyRefusal(readFileSync(authPath, "utf8"));
+  if (refusal) fail(refusal);
   if (!existsSync(join(WEB_DIR, "src/lib/password.ts"))) fail("src/lib/password.ts not found - expected from /add-auth admin mode.");
   if (existsSync(join(WEB_DIR, "src/lib/auth-2fa.ts"))) fail("src/lib/auth-2fa.ts already exists - 2FA seems already installed.");
   // loginAction and authorize() (auth.ts) import checkRateLimit from ~/lib/rate-limit. Bootstrap creates

@@ -158,6 +158,9 @@ function socle(projet, version) {
   ecrire(projet, "src/server/donnee.ts", `export async function lireDonnee(): Promise<string> {\n  await new Promise((r) => setTimeout(r, 20));\n  return "${MARQUEUR}";\n}\n`);
   ecrire(projet, "src/server/auth.ts", render("auth/admin/auth.ts", {}));
   ecrire(projet, "src/lib/password.ts", render("auth/admin/password.ts", {}));
+  // The rate limiter /bootstrap writes (setup-security.mjs), which auth.ts imports since 3.4.23:
+  // a stand-in that lets every attempt through, the build only needs the module and its shape.
+  ecrire(projet, "src/lib/rate-limit.ts", "export function checkRateLimit(_key: string, ..._rest: unknown[]): { allowed: boolean; retryAfterMs?: number } {\n  return { allowed: true };\n}\n");
 }
 
 const installer = (projet) => spawnSync("pnpm install --prefer-offline --config.strict-dep-builds=false --reporter=append-only", {
@@ -310,6 +313,9 @@ for (const version of VERSIONS) {
     ecrire(projet, "src/server/donnee.ts", `export async function lireDonnee(): Promise<string> {\n  await new Promise((r) => setTimeout(r, 20));\n  return "${MARQUEUR}";\n}\n`);
     ecrire(projet, "src/server/auth.ts", render("auth/admin/auth.ts", {}));
     ecrire(projet, "src/lib/password.ts", render("auth/admin/password.ts", {}));
+    // The rate limiter /bootstrap writes (setup-security.mjs), which auth.ts imports since 3.4.23:
+    // a stand-in that lets every attempt through, the build only needs the module and its shape.
+    ecrire(projet, "src/lib/rate-limit.ts", "export function checkRateLimit(_key: string, ..._rest: unknown[]): { allowed: boolean; retryAfterMs?: number } {\n  return { allowed: true };\n}\n");
     if (tpl("auth/admin/require-admin.ts")) ecrire(projet, "src/server/require-admin.ts", render("auth/admin/require-admin.ts", {}));
     ecrire(projet, "src/app/admin/(protected)/layout.tsx", render("auth/admin/pages/protected-layout.tsx", {}));
     const page = pageQuiLit(render("auth/admin/pages/protected-page.tsx", {}));
@@ -317,6 +323,13 @@ for (const version of VERSIONS) {
     if (!page) continue;
     ecrire(projet, "src/app/admin/(protected)/page.tsx", page);
     ecrire(projet, "src/app/admin/(protected)/clients/page.tsx", page);
+    // The page imports its sign-out button from its own folder (3.4.30): written next to each copy,
+    // as setup-auth-admin.mjs writes it next to the page.
+    if (tpl("auth/admin/pages/sign-out-button.tsx")) {
+      for (const dossier of ["src/app/admin/(protected)", "src/app/admin/(protected)/clients"]) {
+        ecrire(projet, `${dossier}/sign-out-button.tsx`, render("auth/admin/pages/sign-out-button.tsx", {}));
+      }
+    }
 
     // ── Installed from the registry, then the middleware as the harness writes it ──
     const t0 = Date.now();

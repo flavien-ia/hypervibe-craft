@@ -28,7 +28,7 @@ function ResetPasswordForm() {
     } catch (err) {
       const message =
         err && typeof err === "object" && "message" in err
-          ? String((err as { message: unknown }).message)
+          ? String(err.message)
           : t("errorGeneric");
       toast.error(message);
     }

@@ -10,6 +10,7 @@ import {
 import { db } from "~/server/db";
 import { users, passwordResetTokens } from "~/server/db/schema";
 import { hashPassword, verifyPassword } from "~/lib/password";
+import { checkRateLimit } from "~/lib/rate-limit";
 import { sendMail, escapeForBrevo } from "~/server/mail";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
@@ -25,6 +26,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const existing = await db.query.users.findFirst({
+        columns: { id: true },
         where: eq(users.email, input.email),
       });
       if (existing) {
@@ -45,15 +47,44 @@ export const authRouter = createTRPCRouter({
       return { id: user!.id, email: user!.email };
     }),
 
-  deleteAccount: protectedProcedure.mutation(async ({ ctx }) => {
-    await db.delete(users).where(eq(users.id, ctx.session.user.id));
-    return { success: true };
-  }),
+  /**
+   * Delete the current user's account. Requires authentication AND the current password,
+   * checked here: a session alone (an unlocked computer, a stolen cookie) must not be enough to
+   * erase an account. Limited in attempts per account, as a password check is. An account without
+   * a password (signed in through an outside provider only) is refused, with what to do.
+   * Cascades to accounts/sessions via the FK on userId.
+   */
+  deleteAccount: protectedProcedure
+    .input(z.object({ password: z.string().min(1).max(200) }))
+    .mutation(async ({ ctx, input }) => {
+      if (!checkRateLimit(`delete-account:${ctx.session.user.id}`).allowed) {
+        throw new TRPCError({
+          code: "TOO_MANY_REQUESTS",
+          message: "Trop de tentatives. Réessaie dans quelques minutes.",
+        });
+      }
+      const account = await db.query.users.findFirst({
+        columns: { passwordHash: true },
+        where: eq(users.id, ctx.session.user.id),
+      });
+      if (!account?.passwordHash) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Ce compte n’a pas de mot de passe : choisis-en un (« Mot de passe oublié ? »), puis supprime le compte.",
+        });
+      }
+      if (!(await verifyPassword(input.password, account.passwordHash))) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Mot de passe incorrect." });
+      }
+      await db.delete(users).where(eq(users.id, ctx.session.user.id));
+      return { success: true };
+    }),
 
   requestPasswordReset: rateLimitedProcedure
     .input(z.object({ email: z.string().email() }))
     .mutation(async ({ input }) => {
       const user = await db.query.users.findFirst({
+        columns: { id: true, email: true, name: true },
         where: eq(users.email, input.email),
       });
 
@@ -106,6 +137,7 @@ export const authRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       const candidates = await db.query.passwordResetTokens.findMany({
+        columns: { id: true, userId: true, tokenHash: true },
         where: and(
           isNull(passwordResetTokens.consumedAt),
           gt(passwordResetTokens.expiresAt, new Date()),
@@ -129,7 +161,8 @@ export const authRouter = createTRPCRouter({
       const newHash = await hashPassword(input.newPassword);
       await db
         .update(users)
-        .set({ passwordHash: newHash })
+        // The time of the change ends every session opened before it (src/server/auth.ts).
+        .set({ passwordHash: newHash, passwordChangedAt: new Date() })
         .where(eq(users.id, matched.userId));
       await db
         .update(passwordResetTokens)

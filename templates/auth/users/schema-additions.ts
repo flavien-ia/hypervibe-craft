@@ -1,7 +1,7 @@
 // ─── NextAuth tables (appended by /add-auth users mode) ───────────────
 //
 // 4 standard tables compatible with @auth/drizzle-adapter:
-//   - users:              account records (id, email, name, image, passwordHash)
+//   - users:              account records (id, email, name, image, passwordHash, passwordChangedAt)
 //   - accounts:           OAuth accounts (one row per provider per user)
 //   - sessions:           DB sessions (unused in jwt strategy, kept for OAuth future)
 //   - verificationTokens: email verification flow
@@ -26,6 +26,8 @@ export const users = createTable("user", {
   // scrypt hash for credentials login (format: `salt:hash` hex:hex).
   // Null for OAuth-only accounts (no credentials).
   passwordHash: text("password_hash"),
+  // When the password last changed (a reset): a session opened before it ends (src/server/auth.ts).
+  passwordChangedAt: timestamp("password_changed_at", { mode: "date", withTimezone: true }),
 });
 
 export const accounts = createTable(

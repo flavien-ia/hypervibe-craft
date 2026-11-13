@@ -55,7 +55,7 @@ Relay it in plain language (`↳ Generating your secret…`, `↳ Storing your k
 
 **On success**: capture `storedIn`, `vaultItem`, `qrPath`. Move on to Step 3.
 
-**On failure**: read the error above the banner (`❌ Failed at: <step>`, maps 1:1 to a function in `setup-2fa.mjs`). Causes: preflight (no admin auth / 2FA already present), install (pnpm/network), env push. If `src/lib/rate-limit.ts` was missing (a project that ran `/add-auth` outside of bootstrap), the script **creates a minimal one automatically** while writing the code: no more broken build.
+**On failure**: read the error above the banner (`❌ Failed at: <step>`, maps 1:1 to a function in `setup-2fa.mjs`). Causes: preflight (no admin auth / 2FA already present, or an `auth.ts` that is not the admin login alone: a combined sign-in `admin, users`, accounts in the database or an OAuth provider; the script refuses and leaves the file untouched, since it rewrites it whole: never work around it, go back to `add-2fa` Step 1), install (pnpm/network), env push. If `src/lib/rate-limit.ts` was missing (a project that ran `/add-auth` outside of bootstrap), the script **creates a minimal one automatically** while writing the code: no more broken build.
 
 ---
 

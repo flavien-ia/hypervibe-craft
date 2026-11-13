@@ -88,13 +88,14 @@ Invoke `_update-claude-md` with:
 - `conventions`:
   - `- Auth users: \`await auth()\` from \`~/server/auth\` for the session. \`protectedProcedure\` in tRPC for routes that require a logged-in user. \`session.user.id\` is guaranteed non-null thanks to the module augmentation in \`auth.ts\`.`
   - `- **Pages for signed-in users**: a server page that shows a user's data checks the session itself on its first lines, before reading anything, as \`/dashboard\` does (\`const session = await auth(); if (!session?.user) redirect("/signin?callbackUrl=...")\`). A check in a shared \`layout.tsx\` is not enough: Next.js renders the layout and the page at the same time, and the layout's redirect carries the page's content. Every \`"use server"\` action that changes something checks the session first too.`
+  - `- **A session ends with its account**: \`auth()\` (\`src/server/auth.ts\`) does not trust the session cookie's signature alone. Its \`jwt\` callback reads the account at every read of the session (one read per request, by id, two columns: \`id\`, \`passwordChangedAt\`) and ends the session (\`return null\`) when the account no longer exists or when its password changed after the session opened (\`token.signedInAt\`). Keep that check when editing \`auth.ts\`, and keep every page and procedure on \`await auth()\` / \`protectedProcedure\`: never decode the session cookie yourself, never let its mere presence open a page. A new way to change a password (an account page, an admin tool) sets \`passwordChangedAt: new Date()\` with the new hash. Deleting the account asks for the current password, checked on the server (\`auth.deleteAccount\`).`
 - `custom`:
   - heading: `## User authentication`
   - body:
     ```
     User accounts are stored in the DB (table `user`), with the password as a scrypt hash in `password_hash`.
 
-    Pages: `/signin`, `/signup`, `/dashboard` (post-signin landing), `/account` (account deletion).
+    Pages: `/signin`, `/signup`, `/dashboard` (post-signin landing), `/account` (account deletion, the current password asked and checked on the server).
     {{IF_EMAIL_OK}}Forgot password pages: `/forgot-password` + `/reset-password` (scrypt-hashed tokens in table `password_reset_token`, 1h expiry, single use).{{/IF_EMAIL_OK}}
 
     tRPC `auth` router: `signup`, `deleteAccount`{{IF_EMAIL_OK}}, `requestPasswordReset`, `resetPassword`{{/IF_EMAIL_OK}}. All rate-limited by IP.

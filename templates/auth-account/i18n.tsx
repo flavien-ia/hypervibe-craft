@@ -6,6 +6,8 @@ import { useTranslations } from "next-intl";
 import { SessionProvider, useSession, signOut } from "next-auth/react";
 import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import {
   Dialog,
@@ -33,6 +35,8 @@ function AccountContent() {
   const { data: session, status } = useSession();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  // The current password, asked again to delete the account and checked on the server.
+  const [password, setPassword] = useState("");
 
   const deleteAccount = api.auth.deleteAccount.useMutation({
     onSuccess: async () => {
@@ -43,7 +47,6 @@ function AccountContent() {
     },
     onError: (err: { message: string }) => {
       toast.error(err.message);
-      setConfirming(false);
     },
   });
 
@@ -118,12 +121,28 @@ function AccountContent() {
           >
             {t("deleteButton")}
           </Button>
-          <Dialog open={confirming} onOpenChange={setConfirming}>
+          <Dialog
+            open={confirming}
+            onOpenChange={(open) => {
+              setConfirming(open);
+              if (!open) setPassword("");
+            }}
+          >
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{t("deleteDialogTitle")}</DialogTitle>
                 <DialogDescription>{t("deleteDialogDescription")}</DialogDescription>
               </DialogHeader>
+              <div className="grid gap-2">
+                <Label htmlFor="delete-password">{t("deletePasswordLabel")}</Label>
+                <Input
+                  id="delete-password"
+                  type="password"
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
               <DialogFooter>
                 <Button
                   variant="outline"
@@ -135,8 +154,8 @@ function AccountContent() {
                 <Button
                   variant="destructive"
                   className="cursor-pointer"
-                  disabled={deleteAccount.isPending}
-                  onClick={() => deleteAccount.mutate()}
+                  disabled={deleteAccount.isPending || !password}
+                  onClick={() => deleteAccount.mutate({ password })}
                 >
                   {deleteAccount.isPending ? t("deletePending") : t("confirmDelete")}
                 </Button>

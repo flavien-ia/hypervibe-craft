@@ -203,14 +203,14 @@ The users flow logs in via `signIn("credentials", …)`. Add a 2FA step **only f
      // A proof signed by loginAction: the password and the second factor were checked there,
      // and the attempt counted. It alone opens an account that enabled 2FA.
      if (email && proof && verifyLoginProof(email, proof)) {
-       const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+       const user = await db.query.users.findFirst({ columns: { id: true, email: true, name: true, image: true, passwordHash: true }, where: eq(users.email, email) });
        return user ? { id: user.id, email: user.email, name: user.name, image: user.image } : null;
      }
      // Anything else counts: a forged proof, a password.
      const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
      if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
      if (!email || !password || proof) return null;
-     const user = await db.query.users.findFirst({ where: eq(users.email, email) });
+     const user = await db.query.users.findFirst({ columns: { id: true, email: true, name: true, image: true, passwordHash: true }, where: eq(users.email, email) });
      if (!user?.passwordHash) return null;
      const ok = await verifyPassword(password, user.passwordHash);
      // A password alone never opens an account that enabled 2FA, whoever calls the route.
