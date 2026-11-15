@@ -32,7 +32,7 @@ This skill pulls content in from outside (documentation, an API response, a web 
 
 ## Preflight - vault unlocked
 
-This skill reads the email key (Resend/Brevo) from the vault, so first make sure it is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then if `locked`/`expired`, run `launch.mjs unlock` (window; the vault then stays open 6 hours, and locks itself again); if the vault does not exist yet, delegate to `_add-keyring`.
+This skill reads the email key (Resend/Brevo) from the vault, so first make sure it is unlocked (follow **`_ensure-vault`**): `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status` then if `locked`/`expired`, run `launch.mjs unlock` (window; the vault then stays open 12 hours, and locks itself again); if the vault does not exist yet, delegate to `_add-keyring`.
 
 ---
 

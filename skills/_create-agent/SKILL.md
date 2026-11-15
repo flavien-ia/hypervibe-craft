@@ -186,7 +186,7 @@ If you (Claude) get this error from the script, tell the user:
 >
 > 1. Go to **https://dash.cloudflare.com/profile/api-tokens**
 > 2. Find your "Claude Code" token (created by `/start`) → click **"Edit"**
-> 3. In **Permissions**, click **"+ Add more"** and add: **Account · Workers AI · Read**
+> 3. Open its **Account policy** block, type `Workers AI` in **Search for permission groups...** and tick **Read** on its row (that is **Account · Workers AI · Read**)
 > 4. Click **"Continue to summary"** → **"Save Token"**
 > 5. Come back here and tell me "done" - I'll re-run the scaffold
 

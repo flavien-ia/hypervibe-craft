@@ -9,7 +9,11 @@
 //      + reactStrictMode:true + async headers() into the existing config object. The file
 //      is never regenerated, so wrapped configs (next-intl, PWA...) and custom options
 //      (redirects, remotePatterns...) survive. Also strips the deprecated X-XSS-Protection
-//      header if a previous version of this script added it.
+//      header if a previous version of this script added it. Also injects
+//      images.remotePatterns for the placeholder hosts (picsum.photos, fastly.picsum.photos,
+//      images.unsplash.com) when the config has no `images` key: without it, next/image answers
+//      400 for every placeholder image the project rules prescribe. An existing `images` key is
+//      never touched.
 //   2. Wraps the `[TRPC]` timing console.log in src/server/api/trpc.ts with
 //      `if (t._config.isDev)` so timing info doesn't leak in production logs.
 //   3. Creates src/lib/rate-limit.ts (in-memory rate limiter with auto-cleanup).
@@ -17,12 +21,16 @@
 //      import) so other skills can use it for public routes that accept user input.
 //      Its error message is written in English - the calling skill translates it to
 //      the project's language afterwards.
-//
-// The script does NOT add a Content-Security-Policy - CSP requires per-project tuning
-// and misconfiguring it breaks Next.js hydration.
+//   5. Writes the site's Content-Security-Policy (scripts/csp.mjs): a base that is
+//      enforced and blocks nothing a site loads (frame-ancestors, base-uri, object-src,
+//      form-action), and a script policy that is only REPORTED (Report-Only), to which each
+//      building block adds its domains when it installs. Merged into the existing headers(),
+//      never a nonce (it would render every page at each visit), and never over a CSP the
+//      project already sets: that one is left as it is, and said.
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { applyCsp } from "./csp.mjs";
 
 const actions = [];
 
@@ -38,6 +46,16 @@ const SECURITY_HEADERS_BLOCK = `const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 `;
+
+// The hosts of the placeholder images the rules prescribe (Lorem Picsum, which redirects to its
+// fastly mirror, and Unsplash). next/image only optimizes a remote image whose host is listed:
+// without them, every placeholder answers 400 at the optimizer (seen on 13/11/2026).
+const PLACEHOLDER_IMAGE_HOSTS = ["picsum.photos", "fastly.picsum.photos", "images.unsplash.com"];
+const IMAGES_KEY = `  images: {
+    remotePatterns: [
+${PLACEHOLDER_IMAGE_HOSTS.map((h) => `      { protocol: "https", hostname: "${h}" },`).join("\n")}
+    ],
+  },`;
 
 function patchNextConfig() {
   const candidates = ["next.config.ts", "next.config.mjs", "next.config.js"];
@@ -56,6 +74,24 @@ function patchNextConfig() {
     content = content.replace(xssLine, "");
     changed = true;
     actions.push(`✓ ${file}: removed deprecated X-XSS-Protection header`);
+  }
+
+  // The placeholder hosts, before the headers: a project patched by an earlier version (headers
+  // already there) gets them too. Any `images` key, even one without remotePatterns, is the
+  // project's own and stays as it is.
+  const configObj = /(const\s+\w+\s*(?::\s*[\w.]+)?\s*=\s*\{)/;
+  if (/\bimages\s*:/.test(content)) {
+    actions.push(`✓ ${file}: an images key is already present (left as it is)`);
+  } else if (configObj.test(content)) {
+    // An empty object ({}) gets its closing brace back on its own line.
+    const emptyObj = new RegExp(`${configObj.source}\\s*\\}`);
+    content = emptyObj.test(content)
+      ? content.replace(emptyObj, `$1\n${IMAGES_KEY}\n}`)
+      : content.replace(configObj, `$1\n${IMAGES_KEY}`);
+    changed = true;
+    actions.push(`✓ ${file}: injected images.remotePatterns (${PLACEHOLDER_IMAGE_HOSTS.join(", ")})`);
+  } else {
+    actions.push(`⚠️  ${file}: could not locate the config object literal - add images.remotePatterns manually`);
   }
 
   if (content.includes("X-Content-Type-Options")) {
@@ -239,8 +275,18 @@ export function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs?: n
   actions.push(`✓ ${file}: created`);
 }
 
+// ─── 5. Content-Security-Policy ────────────────────────────────────────
+function patchCsp() {
+  const r = applyCsp(process.cwd());
+  if (r.state === "written") actions.push(`✓ ${r.file}: Content-Security-Policy written (base enforced, script policy reported only)`);
+  else if (r.state === "current") actions.push(`✓ ${r.file}: Content-Security-Policy already in place`);
+  else if (r.state === "present") actions.push(`✓ ${r.file}: the project sets a Content-Security-Policy of its own (${r.where.join(", ")}), left as it is`);
+  else actions.push(`⚠️  CSP_REVIEW: ${r.reason}`);
+}
+
 // ─── Run ───────────────────────────────────────────────────────────────
 patchNextConfig();
+patchCsp();
 writeRateLimitFile();
 patchTrpcFile();
 

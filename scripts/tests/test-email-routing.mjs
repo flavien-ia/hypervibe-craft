@@ -25,7 +25,7 @@ function check(label, ok, detail = "") {
 
 let st;
 const world = (o = {}) => {
-  st = { zones: [{ id: "z1", name: "example.fr" }], mx: [], enabled: false, refuseEnable: null, stayOff: false, calls: [], ...o };
+  st = { zones: [{ id: "z1", name: "example.fr" }], mx: [], enabled: false, refuseEnable: null, refuseRight: false, settingsRight: false, stayOff: false, calls: [], ...o };
 };
 const server = createServer((req, res) => {
   const send = (status, body) => {
@@ -37,8 +37,10 @@ const server = createServer((req, res) => {
   const u = new URL(req.url, "http://x");
   if (req.method === "GET" && u.pathname === "/client/v4/zones") return send(200, { success: true, result: st.zones.filter((z) => z.name === u.searchParams.get("name")) });
   if (req.method === "GET" && u.pathname === "/client/v4/zones/z1/dns_records") return send(200, { success: true, result: st.mx.map((content, i) => ({ id: `m${i}`, type: "MX", name: "example.fr", content, priority: 10 })) });
+  if (req.method === "GET" && u.pathname === "/client/v4/zones/z1/email/routing" && st.settingsRight) return send(403, { success: false, errors: [{ code: 10000, message: "Authentication error" }] });
   if (req.method === "GET" && u.pathname === "/client/v4/zones/z1/email/routing") return send(200, { success: true, result: { enabled: st.enabled, status: st.enabled ? "ready" : "unconfigured", name: "example.fr" } });
   if (req.method === "POST" && u.pathname === "/client/v4/zones/z1/email/routing/enable") {
+    if (st.refuseRight) return send(403, { success: false, errors: [{ code: 10000, message: "Authentication error" }] });
     if (st.refuseEnable) return send(400, { success: false, errors: [{ code: 2007, message: st.refuseEnable }] });
     if (!st.stayOff) st.enabled = true;
     return send(200, { success: true, result: { enabled: st.enabled } });
@@ -86,6 +88,16 @@ try {
   world({ mx: [], refuseEnable: "Missing permission" });
   r = await run(["enable", "example.fr"]);
   check("Cloudflare refuses: its words, exit 1", r.code === EXIT.UNREADABLE && /Missing permission/.test(r.json?.error ?? ""), r.out);
+
+  world({ mx: [], refuseRight: true });
+  r = await run(["enable", "example.fr"]);
+  check("Cloudflare refuses for lack of a right: exit 1, and the right named (Zone · Zone Settings · Edit, 3.4.31)", r.code === EXIT.UNREADABLE && r.json?.missingRight === "Zone · Zone Settings · Edit" && /lacks the right "Zone · Zone Settings · Edit"/.test(r.json?.error ?? ""), r.out);
+  world({ mx: [], refuseEnable: "Missing permission" });
+  r = await run(["enable", "example.fr"]);
+  check("... a refusal for another reason does not name it", r.code === EXIT.UNREADABLE && !r.json?.missingRight && !/Zone Settings/.test(r.json?.error ?? ""), r.out);
+  world({ mx: [], settingsRight: true });
+  r = await run(["status", "example.fr"]);
+  check("... nor does reading the settings without that right go unnamed", r.code === EXIT.UNREADABLE && r.json?.missingRight === "Zone · Zone Settings · Edit", r.out);
 
   world({ mx: [], stayOff: true });
   r = await run(["enable", "example.fr"]);

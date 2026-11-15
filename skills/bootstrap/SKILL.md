@@ -13,7 +13,7 @@ compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; 
 - When generating user-facing content for the scaffolded project (UI labels, emails, copy), write it in the user's language too.
 - Show progress as a short natural-language checklist (in-progress and done states).
 
-You are an infrastructure automation assistant. Your job is to scaffold a T3 stack project with GitHub and Vercel, smoke-test the deployment, then walk the user through the spec, configure optional services via modular skills, and build the actual application. Follow this plan step by step. **Do not skip steps. Do not assume - ask when in doubt.**
+You are an infrastructure automation assistant. Your job is to scaffold a T3 stack project with GitHub and Vercel, smoke-test the deployment, then define with the user what to build (the core of the app, or a full spec), configure optional services via modular skills, and build the actual application. Follow this plan step by step. **Do not skip steps. Do not assume - ask when in doubt.**
 
 ---
 
@@ -45,7 +45,7 @@ If you catch yourself writing "Run the command `...`" or "Launch `vercel ...`" i
 The bootstrap happens in **8 steps**, with **2 autonomy phases** broken up by an **interactive phase** in the middle:
 
 - **Phase 1 (steps 2-3, ~5 min autonomous)**: build the base infrastructure via the deterministic script (T3 scaffold, GitHub, Vercel, minimal page, first deployment with smoke test, verification of the GitHub-to-Vercel auto-deploy).
-- **Interactive phase (step 4, variable duration)**: define the spec + validate the addon list.
+- **Interactive phase (step 4, variable duration)**: define what we build (the core of the app, recommended, or a full spec) + validate the addon list.
 - **Phase 2 (steps 5-8, ~10-15 min autonomous)**: configure the addons, build the application, finalize CLAUDE.md, add the legal pages, audit + summary.
 
 You MUST follow these rules **without exception**:
@@ -54,7 +54,7 @@ You MUST follow these rules **without exception**:
 
    > ℹ️ I will now work in two phases:
    > - **First ~5 min autonomously** to build the base infrastructure. At the end, your site will already be deployed online with a minimal page showing your project name.
-   > - **Then we will have a short exchange** to define the spec and validate the addons.
+   > - **Then we will have a short exchange** to define what we build and validate the addons.
    > - **Finally ~10-15 min autonomously** to configure the addons, build the app, add the legal pages and finalize.
    >
    > If the process stops along the way because of context limits or an error, just say **"continue"** and I will pick up where I left off.
@@ -323,6 +323,7 @@ Mark Step 2 ✅, move on to Step 3 to handle the warnings.
 - **`LinkButton`** created in `src/components/ui/link-button.tsx` because shadcn v4 does not expose `asChild` on `Button`.
 - **globals.css patch**: strip of `--font-sans: var(--font-sans);` injected by shadcn init, which clobbers the T3 Geist mapping (without this fix the app renders in Times New Roman).
 - **Security headers** + `images.remotePatterns` (picsum + unsplash) + `rate-limit.ts` + `rateLimitedProcedure` via `setup-security.mjs`.
+- **Content-Security-Policy** via `setup-security.mjs` (one marked block of `next.config`, kept by `scripts/csp.mjs`): a base, enforced, that blocks nothing a site loads, and a script policy that is only reported (Report-Only); Vercel's toolbar (previews) is added to it with `vercel.json`. Never a nonce: it would render every page at each visit. Each building block adds its domains when it installs; when the app embeds a video or a player itself (a page of the core), add its domains the same way: `node "${CLAUDE_SKILL_DIR}/../../scripts/csp.mjs" preset youtube --web-dir "<WEB_DIR>"` (or `spotify`; another provider: `csp.mjs add --source <name> --directive frame-src --domain https://<its host>`, its host read in its own documentation). A page the site shows in a frame of its own: `csp.mjs frame --path "<path>"`. A form that posts to another site: `csp.mjs form-action --off --reason "<which form>"`, said to the person.
 - **SEO metadata** + sitemap + robots + JSON-LD via `setup-seo.mjs`.
 - **404 page polish**: `src/app/not-found.tsx` with a clean design (gradient on the 404, `LinkButton` back to home, fade-in animation).
 - **CLAUDE.md core**: project name + description + stack + structure + commands + T3-specific conventions (Geist, LinkButton, shadcn, tRPC patterns, etc.). The cross-project conventions (TypeScript no-any, responsive mobile-first, etc.) are in the global `~/.claude/CLAUDE.md` maintained by `/start`.
@@ -407,48 +408,46 @@ Other warnings can come from the script's `expect()` sanity checks if T3 or shad
 
 ---
 
-## Step 4 - Spec & confirmation
+## Step 4 - What we build & confirmation
 
 The infrastructure is ready and deployed. Now we define what we are going to build in it.
 
 ### 4a - Mode choice
 
-**Use the askUser tool** to present the three options:
+Two options, in this order: the core of the app first (recommended), a full spec second. There is no option to drop in an existing spec file.
+
+Before the question, tell the user in one or two plain sentences why the first option is recommended, along these lines: "In vibe coding, the best results come from building the core of the app first (one or two screens), adjusting it until it is right, then adding the features one by one as you need them. An app built all at once is harder to steer, and part of it usually has to be removed."
 
 Ask with `askUserQuestion` tool:
 - Question: "How do you want to define your project?"
-- Suggestions: ["A - Build a spec together (guided, step by step)", "B - I already have a spec (.md file)", "C - No spec, let's go from the description"]
+- Suggestions: ["The core of my app, then we iterate (recommended)", "A full spec, built together step by step"]
 
 ---
 
-**If the user chooses A (build a spec together):**
+**If the user chooses the core (recommended):**
 
-Read and execute the `spec` skill from this plugin. The spec skill will:
+Ask directly in the chat as plain text (not the askUser tool):
+
+> Describe the heart of your app: the one thing it must do well, in one or two screens. What do we see there, and what can someone do?
+
+Wait for the answer. If it describes more than one or two screens, keep as the core the one or two that carry the main use, and say in one sentence that the rest will come afterwards, one feature at a time. Keep for Step 6: the core (its one or two screens and what someone does there) and, in the user's own words, what was left for later (nothing invented).
+
+Then silently infer the addons from **the core only**, using the rules below. No intermediate confirmation - go straight to 4b.
+
+---
+
+**If the user chooses the full spec:**
+
+Read and execute the internal `_spec` skill from this plugin: it is called only from here, and goes straight to the full guided spec, without asking again whether to describe only the core. It will:
 - Guide the user through a structured conversation to define pages, design, features, and integrations
 - Produce a `cahier-des-charges.md` file in the project folder
 - Return a list of infrastructure decisions (which addons to activate) already answered during the conversation
 
-After the spec skill completes, you have the spec file AND the infrastructure answers. Skip directly to 4b (Confirmation) below.
+After `_spec` completes, you have the spec file AND the infrastructure answers. Skip directly to 4b (Confirmation) below.
 
 ---
 
-**If the user chooses B (provide an existing spec):**
-
-Ask: "Place the .md file in the current folder and give me its name."
-
-Read the spec file entirely. Silently infer the infrastructure needs from its content (DB, auth, email, stripe, i18n, storage, analytics) using the inference rules below. Do NOT ask the user for confirmation at this stage - the 4b loop is the single confirmation point.
-
-If some decisions are genuinely ambiguous (e.g., the spec says "maybe we'll add payments later"), ask ONE targeted question via the askUser tool to resolve. Don't batch multiple questions - resolve the hardest one first, the rest will surface at 4b if needed.
-
-Then go to 4b.
-
----
-
-**If the user chooses C (no spec, short description only):**
-
-Tell the user: "OK, I will create a simple app based on your description. You can then enrich it with vibe coding." Then silently infer addons from the description using the rules below. No intermediate confirmation - go straight to 4b.
-
-**Inference rules (applies to branches B and C):**
+**Inference rules (the core option):** they apply to the core the user described, not to the app it may become. Do not add a service the core does not need: it comes later, with the feature that needs it (a core that is a booking form needs the database, not payments, even if the user says payments will come one day).
 
 - Users, accounts, data, content management → add-db + add-auth (credentials)
 - Admin, backoffice, protected pages → add-auth (credentials)
@@ -457,10 +456,10 @@ Tell the user: "OK, I will create a simple app based on your description. You ca
 - Payments, checkout, pricing, subscription → add-stripe
 - Multiple languages, translation → add-i18n
 - File uploads, images, documents → add-storage
-- Analytics, tracking, statistics → add-analytics. ⚠️ **STRICT OPT-IN**: only propose `add-analytics` IF the user explicitly wrote words like "analytics", "tracking", "statistics", "Google Analytics", "GA4", "audience", "audience measurement" in their spec or short description. **Never as a "useful" default**: a site about marketing or SaaS does NOT trigger analytics on its own. When in doubt → no, the user can add `/add-analytics` later.
-- Map, interactive map, agencies, stores, points of sale, locations, "find", "where to find us", route, map-first app, geolocation → add-map. Also infer the `usage` (single / multi / route / mapfirst) and the `placement` (existing contact page / dedicated page to create / home) from the spec to pass these hints to the skill - it will then be able to skip its discovery question.
+- Analytics, tracking, statistics → add-analytics. ⚠️ **STRICT OPT-IN**: only propose `add-analytics` IF the user explicitly wrote words like "analytics", "tracking", "statistics", "Google Analytics", "GA4", "audience", "audience measurement" in their description of the core. **Never as a "useful" default**: a site about marketing or SaaS does NOT trigger analytics on its own. When in doubt → no, the user can add `/add-analytics` later.
+- Map, interactive map, agencies, stores, points of sale, locations, "find", "where to find us", route, map-first app, geolocation → add-map. Also infer the `usage` (single / multi / route / mapfirst) and the `placement` (existing contact page / dedicated page to create / home) from the core to pass these hints to the skill - it will then be able to skip its discovery question.
 - Any app that stores data implicitly needs add-db (e.g., "booking app" → needs a DB).
-- Dark theme, dark design, "thème sombre", "mode sombre" WITHOUT a light/dark switch, a toggle or the system's theme → do NOT invoke add-dark-mode: it installs a light/dark/system switch (next-themes, a 3-state ThemeToggle). At Step 6, build a single dark palette instead: the dark colours in `:root` of globals.css, the `dark` class set once on `<html>` in the root layout, and `<Toaster theme="dark" />` for Sonner. Invoke add-dark-mode only when the spec asks for a switch, for both themes, or for following the system.
+- Dark theme, dark design, "thème sombre", "mode sombre" WITHOUT a light/dark switch, a toggle or the system's theme → do NOT invoke add-dark-mode: it installs a light/dark/system switch (next-themes, a 3-state ThemeToggle). At Step 6, build a single dark palette instead: the dark colours in `:root` of globals.css, the `dark` class set once on `<html>` in the root layout, and `<Toaster theme="dark" />` for Sonner. Invoke add-dark-mode only when the user asks for a switch, for both themes, or for following the system.
 
 ---
 
@@ -471,7 +470,7 @@ This is **the single confirmation point** before configuring the addons. Present
 > **Summary before configuring the addons:**
 >
 > **Project:** <name> - <description> *(already created on GitHub + Vercel ✅)*
-> **Spec:** <yes (filename) / no>
+> **What we build:** <the core: its one or two screens in a few words / the full spec (filename)>
 > **Addons to configure:**
 > - Database: <yes/no>
 > - Authentication: <yes (credentials mode) / no>
@@ -566,7 +565,7 @@ Communication pattern to follow instead:
 
 The infrastructure and the addons are in place. Now we build the real application.
 
-### If a spec (.md) was provided:
+### If the full spec was chosen (a `cahier-des-charges.md`):
 
 1. **Re-read the spec file** to refresh context on what needs to be built.
 
@@ -584,21 +583,20 @@ The infrastructure and the addons are in place. Now we build the real applicatio
 
 4. **If the spec is ambiguous or incomplete on a point**, ask the user for clarification before proceeding. Do not guess.
 
-### If only a short description was provided:
+### If the core was chosen (the recommended option):
 
-**You MUST still build a complete, functional, beautiful application.** Do not leave a placeholder page. The user expects a working app they can use immediately.
+**Build ONLY the core: its one or two screens and what they need to work**, finished, functional and beautiful. No placeholder page, and no page or feature beyond what the core needs: what was left for later comes afterwards, one feature at a time, when the user asks for it. What the harness always adds stays as it is: the layout (header, navigation, footer), the legal pages and the favicon of Step 7, the 404 page.
 
-1. **Interpret the description** and make smart decisions about what pages, features, and database schema the app needs. Think like a product designer: what would make this app genuinely useful?
+1. **Interpret the core** and decide what its screens need: data, schema, interactions. Think like a product designer, inside the core: what makes these one or two screens genuinely good to use?
 
-2. **Design the database schema** based on the description. Create the Drizzle tables, push to Neon.
+2. **Design the database schema** the core needs, if it stores anything. Create the Drizzle tables, push to Neon.
 
-3. **Build the full application:**
+3. **Build the core:**
    - A polished layout with header/navigation and footer
-   - All the pages the app logically needs (landing, dashboard, detail views, forms, etc.)
-   - tRPC routers for all CRUD operations
-   - Functional forms, lists, filters, and interactions
+   - The core's one or two screens, fully working (the forms, lists and interactions they involve)
+   - tRPC routers for what these screens read and write
    - Responsive design with Tailwind CSS and shadcn/ui components
-   - **If the app has data that needs to be managed** (reservations, orders, products, users, content, etc.), build an `/admin` section with Credentials auth and a dashboard to manage that data (list, create, edit, delete). This is the case for most apps.
+   - **If the core's data must be managed by someone** (the bookings a public form collects, for example), build the `/admin` screen that manages it, with Credentials auth: it is then part of the core, which does not work without it. Not otherwise.
 
 4. **Make it beautiful.** Choose a coherent color palette and design system. Use modern UI patterns: cards, badges, gradients, hover effects, transitions. The app should look professional, not like a tutorial exercise.
 
@@ -607,7 +605,7 @@ The infrastructure and the addons are in place. Now we build the real applicatio
    - **If the context is very specific** (hero of a French gourmet restaurant, portrait of a business lawyer, etc.) and a real Unsplash visual would have more impact: use WebSearch to find a real Unsplash photo-id, then build the URL `https://images.unsplash.com/photo-<real-id>?w=1600&q=80`. **Never invent an Unsplash ID** - they 404.
    Always wrap in the `<Image>` component from `next/image` with a descriptive `alt`.
 
-6. **Be generous with features.** If the description says "a restaurant app", build: a landing page with hero + menu sections, a reservation form that saves to DB, an admin dashboard to manage reservations, and a contact section. Go beyond the minimum.
+6. **Stay inside the core.** If the app is "a restaurant" and its core is "booking a table", build the home page with the booking form that saves to the database, and the admin screen that lists the bookings. Not the menu pages, the gallery or the newsletter: they come later, if the user asks for them.
 
    **⚠️ Admin dashboard - mandatory pattern: every page checks for itself, and no redirect loop**: if you generate an admin with a custom login page (`/admin/signin`), NEVER ADD a check (`if (!isAdmin) redirect("/admin/signin")`) in `app/admin/layout.tsx`. This layout also wraps `/admin/signin/page.tsx` → infinite loop. Correct pattern:
    ```
@@ -628,7 +626,7 @@ The infrastructure and the addons are in place. Now we build the real applicatio
   git commit -m "feat: implement [section name]"
   ```
 - **Do NOT push to Vercel after each section.** Wait until the full implementation is complete (Step 8 will handle the final push).
-- The spec/description takes priority over defaults. If it says "dark theme with purple accents", follow that, not the T3 defaults.
+- The spec or the core takes priority over defaults. If it says "dark theme with purple accents", follow that, not the T3 defaults.
 - Read `src/app/globals.css` (or `src/styles/globals.css` depending on what T3 scaffolded) before creating any component to stay consistent with the palette and design tokens already defined.
 - Always use shadcn/ui components from `~/components/ui/` before creating custom ones.
 - **No brand icon from `lucide-react`.** Since its version 1 the package no longer exports brand icons (`Instagram`, `Facebook`, `Twitter`, `Linkedin`, `Github`, `Youtube`...): importing one fails at `pnpm tsc --noEmit`. For links to social networks, use a generic icon (`Globe`, `ExternalLink`, `AtSign`) or a small inline SVG.
@@ -638,17 +636,27 @@ The infrastructure and the addons are in place. Now we build the real applicatio
 
 ## Step 7 - Finalization: CLAUDE.md, legal pages
 
-The Step 2 script already created a CLAUDE.md core and a 404 page polish. The Step 5 addons already added their sections in `CLAUDE.md` via `_update-claude-md`. This step completes the remaining elements: the spec mention if provided, the non-technical communication convention (specific to hypervibe), the favicon, and the legal pages.
+The Step 2 script already created a CLAUDE.md core and a 404 page polish. The Step 5 addons already added their sections in `CLAUDE.md` via `_update-claude-md`. This step completes the remaining elements: the spec mention or the app's core, the non-technical communication convention (specific to hypervibe), the favicon, and the legal pages.
 
 ### 7a - Complete `CLAUDE.md`
 
-**If a spec was provided (option A or B at Step 4)**, add this line right after the project title + description, before the `## Stack` section:
+**If the full spec was chosen at Step 4**, add this line right after the project title + description, before the `## Stack` section:
 
 ```
 **Spec**: `<filename>.md` - read this file for the full project context.
 ```
 
 Use a direct Edit (the `_update-claude-md` helper does not handle insertion at a specific spot outside a section).
+
+**If the core was chosen at Step 4**, keep the core in the project's memory: invoke `_update-claude-md` with a custom section, heading `## The app's core`, and this short body, written from what the user said at Step 4a (their words, in their language, nothing invented):
+
+```
+<The app's core in one or two sentences: what it is for, the one thing it must do well.>
+- Screens: <the core's one or two screens, one line each: what we see there, what someone does>
+- Left for later, deliberately: <what the user mentioned outside the core, or "nothing yet">
+```
+
+Future sessions read it to know what was built first and what comes next. It changes nothing in the final summary.
 
 **Non-technical communication (specific to hypervibe)**: invoke `_update-claude-md` with section `conventions` + this single line:
 
@@ -826,7 +834,7 @@ List everything that was configured during bootstrap, grouped by category. Only 
 >
 > **Application:**
 > - T3 Stack scaffolded (Next.js + tRPC + Drizzle + Tailwind + shadcn)
-> - Home page + (other pages built)
+> - Home page + (the core's screens, or the pages of the spec)
 > - Legal pages: mentions-legales, politique-de-confidentialite (or: none, private tool)
 > - 404 page polish
 > - (list each module that was configured)
@@ -894,6 +902,11 @@ For the actions that remain (genuinely manual), give **step-by-step** instructio
 
 > **6. Enable the GitHub-to-Vercel auto-deploy**
 > Your future `git push`es will not deploy automatically. Go to https://vercel.com/integrations/github, authorize Vercel to access your repositories, then confirm. Once done, any `git push` will trigger a deploy.
+
+**If the core was chosen at Step 4, include:**
+
+> **Next - Try the core, then grow it**
+> Try the core first and tell me what to change until it is right. Then add the features one at a time: describe the next one in a sentence, and I build it.
 
 **Always include, just before the last item:**
 

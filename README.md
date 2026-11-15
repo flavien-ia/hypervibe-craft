@@ -47,7 +47,7 @@ What differs from Claude Code: the rules file is `AGENTS.md` (on Codex and OpenC
 | New to this? | Already comfortable? |
 |---|---|
 | `/start` - checks your setup and shows you around | `/bootstrap` - jump straight in |
-| `/prof` - explains how everything works | `/spec` - build a detailed spec first |
+| `/prof` - explains how everything works | |
 
 ## How it works
 
@@ -59,13 +59,12 @@ Just describe what you want to build. Claude analyzes your description and infer
 /bootstrap My online invoicing SaaS with Stripe payments
 ```
 
-### Three ways to define your project
+### Two ways to define your project
 
-When you launch `/bootstrap`, you choose how to describe your app:
+When you launch `/bootstrap`, you choose what Claude builds first:
 
-- **A - Build a spec together** (`/spec`): Claude guides you step by step through 5 blocks (project, pages, design, features, constraints) and produces a `cahier-des-charges.md`
-- **B - Provide an existing spec**: give Claude a `.md` file, he reads it and infers the infrastructure
-- **C - Short description only**: Claude asks the infrastructure questions in one go and builds a simple app
+- **The core of your app (recommended)**: you describe the one thing your app must do well, in one or two screens. Claude builds only that and keeps it in the project's memory. You try it, ask for corrections, then add one feature at a time. In vibe coding this gives the best results: an app built all at once is harder to steer.
+- **A full spec**: Claude guides you step by step through 5 blocks (project, pages, design, features, constraints), produces a `cahier-des-charges.md` and builds everything it describes
 
 ## All skills
 
@@ -74,7 +73,6 @@ When you launch `/bootstrap`, you choose how to describe your app:
 | Skill | What it does |
 |---|---|
 | `/bootstrap` | Create a new project from scratch |
-| `/spec` | Build a detailed project specification, step by step |
 | `/start` | First-time onboarding: checks prerequisites, presents all commands |
 | `/prof` | Explains how everything works in plain language (pedagogical mode) |
 | `/seo` | Audit SEO and fix issues (metadata, sitemap, share image, structure, URLs/slugs, accessibility, readability, topic coverage, freshness, local business), plus what only the live site shows (an unintended noindex, a duplicate address, temporary redirects, broken links, the sitemap's errors). A score computed on a fixed grid, kept in the project to compare passes |
@@ -144,7 +142,7 @@ Projects bootstrapped with this plugin use:
 - **next-intl** for internationalization (when i18n addon is used)
 - **Anthropic** (Claude API) for autonomous AI agents (when the agent addon is used)
 - **Render** for hosting AI agents and long-running automations (when the agent / automation addon routes to Render)
-- **Bitwarden** as a **key vault** - your cross-project access keys (Cloudflare, Neon, email…) are stored **encrypted** in a vault, never in plaintext on disk or in environment variables. `/start` sets it up (free account, EU region); you type one master password when the vault is closed, it stays open six hours and then locks itself for real, and in between Claude fetches the keys on its own when needed.
+- **Bitwarden** as a **key vault** - your cross-project access keys (Cloudflare, Neon, email…) are stored **encrypted** in a vault, never in plaintext on disk or in environment variables. `/start` sets it up (free account, EU region); you type one master password when the vault is closed, it stays open twelve hours and then locks itself for real, and in between Claude fetches the keys on its own when needed.
 
 ## What the bootstrap sets up automatically
 

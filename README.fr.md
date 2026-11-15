@@ -47,7 +47,7 @@ Ce qui change par rapport à Claude Code : le fichier de règles est `AGENTS.md`
 | Première fois ? | Déjà à l'aise ? |
 |---|---|
 | `/start` - vérifie votre config et présente le plugin | `/bootstrap` - lancez-vous directement |
-| `/prof` - explique comment tout fonctionne | `/spec` - construisez un cahier des charges d'abord |
+| `/prof` - explique comment tout fonctionne | |
 
 ## Comment ça marche
 
@@ -59,13 +59,12 @@ Décrivez simplement ce que vous voulez construire. Claude analyse votre descrip
 /bootstrap Mon SaaS de facturation en ligne avec paiements Stripe
 ```
 
-### Trois façons de définir votre projet
+### Deux façons de définir votre projet
 
-Quand vous lancez `/bootstrap`, vous choisissez comment décrire votre app :
+Quand vous lancez `/bootstrap`, vous choisissez ce que Claude construit d'abord :
 
-- **A - Construire un cahier des charges ensemble** (`/spec`) : Claude vous guide étape par étape à travers 5 blocs (projet, pages, design, fonctionnalités, contraintes) et produit un `cahier-des-charges.md`
-- **B - Fournir un cahier des charges existant** : donnez à Claude un fichier `.md`, il le lit et en déduit l'infrastructure
-- **C - Description courte uniquement** : Claude pose les questions d'infrastructure en une fois et construit une app simple
+- **Le cœur de votre app (recommandé)** : vous décrivez la chose que votre app doit bien faire, en un ou deux écrans. Claude ne construit que cela et le garde dans la mémoire du projet. Vous l'essayez, demandez des corrections, puis ajoutez une fonction à la fois. En vibe coding, c'est ce qui donne les meilleurs résultats : une app construite d'un bloc se pilote mal.
+- **Un cahier des charges complet** : Claude vous guide étape par étape à travers 5 blocs (projet, pages, design, fonctionnalités, contraintes), produit un `cahier-des-charges.md` et construit tout ce qu'il décrit
 
 ## Toutes les skills
 
@@ -74,7 +73,6 @@ Quand vous lancez `/bootstrap`, vous choisissez comment décrire votre app :
 | Skill | Ce que ça fait |
 |---|---|
 | `/bootstrap` | Créer un nouveau projet de zéro |
-| `/spec` | Construire un cahier des charges détaillé, étape par étape |
 | `/start` | Premier lancement : vérifie les prérequis, présente toutes les commandes |
 | `/prof` | Explique comment tout fonctionne simplement (mode pédagogique) |
 | `/seo` | Audit SEO et corrections (métadonnées, sitemap, image de partage, structure, URLs/slugs, accessibilité, lisibilité, couverture du sujet, fraîcheur du contenu, commerce local), plus ce que seul le site en ligne montre (un noindex involontaire, une adresse en double, des redirections temporaires, des liens cassés, les erreurs du sitemap). Un score calculé sur une grille fixe, gardé dans le projet pour comparer les passages |
@@ -144,7 +142,7 @@ Les projets créés avec ce plugin utilisent :
 - **next-intl** pour l'internationalisation (quand l'addon i18n est activé)
 - **Anthropic** (API Claude) pour les agents IA autonomes (quand l'addon agent est activé)
 - **Render** pour héberger les agents IA et automatisations longues (quand l'addon agent / automation route vers Render)
-- **Bitwarden** comme **coffre-fort de clés** - vos clés d'accès transverses (Cloudflare, Neon, email…) sont rangées **chiffrées** dans un coffre-fort, jamais en clair sur le disque ni en variable d'environnement. `/start` le met en place (compte gratuit, région EU) ; vous tapez un mot de passe maître quand le coffre est fermé, il reste ouvert six heures puis se referme vraiment, et entre-temps Claude récupère les clés tout seul quand il en a besoin.
+- **Bitwarden** comme **coffre-fort de clés** - vos clés d'accès transverses (Cloudflare, Neon, email…) sont rangées **chiffrées** dans un coffre-fort, jamais en clair sur le disque ni en variable d'environnement. `/start` le met en place (compte gratuit, région EU) ; vous tapez un mot de passe maître quand le coffre est fermé, il reste ouvert douze heures puis se referme vraiment, et entre-temps Claude récupère les clés tout seul quand il en a besoin.
 
 ## Ce que le bootstrap configure automatiquement
 

@@ -17,7 +17,7 @@ Audite la sécurité de votre app et corrige automatiquement les failles courant
   - **Authentification et contrôle d'accès** : vérification que les pages admin/protégées ne sont pas accessibles sans login, que les règles d'accès sont appliquées côté serveur, que chaque utilisateur ne peut accéder qu'à ses propres données (pas à celles d'un autre en changeant un id dans la requête), et que changer d'email, de mot de passe ou supprimer son compte demande le mot de passe actuel
   - **Validation des inputs** : vérification que les données utilisateur sont validées côté serveur (zod, etc.), y compris les uploads de fichiers (type et taille)
   - **Injection SQL et requêtes BDD** : vérification que les requêtes sont paramétrées (pas de concaténation de chaînes)
-  - **Headers de sécurité** : CSP, HSTS, X-Content-Type-Options, etc.
+  - **Headers de sécurité** : CSP, HSTS, X-Content-Type-Options, etc. La CSP qu'Hypervibe pose sur chaque site a deux parties : une base, appliquée, qui ne bloque rien de ce que le site charge, et une politique des scripts qui ne fait que signaler dans la console du navigateur ce qu'elle bloquerait. Un projet plus ancien la reçoit par la correction. La rendre bloquante reste votre décision, une fois ces signalements lus, et l'audit ne le fait jamais seul ; une CSP que vous avez écrite vous-même n'est jamais touchée
   - **CORS** : configuration des cross-origin requests
   - **Dépendances vulnérables** : `npm audit` sur les dépendances de production, framework compris
   - **Rate limiting et protection anti-abus** : protection contre le brute force et les abus (ex : sur le login)

@@ -118,7 +118,7 @@ cd <WEB_DIR> && node scripts/check-recette.mjs --inventaire
 
 You get, as JSON: the routers with their procedures, the pages with their routes, the existing tests, and (if a cahier exists) what is still uncovered. Also read:
 
-- `cahier-des-charges.md` at the project root, if `/spec` produced one: it holds the business rules the cahier must state (a rule the spec writes is a line of the recette).
+- `cahier-des-charges.md` at the project root, if the full spec of `/bootstrap` produced one: it holds the business rules the cahier must state (a rule the spec writes is a line of the recette).
 - `CLAUDE.md`: the conventions and the stack, to describe features with the right words.
 
 ## Step 6 - Write the cahier de recette

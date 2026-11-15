@@ -63,7 +63,7 @@ Vous choisissez : tout supprimer, ou garder certaines briques (la base de donné
 
 Hypervibe enchaîne les suppressions en parallèle où c'est possible (Vercel, R2, Workers, DNS, Stripe webhooks, Render, Upstash, Email Routing) puis en série là où il y a des dépendances (Neon, puis retrait du projet dans le worker `db-backup` partagé, puis ses tâches planifiées sur le worker partagé, puis mémoire Claude, et le repo GitHub en dernier).
 
-Si votre coffre-fort s'est refermé entre-temps (sa session dure six heures, et confirmer peut prendre une soirée), rien n'est supprimé du tout, le site compris : Hypervibe vous demande de rouvrir le coffre, puis reprend avec le même inventaire. Un projet ne reste jamais à moitié supprimé faute d'une clé qui n'a pas pu être lue.
+Si votre coffre-fort s'est refermé entre-temps (sa session dure douze heures, et confirmer peut prendre une soirée), rien n'est supprimé du tout, le site compris : Hypervibe vous demande de rouvrir le coffre, puis reprend avec le même inventaire. Un projet ne reste jamais à moitié supprimé faute d'une clé qui n'a pas pu être lue.
 
 À la fin, un rapport vous montre :
 - ✅ Ce qui a été supprimé automatiquement

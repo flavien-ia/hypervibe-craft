@@ -1,5 +1,5 @@
 {
-  "description": "Hypervibe guardrails: an irreversible or outward-facing shell command (Bash, Monitor, PowerShell, or the desktop app's terminal: all four run a command line) is confirmed by the user, or refused with the correct alternative. Fail-open by design. At the start of a session, a vault session older than its 6 hours is locked for real, in the background.",
+  "description": "Hypervibe guardrails: an irreversible or outward-facing shell command (Bash, Monitor, PowerShell, or the desktop app's terminal: all four run a command line) is confirmed by the user, or refused with the correct alternative. Fail-open by design. At the start of a session, a vault session older than its 12 hours is locked for real, in the background.",
   "hooks": {
     "SessionStart": [
       {

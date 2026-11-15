@@ -16,6 +16,7 @@ import { tmpdir as guardTmp } from "node:os";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const SUITES = [
+  ["the site's Content-Security-Policy: an enforced base that blocks nothing, a script policy reported only that each block adds to, never over the person's own, never a nonce (3.4.31 / 2.5.10)", join(ROOT, "scripts", "tests", "test-csp.mjs")],
   ["Hypervibe Enterprise: the former name of the offer is gone, outside a short and justified list (3.4.19)", join(ROOT, "scripts", "tests", "test-enterprise-name.mjs")],
   ["managed rule blocks", join(ROOT, "scripts", "tests", "test-managed-block.mjs")],
   ["the rule on database reads: columns named in findFirst too, the read cached rather than the page, both plans, an untouched copy updated (3.4.16)", join(ROOT, "scripts", "tests", "test-db-reads-rule.mjs")],
@@ -43,6 +44,7 @@ const SUITES = [
   ["a value of the .env for a shell variable, its prefix for a check", join(ROOT, "scripts", "tests", "test-env-value.mjs")],
   ["SECURITY.md claims", join(ROOT, "scripts", "tests", "test-security-claims.mjs")],
   ["rate limiter: the in-memory copies agree, and the shared counter keeps the contract", join(ROOT, "scripts", "tests", "test-rate-limit.mjs")],
+  ["placeholder images: setup-security lists their hosts in images.remotePatterns, once, never over the project's own images key (3.4.31 / 2.5.10)", join(ROOT, "scripts", "tests", "test-image-placeholders.mjs")],
   ["privacy audit: every service the project is connected to, known or not", join(ROOT, "scripts", "tests", "test-rgpd-audit.mjs")],
   ["Render variables: the project's own services, from its .env", join(ROOT, "scripts", "tests", "test-render-env.mjs")],
   ["a Render service found by its exact name, and recorded in the project's manifest", join(ROOT, "scripts", "tests", "test-render-service.mjs")],
@@ -102,7 +104,7 @@ const SUITES = [
   ["git identity: checked and repaired, never shown", join(ROOT, "scripts", "tests", "test-git-identity.mjs")],
   ["the vault's sign-in: one folder for every program on Windows, taken over by a copy", join(ROOT, "scripts", "tests", "test-bw-home.mjs")],
   ["the vault's unlock: one window at a time, none when the vault is already open", join(ROOT, "scripts", "tests", "test-vault-unlock.mjs")],
-  ["the vault's session: 6 hours for every reader, then locked for real, scheduled at the unlock and caught up at the start of a session (3.4.16)", join(ROOT, "scripts", "tests", "test-vault-session.mjs")],
+  ["the vault's session: 12 hours for every reader, then locked for real, scheduled at the unlock and caught up at the start of a session (3.4.16)", join(ROOT, "scripts", "tests", "test-vault-session.mjs")],
   ["a local payment test run by Claude: a test price checked, both started in the background, never a command to type", join(ROOT, "scripts", "tests", "test-stripe-local-test.mjs")],
   ["the SEO a project receives: the site's address in one place, robots.txt with its sitemap, a share image drawn by next/og, earlier lines brought up to date (3.4.12)", join(ROOT, "scripts", "tests", "test-seo-setup.mjs")],
   ["/seo's live checks, and the scores of /seo and /geo on a fixed grid kept in the project (3.4.12)", join(ROOT, "scripts", "tests", "test-seo-tools.mjs")],

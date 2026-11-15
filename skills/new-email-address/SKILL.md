@@ -86,7 +86,7 @@ node "$ROUTING" enable <domain>
 
 - **Exit 0** (`enabled: true`): Email Routing is on (`already: true` if it was). On a first activation Cloudflare adds its own MX and SPF records. Go on.
 - **Exit 2** (`foreignMx`): the domain receives its mail at another provider. **Stop here**: tell the user, in plain words, that their mailboxes there would stop receiving, and that the address is better created with that provider (most of them offer aliases). Replacing those mailboxes with forwarding is a change of mail provider, not this skill's to make.
-- **Exit 1**: Cloudflare refused, or the settings do not read back as enabled (`error`, in Cloudflare's own words): say it, and stop. Never announce an activation that did not read back.
+- **Exit 1**: Cloudflare refused, or the settings do not read back as enabled (`error`, in Cloudflare's own words): say it, and stop. Never announce an activation that did not read back. When `missingRight` is set, the Cloudflare key lacks the right **Zone · Zone Settings · Edit** (keys made before 3.4.31 do not have it): say so in plain words, and offer the two ways out the `error` gives, adding that right to the key (its page on Cloudflare, the key's line, **Edit**, then the **Zone policy** block) or enabling Email Routing once in the dashboard; then run the command again.
 - **Exit 3 / 4**: open the vault (`_ensure-vault`), or run `/start`.
 
 ---

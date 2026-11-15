@@ -96,6 +96,7 @@ import { syncManagedBlock } from "./rules/managed-block.mjs";
 import { NPMRC_PUBLIC_HOIST, PNPM_OVERRIDES, PNPM_PUBLIC_HOIST, addLines, pnpmReadsHoist, setWorkspaceBlock } from "./_pnpm-workspace.mjs";
 import { parseDeployOutput } from "./vercel/parse-deploy-output.mjs";
 import { loadAuthToken, readCliCurrentTeam } from "./_vercel-auth.mjs";
+import { addCspHost } from "./csp.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1019,6 +1020,11 @@ function vercelConfig() {
     JSON.stringify({ regions: ["fra1"] }, null, 2) + "\n",
   );
   ok("vercel.json written");
+  // What Vercel itself loads on the site (its toolbar on previews), in the reported part of the
+  // site's Content-Security-Policy, which setup-security.mjs has written.
+  const csp = addCspHost(PROJECT_DIR);
+  if (csp.state === "written" || csp.state === "current") ok(`${csp.file}: the Content-Security-Policy lets Vercel's toolbar through`);
+  else warn(`CSP_REVIEW: ${csp.reason ?? csp.state}`);
 }
 
 // ─── workspace-root/.claude/launch.json (Claude Preview MCP) ─────────

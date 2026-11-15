@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// test-vault-session.mjs - The vault's session: 6 hours, one length for every reader, and a real
-// end (3.4.16 / 2.4.15, security audit of 23/10/2026).
+// test-vault-session.mjs - The vault's session: 12 hours, one length for every reader, and a real
+// end (3.4.16 / 2.4.15, security audit of 23/10/2026, which set 6 hours; 12 again since 3.4.31 /
+// 2.5.10, Flavien's decision of 15/11/2026: one unlock for a working day, the real end unchanged).
 //
 // Until then the session's limit (12 hours) was only a rule of the scripts: a read refused an older
 // session, but nothing ever ran `bw lock`, and the token kept opening the vault to any program of
@@ -10,12 +11,12 @@
 //   2. a session found over is locked for real (`bw lock`, the token in its environment, never on
 //      its command line), then its file removed; never a newer session, never during an unlock,
 //      never a thrown error, never the token in a message;
-//   3. the unlock schedules that lock 6 hours later in the system's own scheduler (Windows task,
+//   3. the unlock schedules that lock 12 hours later in the system's own scheduler (Windows task,
 //      macOS launchd agent, systemd-run then at on Linux, else said), without a window, through a
 //      copy kept out of the plugin that runs alone once the plugin's folder is gone (3.4.17);
 //   4. the SessionStart hook catches up a computer that was off, in the background, fast, silent
 //      when there is nothing to do;
-//   5. the texts say 6 hours, and that the vault closes for real.
+//   5. the texts say 12 hours (never the 6 of 3.4.16 to 3.4.30), and that the vault closes for real.
 // No vault, no window, no scheduler: `bw` is a stand-in (HYPERVIBE_BW_STANDIN) in a home folder of
 // the recette's own, and the schedulers are recorded, never run.
 //
@@ -89,7 +90,7 @@ const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 try {
   console.log("── 1. Une seule durée, lue par tous ──");
-  check("la session dure 6 heures, une seule constante", S.TTL_HOURS === 6 && S.TTL_SECONDS === 6 * 3600);
+  check("la session dure 12 heures, une seule constante", S.TTL_HOURS === 12 && S.TTL_SECONDS === 12 * 3600);
   {
     // Every file of the harness that names the session's file reads it through session.mjs, and
     // none carries a length of its own (the old 12 * 60 * 60 lived in four of them).
@@ -110,14 +111,15 @@ try {
     const i18n = await import(pathToFileURL(join(VAULT_DIR, "i18n.mjs")).href);
     const fr = i18n.makeT("fr");
     const en = i18n.makeT("en");
-    check("la fenêtre dit la durée de la constante, en français et en anglais", fr("unlocked").includes(`${S.TTL_HOURS}h`) && en("unlocked").includes(`${S.TTL_HOURS}h`) && !/12/.test(fr("unlocked") + en("unlocked")), `${fr("unlocked")} | ${en("unlocked")}`);
+    check("la fenêtre dit la durée de la constante, en français et en anglais", fr("unlocked").includes(`${S.TTL_HOURS}h`) && en("unlocked").includes(`${S.TTL_HOURS}h`) && !/\b6\s?h\b/.test(fr("unlocked") + en("unlocked")), `${fr("unlocked")} | ${en("unlocked")}`);
     check("... et que le coffre se referme ensuite", /referme/.test(fr("unlocked")) && /locks itself/.test(en("unlocked")));
     check("... et quand la fermeture n'a pas pu être programmée, elle le dit avec la raison", fr("lockNotScheduled", { detail: "raison" }).includes("raison") && en("lockNotScheduled", { detail: "why" }).includes("why"));
-    check("le texte de la fenêtre n'écrit pas la durée lui-même", !/12h|Valable 12|Valid for 12/.test(readFileSync(join(VAULT_DIR, "i18n.mjs"), "utf8")));
+    check("le texte de la fenêtre n'écrit pas la durée lui-même", !/\b(?:6|12)\s?h\b|Valable (?:6|12)|Valid for (?:6|12)/.test(readFileSync(join(VAULT_DIR, "i18n.mjs"), "utf8")));
   }
   {
     const ts = Math.floor(NOW / 1000);
-    check("une session de 6 h tout juste n'est pas finie, une seconde de plus si", !S.isExpired(ts - 6 * 3600, ts * 1000) && S.isExpired(ts - 6 * 3600 - 1, ts * 1000));
+    check("une session de 12 h tout juste n'est pas finie, une seconde de plus si", !S.isExpired(ts - 12 * 3600, ts * 1000) && S.isExpired(ts - 12 * 3600 - 1, ts * 1000));
+    check("... ni une session de 11 h (l'ancienne limite de 6 h est passée)", !S.isExpired(ts - 11 * 3600, ts * 1000));
   }
 
   console.log("\n── 2. Le vrai verrouillage d'une session finie ──");
@@ -134,19 +136,19 @@ try {
     };
   };
   {
-    const h = home(6 * HOUR + 10 * SECOND);
+    const h = home(12 * HOUR + 10 * SECOND);
     const r0 = runner();
     const r = S.lockSession({ file: sessionOf(h), home: h, run: r0.run, unlockLock: join(h, ".hypervibe", "bw-unlock.lock") });
     check("une session finie : bw lock, avec son jeton, puis son fichier retiré", r.ended === true && r.reason === "locked" && r0.seen.length === 1 && r0.seen[0].token === "jeton-de-recette-SECRET-0042" && !existsSync(sessionOf(h)), JSON.stringify(r));
   }
   {
-    const h = home(5 * HOUR);
+    const h = home(11 * HOUR);
     const r0 = runner();
     const r = S.lockSession({ file: sessionOf(h), home: h, run: r0.run });
     check("une session qui n'est pas finie n'est pas touchée", r.reason === "not-expired" && r0.seen.length === 0 && existsSync(sessionOf(h)), JSON.stringify(r));
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const ts = Number(readFileSync(sessionOf(h), "utf8").split("\n")[0]);
     const r0 = runner();
     const r = S.lockSession({ at: ts - 3600, file: sessionOf(h), home: h, run: r0.run });
@@ -155,7 +157,7 @@ try {
     check("... celui de sa propre session la verrouille", r2.reason === "locked" && r0.seen.length === 1, JSON.stringify(r2));
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const lock = join(h, ".hypervibe", "bw-unlock.lock");
     writeFileSync(lock, `${process.pid}\n${new Date(NOW).toISOString()}\n`);
     const r0 = runner();
@@ -166,7 +168,7 @@ try {
     check("... une fenêtre abandonnée depuis plus de 15 minutes n'empêche plus rien", r2.reason === "locked", JSON.stringify(r2));
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const r0 = runner(1, "boom jeton-de-recette-SECRET-0042");
     let r;
     let thrown = null;
@@ -179,13 +181,13 @@ try {
     check("... sans jamais redire le jeton", !JSON.stringify(r).includes("SECRET-0042") && !S.lockOutcome(r).includes("SECRET-0042"));
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const r = S.lockSession({ file: sessionOf(h), home: h, run: runner(1, "You are not logged in.").run });
     check("aucun compte connecté : le jeton n'ouvre rien, son fichier part quand même", r.reason === "signed-out" && r.ended === true && !existsSync(sessionOf(h)), JSON.stringify(r));
   }
   {
     // An unlock that lands while the lock runs: its new session is never removed.
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const r0 = runner(0, "Your vault is locked.", () => writeFileSync(sessionOf(h), `${Math.floor(NOW / 1000)}\nnouvelle-session`));
     const r = S.lockSession({ file: sessionOf(h), home: h, run: r0.run });
     check("une session écrite pendant le verrouillage reste en place", r.reason === "locked" && existsSync(sessionOf(h)) && readFileSync(sessionOf(h), "utf8").includes("nouvelle-session"), JSON.stringify(r));
@@ -195,7 +197,7 @@ try {
     check("pas de session : rien à verrouiller", S.lockSession({ file: sessionOf(h), home: h, run: runner().run }).reason === "no-session");
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const guard = join(h, ".hypervibe", "bw-locking");
     writeFileSync(guard, "");
     const r0 = runner();
@@ -228,7 +230,7 @@ try {
 
   console.log("\n── 3. Le verrouillage programmé au déverrouillage ──");
   const TS = 1_800_000_000;
-  const DUE = Math.ceil(((TS + 6 * 3600 + 60) * 1000) / 60000) * 60000;
+  const DUE = Math.ceil(((TS + 12 * 3600 + 60) * 1000) / 60000) * 60000;
   /** A scheduler recorded, never run: each call answered by `answer(cmd, args)`. */
   const scheduler = (answer = () => ({ status: 0, stdout: "scheduled", stderr: "" })) => {
     const seen = [];
@@ -240,7 +242,7 @@ try {
     const r = S.scheduleLock({ at: TS, os: "win32", home: h, run: sch.run, node: "C:\\Program Files\\nodejs\\node.exe" });
     const ps = sch.seen.find((c) => c.cmd === "powershell.exe")?.args?.at(-1) ?? "";
     check("Windows : une tâche planifiée unique, remplacée à chaque déverrouillage", r.ok === true && r.how === "task-scheduler" && /Register-ScheduledTask -TaskName 'Hypervibe vault lock'/.test(ps) && /-Force/.test(ps) && /New-ScheduledTaskTrigger -Once/.test(ps), JSON.stringify(r));
-    check("... à l'heure de fin de la session (6 h et une minute, à la minute près)", ps.includes(`FromUnixTimeSeconds(${DUE / 1000})`) && r.due === new Date(DUE).toISOString(), r.due);
+    check("... à l'heure de fin de la session (12 h et une minute, à la minute près)", ps.includes(`FromUnixTimeSeconds(${DUE / 1000})`) && r.due === new Date(DUE).toISOString(), r.due);
     check("... rattrapée à la prochaine ouverture de session si l'heure est passée", /-StartWhenAvailable/.test(ps));
     check("... lancée par wscript, sans fenêtre, avec l'horodatage de SA session", /-Execute 'wscript\.exe'/.test(ps) && ps.includes(`lock.vbs" ${TS}'`), ps);
     const vbs = readFileSync(join(h, ".hypervibe", "vault-lock", "lock.vbs"));
@@ -299,7 +301,7 @@ try {
   console.log("\n── 4. Les lecteurs, lancés pour de vrai ──");
   const VAULT = join(VAULT_DIR, "vault.mjs");
   {
-    const h = home(6 * HOUR + 30 * SECOND);
+    const h = home(12 * HOUR + 30 * SECOND);
     const { env, log } = envFor(h);
     const r = spawnSync(process.execPath, [VAULT, "status"], { env, encoding: "utf8" });
     const c = calls(log);
@@ -310,13 +312,13 @@ try {
     check("... ensuite le coffre se dit verrouillé, sans relancer bw", r2.stdout.trim() === "locked" && calls(log).length === 1, r2.stdout);
   }
   {
-    const h = home(6 * HOUR + 30 * SECOND);
+    const h = home(12 * HOUR + 30 * SECOND);
     const { env } = envFor(h);
     const r = spawnSync(process.execPath, [VAULT, "get", "NEON", "api_key"], { env, encoding: "utf8" });
-    check("vault.mjs get, session finie : code 3, et le message dit 6 h et le verrouillage", r.status === 3 && /expired \(>6h\): the vault was locked/.test(r.stderr), `${r.status} ${r.stderr}`);
+    check("vault.mjs get, session finie : code 3, et le message dit 12 h et le verrouillage", r.status === 3 && /expired \(>12h\): the vault was locked/.test(r.stderr), `${r.status} ${r.stderr}`);
   }
   {
-    const h = home(6 * HOUR + 30 * SECOND);
+    const h = home(12 * HOUR + 30 * SECOND);
     const { env } = envFor(h, { mode: "fail" });
     const r = spawnSync(process.execPath, [VAULT, "get", "NEON", "api_key"], { env, encoding: "utf8" });
     check("un bw lock qui échoue : la lecture rend son code 3 comme avant, et dit l'échec", r.status === 3 && /locking it failed \(boom/.test(r.stderr) && existsSync(sessionOf(h)), `${r.status} ${r.stderr}`);
@@ -332,13 +334,13 @@ try {
   ]) {
     const script = join(ROOT, "scripts", name);
     if (!existsSync(script)) continue;
-    const h = home(6 * HOUR + 30 * SECOND);
+    const h = home(12 * HOUR + 30 * SECOND);
     const { env, log } = envFor(h);
     const r = spawnSync(process.execPath, [script, ...args], { env, encoding: "utf8", cwd: h });
-    check(`${name}, session finie : code 3, verrouillée pour de vrai, message en 6 h`, r.status === 3 && calls(log).length === 1 && !existsSync(sessionOf(h)) && /plus de 6 h/.test(r.stderr) && /verrouillé/.test(r.stderr), `${r.status} ${r.stderr.slice(0, 300)}`);
+    check(`${name}, session finie : code 3, verrouillée pour de vrai, message en 12 h`, r.status === 3 && calls(log).length === 1 && !existsSync(sessionOf(h)) && /plus de 12 h/.test(r.stderr) && /verrouillé/.test(r.stderr), `${r.status} ${r.stderr.slice(0, 300)}`);
   }
   {
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const ts = Number(readFileSync(sessionOf(h), "utf8").split("\n")[0]);
     const { env, log } = envFor(h);
     let r = spawnSync(process.execPath, [SESSION, "lock", "--at", String(ts - 60)], { env, encoding: "utf8" });
@@ -354,7 +356,7 @@ try {
     // lock is scheduled from it, that folder is removed, then the very command the scheduler
     // recorded is launched. A task aimed at the plugin's own script, or an import that resolves in
     // the plugin but not in the copy, fails here.
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const ts = Number(readFileSync(sessionOf(h), "utf8").split("\n")[0]);
     const plugin = join(scratch("hv-session-plugin-"), "scripts", "vault");
     mkdirSync(plugin, { recursive: true });
@@ -379,7 +381,7 @@ try {
   {
     // The work of the check itself, without Node's start: well under 100 ms.
     const quiet = home(2 * HOUR);
-    const over = home(7 * HOUR);
+    const over = home(13 * HOUR);
     const spawned = [];
     let t = performance.now();
     const a = S.sweep({ file: sessionOf(quiet), spawnLock: (ts) => spawned.push(ts) });
@@ -392,7 +394,7 @@ try {
   }
   {
     // For real: the hook as Claude Code runs it, then its detached lock.
-    const h = home(7 * HOUR);
+    const h = home(13 * HOUR);
     const { env, log } = envFor(h);
     const t0 = performance.now();
     const r = spawnSync(process.execPath, [SESSION, "sweep"], { env, encoding: "utf8", input: "{}" });
@@ -433,21 +435,27 @@ try {
     };
     walk(join(ROOT, "skills"));
     for (const f of ["README.md", "README.fr.md", "SECURITY.md"]) if (existsSync(join(ROOT, f))) docs.push(join(ROOT, f));
-    const twelve = /(?:session|coffre|vault|ouvert|open|valid|valable|déverrouill|unlock)[^.]{0,80}(?:12\s?h\b|12 hours|12 heures|douze heures|twelve hours)|(?:12\s?h\b|12 hours|12 heures|douze heures|twelve hours)[^.]{0,40}(?:session|coffre|vault)|TTL 12/i;
+    const vaultWords = "(?:session|coffre|vault|ouvert|open|valid|valable|déverrouill|unlock|mot de passe ma[iî]tre|master password)";
+    const length = "(?:\\b6\\s?h\\b|\\b6 hours|\\b6 heures|six hours|six heures|half-day|half a day|demi-journée|once or twice a day|une ou deux (?:fois|saisies))";
+    const daily = "(?:one|an) (?:unlock|entry) per half|une saisie par demi|every six hours|toutes les six heures";
+    const six = new RegExp(`${vaultWords}[^.]{0,80}${length}|${length}[^.]{0,60}${vaultWords}|TTL 6\\b|${daily}`, "i");
+    // The clock's alert throttle (at most one mail every six hours per task) is another six hours.
+    const throttle = /at most once every (?:six|6) hours|au maximum une fois toutes les (?:six|6) heures|an alert every (?:six|6) hours|once every 6 hours per task/i;
     // Read sentence by sentence (a page wraps its lines): a sentence that tells what was true
     // before this version ("Until 3.4.16 ...") is history, not a claim.
     const history = /\b(?:until|jusqu'(?:à|a)(?: la)?)\s+(?:3\.4\.16|2\.4\.15)/i;
     const sentences = (f) => readFileSync(f, "utf8").replace(/\s+/g, " ").split(/(?<=[.!?])\s/);
-    const stale = docs.filter((f) => sentences(f).some((s) => twelve.test(s) && !history.test(s)));
-    check("plus aucun texte ne dit que le coffre reste ouvert 12 heures", stale.length === 0, stale.map((f) => relative(ROOT, f)).join(", "));
+    const claims = (s) => six.test(s) && !history.test(s) && !throttle.test(s);
+    const stale = docs.filter((f) => sentences(f).some(claims));
+    check("plus aucun texte ne dit que le coffre reste ouvert six heures, ni par demi-journée", stale.length === 0, stale.map((f) => `${relative(ROOT, f)}: ${sentences(f).find(claims)?.slice(0, 160)}`).join(" | "));
     const keyring = ["skills/_add-keyring/SKILL.md", "skills/add-keyring/SKILL.md"].map((f) => join(ROOT, f)).find(existsSync);
-    check("la mise en place du coffre dit 6 h, et qu'il se referme tout seul", Boolean(keyring) && /6\s?h/.test(readFileSync(keyring, "utf8")) && /(?:locks itself|se referme)/.test(readFileSync(keyring, "utf8")));
+    check("la mise en place du coffre dit 12 h, et qu'il se referme tout seul", Boolean(keyring) && /\b12\s?h\b|\b12 heures|\b12 hours/.test(readFileSync(keyring, "utf8")) && !/\b6\s?h\b/.test(readFileSync(keyring, "utf8")) && /(?:locks itself|se referme)/.test(readFileSync(keyring, "utf8")));
     const en = lire(join(ROOT, "README.md")).replace(/\s+/g, " ");
     const frReadme = lire(join(ROOT, "README.fr.md")).replace(/\s+/g, " ");
-    check("le README dit les six heures et le vrai verrouillage, en anglais et en français", /six hours/.test(en) && /(?:locks itself for real|really locked)/.test(en) && /six heures/.test(frReadme) && /(?:se referme vraiment|vraiment verrouillé)/.test(frReadme));
+    check("le README dit les douze heures et le vrai verrouillage, en anglais et en français", /twelve hours/.test(en) && /(?:locks itself for real|really locked)/.test(en) && /douze heures/.test(frReadme) && /(?:se referme vraiment|vraiment verrouillé)/.test(frReadme));
     if (existsSync(join(ROOT, "SECURITY.md"))) {
       const sec = lire(join(ROOT, "SECURITY.md"));
-      check("SECURITY.md dit la session de 6 heures et son vrai verrouillage", /six hours/.test(sec) && /`bw lock`/.test(sec) && /scheduled/.test(sec), "");
+      check("SECURITY.md dit la session de 12 heures et son vrai verrouillage", /twelve hours/.test(sec) && !/six hours/.test(sec) && /`bw lock`/.test(sec) && /scheduled/.test(sec), "");
     }
   }
 } finally {

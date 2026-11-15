@@ -3,8 +3,9 @@
 // `bw unlock` hands back a session token. The unlock window (interactive.mjs) writes it to
 // ~/.hypervibe/bw-session ("<unix_timestamp>\n<token>"), and every read that is not a window takes
 // it from there: vault.mjs, and in the Enterprise harnesses bw-org.mjs and apply-bienvenue.mjs.
-// TTL_SECONDS below is the ONE length of a session all of them read: 6 hours since 3.4.16 / 2.4.15
-// (12 before).
+// TTL_SECONDS below is the ONE length of a session all of them read: 12 hours since 3.4.31 /
+// 2.5.10 (Flavien's decision of 15/11/2026, one unlock for a working day), 6 from 3.4.16 / 2.4.15,
+// 12 before.
 //
 // Until then that length was only a rule of the scripts: a read refused an older session, but
 // nothing ever ran `bw lock`, so the token stayed in that file and opened the vault to any program
@@ -12,7 +13,7 @@
 // real, in three places, none of which ever blocks a read or an unlock:
 //   1. the read that finds the session over locks it (lockSession): `bw lock`, the token handed
 //      over in the environment, never on a command line, then the file removed;
-//   2. the unlock schedules that lock 6 hours later in the system's own scheduler (scheduleLock),
+//   2. the unlock schedules that lock 12 hours later in the system's own scheduler (scheduleLock),
 //      replacing the one of the previous unlock: a one-time task on Windows, caught up at the
 //      next sign-in when the computer was off; a launchd agent on macOS, which takes itself away
 //      once it has run; systemd-run --user on Linux, else at, else nothing, and that is said;
@@ -47,7 +48,7 @@ import { useBwHome } from "./bw-home.mjs";
 import { alive, lockFile, STALE_MS } from "./unlock-once.mjs";
 
 /** How long an unlocked session lasts, in hours: the one length every reader and text uses. */
-export const TTL_HOURS = 6;
+export const TTL_HOURS = 12;
 export const TTL_SECONDS = TTL_HOURS * 60 * 60;
 /** The scheduled lock runs this long after the end of the session: by then every reader agrees
  *  it is over (they refuse a session strictly older than TTL_SECONDS). */

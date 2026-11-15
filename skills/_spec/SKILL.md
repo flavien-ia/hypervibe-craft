@@ -1,6 +1,7 @@
 ---
-name: spec
-description: Guide the user through building a detailed project specification (cahier des charges) for a web application. Produces a structured .md file ready to be used by /bootstrap. Use when the user wants to define their project step by step before building it.
+name: _spec
+description: "Internal - the full guided specification (cahier des charges) of a web application, bloc by bloc, written to cahier-des-charges.md with the infrastructure it implies. Called only by /bootstrap's full-spec option (its second option, after the core). Not meant to be invoked directly by users."
+user-invocable: false
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; most workflows also use pnpm, git, and project CLIs (vercel, gh)."
 ---
 
@@ -22,9 +23,9 @@ You are a product strategist helping a non-technical user define their web appli
 - If the user is vague, propose concrete options to choose from
 - Adapt the depth of questions to the complexity of the project
 
-The project name and short description have already been provided by `/bootstrap` before calling this skill. Use them as context.
+This skill is called only by `/bootstrap`'s full-spec option, where the user already chose the full spec over the core: go straight to the full guided spec below, with no second question. The project name and short description have already been provided by `/bootstrap`: use them as context.
 
-⚠️ **No explicit questions about infrastructure** (DB, auth, email, stripe, etc.). You **silently infer** these decisions from what the user describes in blocs 1-2 (pages, actions, admin area, mentioned payments, etc.), exactly as `/bootstrap` does when there is no spec. No "confirm the infra" recap either in the spec: the final confirmation happens **only once**, in bootstrap Step 4b after you hand control back.
+⚠️ **No explicit questions about infrastructure** (DB, auth, email, stripe, etc.). You **silently infer** these decisions from what the user describes in blocs 1-2 (pages, actions, admin area, mentioned payments, etc.), exactly as `/bootstrap` does for the core. No "confirm the infra" recap either in the spec: the final confirmation happens **only once**, in bootstrap Step 4b after you hand control back.
 
 ⚠️ **No questions about the domain, GitHub collaborators, or legal notices** in the spec:
 - Domain → `/add-domain` post-bootstrap, out of scope of "what are we building"
@@ -113,7 +114,7 @@ Summarize, confirm, then proceed to the silent inference + file generation.
 
 ⚠️ This section is **internal**, the user sees NOTHING of this step. No menu, no recap, no confirmation. You deduce silently, you fill in the "5. Infrastructure technique" section of the generated file, and the confirmation will happen later in bootstrap Step 4b.
 
-**Inference rules** (identical to branches B/C of bootstrap, keep both consistent):
+**Inference rules** (identical to those of `/bootstrap`'s core option, keep both consistent):
 
 - Users, accounts, data, content management (mention of "booking", "order", "article", "client record", etc. in bloc 1-2) → `add-db` + `add-auth` (credentials)
 - Admin area / backoffice / protected pages (bloc 2) → `add-auth` (credentials, admin mode if only the owner logs in; users mode if public signup)

@@ -379,7 +379,7 @@ How the question is asked depends on what is left:
 
 ## Phase 3 - Execution (1 script call)
 
-**Open the vault again first**: invoke `_ensure-vault` before the execution. Confirmations can take an evening, or a night: the vault's session lasts six hours, and it may have closed since the inventory.
+**Open the vault again first**: invoke `_ensure-vault` before the execution. Confirmations can take an evening, or a night: the vault's session lasts twelve hours, and it may have closed since the inventory.
 
 Build the `scope` JSON array from the Phase 2.5 choices. Possible categories:
 

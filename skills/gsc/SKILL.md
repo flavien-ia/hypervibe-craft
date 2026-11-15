@@ -130,9 +130,11 @@ Ask the user for their Google address (the one for their Search Console) for the
 
 **(d) Add the property in GSC** (after successful verification):
 ```bash
-printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3A<domain>"
+printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -H "Content-Length: 0" -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3A<domain>"
 ```
 Mandatory order: (a) token -> (b) TXT -> (c) verify -> (d) add (otherwise 403).
+
+Both `PUT` calls of this skill (adding the property, submitting the sitemap) send no body, and carry `Content-Length: 0` for that reason: without it, Google refuses them with **411 Length Required**. A 411 means that header is missing, nothing else. A 403 on the sitemap right after it does not mean a missing right: the property was never added (this step failed). Add the property again, then submit the sitemap.
 
 ---
 
@@ -173,7 +175,7 @@ Look for `src/app/sitemap.ts` (or `apps/web/src/app/sitemap.ts`). Absent -> tell
 ### 3.2 - Submit (PUT)
 ```bash
 SITE="sc-domain%3A<domain>"; FEED="https%3A%2F%2F<domain>%2Fsitemap.xml"
-printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -X PUT "https://www.googleapis.com/webmasters/v3/sites/$SITE/sitemaps/$FEED"
+printf 'header = "Authorization: Bearer %s"\n' "$TOK" | curl -s --config - -H "Content-Length: 0" -X PUT "https://www.googleapis.com/webmasters/v3/sites/$SITE/sitemaps/$FEED"
 ```
 
 ### 3.3 - Check the status

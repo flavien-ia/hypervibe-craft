@@ -73,9 +73,9 @@ Wait for the answer.
 
 | Choice | Action |
 |---|---|
-| 1 (switch bucket) | Ask for the new bucket name + public/private. Create it via `wrangler r2 bucket create <nom> -J eu` (strict EU jurisdiction, GDPR - NEVER omit `-J eu`). Push `R2_BUCKET_NAME=<nouveau>` via `_push-env-vars`. Remind that the files in the old bucket are not migrated automatically. |
+| 1 (switch bucket) | Ask for the new bucket name + public/private. Create it via `wrangler r2 bucket create <nom> -J eu` (strict EU jurisdiction, GDPR - NEVER omit `-J eu`). Push `R2_BUCKET_NAME=<nouveau>` via `_push-env-vars`, then the `csp.mjs storage` command (Step 6). Remind that the files in the old bucket are not migrated automatically. |
 | 2 (key rotation) | Guide to the Cloudflare dashboard → R2 → Manage R2 API tokens → Revoke the old one + Create new token with the same permissions on the bucket. Collect the two new keys through the masked window of Step 8 (`_collect-secret`, entry « Cloudflare R2 - bucket token »), never in the conversation. |
-| 3 (update public URL) | Ask for the new public URL (e.g. `https://assets.mydomain.com`). Push `R2_PUBLIC_URL=<url>` via `_push-env-vars`. Remind that on the Cloudflare side, a custom domain must have been connected to the bucket via the R2 dashboard. |
+| 3 (update public URL) | Ask for the new public URL (e.g. `https://assets.mydomain.com`). Push `R2_PUBLIC_URL=<url>` via `_push-env-vars`, then the `csp.mjs storage` command (Step 6). Remind that on the Cloudflare side, a custom domain must have been connected to the bucket via the R2 dashboard. |
 | 4 (start over) | Abort: ask the user to manually clean up their R2 env vars, then re-run. |
 | 5 (migrate to EU) | Start the migration - see **"Option 5 in detail"** just below. In short: create the EU twin **under the same name**, copy the objects ONCE, switch the env vars, then delete the old bucket. |
 | 6 (something else) | Ask for clarification. Do not run the full flow by default. |
@@ -253,6 +253,14 @@ Invoke `_push-env-vars` with:
 - **If public**: also add `R2_PUBLIC_URL=<the pub-...r2.dev URL retrieved in Step 4>`
 
 **Do NOT push `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` here** - created manually by the user in Step 8.
+
+Then let the addresses of the files through the site's Content-Security-Policy (images, media and uploads from the browser, in its reported part, which only watches). They are read from the `R2_*` variables just written:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/csp.mjs" storage --project-dir "<PROJECT_ROOT>" --web-dir "<WEB_DIR>"
+```
+
+`state` `written` or `current` → nothing to say. `own` → the project sets a policy of its own, never touched: pass on `reason` (the addresses to add by hand). `review` → pass on its `reason`. Run it again whenever the bucket, its endpoint (the move to the EU, option 5) or its public address changes: it replaces what the storage had asked for before.
 
 ## Step 7 - Update CLAUDE.md
 

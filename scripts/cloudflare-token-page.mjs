@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // cloudflare-token-page.mjs - The page that makes a Cloudflare API token with its permissions already
-// ticked, so that a person checks and clicks instead of adding thirteen lines one by one with
+// ticked, so that a person checks and clicks instead of adding fourteen lines one by one with
 // "+ Add more" (pre-training sessions of November 2026: that list is where people got stuck).
 //
 // Cloudflare fills the "Create Token" form from its address:
@@ -12,7 +12,10 @@
 // There each group carries a `label`, its short key followed by its level ("dns_write",
 // "cache_purge"); `write` is asked as "edit" in the address. `cfLabel` keeps that label, and the
 // recette derives key and type from it. The three pages were opened and read down to the summary
-// on 11/11/2026: every line was ticked, at its level, and nothing else.
+// on 11/11/2026: every line was ticked, at its level, and nothing else. "Zone Settings" (label
+// zone_settings_write, key zone_settings / edit, as the couture's Cloudflare module declares it)
+// joined the account's and the organisation's lists in 3.4.31 / 2.5.10: enabling Email Routing
+// through the API, and reading its settings, need it (email-routing.mjs names it on a refusal).
 //
 // One list per key, and the skills read it from here, the page and the readable fallback alike:
 //   account       the account's key of the solo harness (/start)
@@ -34,6 +37,7 @@ const ACCOUNT_SOLO = [
   { scope: "User", group: "Memberships", level: "Read", cfLabel: "memberships_read" },
   { scope: "Zone", group: "Zone", level: "Edit", cfLabel: "zone_write" },
   { scope: "Zone", group: "DNS", level: "Edit", cfLabel: "dns_write" },
+  { scope: "Zone", group: "Zone Settings", level: "Edit", cfLabel: "zone_settings_write" },
   { scope: "Zone", group: "Email Routing Rules", level: "Edit", cfLabel: "email_routing_rule_write" },
   { scope: "Zone", group: "Bot Management", level: "Read", cfLabel: "bot_management_read" },
   { scope: "Zone", group: "Cache Purge", level: "Purge", cfLabel: "cache_purge" },
@@ -52,6 +56,7 @@ const ORGANISATION = [
   { scope: "User", group: "Memberships", level: "Read", cfLabel: "memberships_read" },
   { scope: "Zone", group: "Zone", level: "Edit", cfLabel: "zone_write" },
   { scope: "Zone", group: "DNS", level: "Edit", cfLabel: "dns_write" },
+  { scope: "Zone", group: "Zone Settings", level: "Edit", cfLabel: "zone_settings_write" },
   { scope: "Zone", group: "Email Routing Rules", level: "Edit", cfLabel: "email_routing_rule_write" },
   { scope: "Zone", group: "Cache Purge", level: "Purge", cfLabel: "cache_purge" },
 ];

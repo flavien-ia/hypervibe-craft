@@ -75,7 +75,7 @@ Wait for the user's reply, then explain the requested topic using the content be
 > - **tRPC** - The internal communication system. This is what lets the frontend (what the user sees) talk to the backend (the invisible logic).
 > - **GitHub** - The vault for your code. Everything is saved there, with a complete history. You can always go back.
 > - **Vercel** - The host. It's the company that puts your app online and makes it accessible to the whole world. Every time you update your code, Vercel updates your app automatically.
-> - **Bitwarden (the key vault)** - Where your access keys to services (Cloudflare, database, email...) are stored **encrypted**, never in plain text on your computer. You type a single master password, the vault stays open six hours and then locks itself again, and in between Claude fetches the right keys on its own whenever it needs them. `/start` sets it up for you at the very beginning (free account). This is what lets you never have to handle or copy your keys by hand.
+> - **Bitwarden (the key vault)** - Where your access keys to services (Cloudflare, database, email...) are stored **encrypted**, never in plain text on your computer. You type a single master password, the vault stays open twelve hours and then locks itself again, and in between Claude fetches the right keys on its own whenever it needs them. `/start` sets it up for you at the very beginning (free account). This is what lets you never have to handle or copy your keys by hand.
 >
 > 💡 **European hosting by default**: Hypervibe configures your app so that its functions run in **Frankfurt** (region `fra1` at Vercel) and your database in the same datacenter (`aws-eu-central-1` at Neon). Ultra-low latency between the code and the DB, and your data stays in Europe - better for GDPR.
 >
@@ -104,7 +104,7 @@ Wait for the user's reply, then explain the requested topic using the content be
 > 5. **I create a GitHub repository** - your code is saved online, safely
 > 6. **I deploy to Vercel** - your app is immediately accessible on the internet with a URL
 > 7. **I enable the requested add-ons** - database, authentication, emails, etc.
-> 8. **If you provided a specification**, I build the pages and features described in it
+> 8. **I build what we defined together**: the core of your app (one or two screens) if you chose it, or everything the full spec describes
 > 9. **I create a CLAUDE.md file** - it's my "memory" of the project. Each time you talk to me about this project, I re-read it to remind myself how everything works
 > 10. **I create the legal pages** - legal notices and a **data-driven privacy policy**: it is fed by a central registry (`src/lib/subprocessors.json`) that updates automatically each time a service is added via the `/add-*` skills. You will no longer have to wonder "is Stripe in my policy?" - the answer will be yes as soon as you run `/add-stripe`.
 > 11. **I configure everything for Europe**: your app runs in Frankfurt (region `fra1` at Vercel) and your database in Frankfurt as well (region `aws-eu-central-1` at Neon). Low latency and GDPR compliance on the data residency side.
@@ -121,7 +121,6 @@ Wait for the user's reply, then explain the requested topic using the content be
 >
 > - **/start** - The very first skill to run after installing the plugin. It checks that everything is properly installed on your computer (accounts, tools, access) and introduces you to the available commands.
 > - **/prof** - That's me! To understand how the plugin works, the stack, or any concept that seems obscure to you.
-> - **/spec** - To build a guided specification, question by question. Useful before `/bootstrap`, or at any time to clarify a new project.
 >
 > **To evolve your project**
 >
@@ -212,17 +211,14 @@ Wait for the user's reply, then explain the requested topic using the content be
 
 ## Topic 7 - The specification
 
-> The specification (the spec), is the document that describes everything your app must do. The more precise it is, the better the result.
+> The specification (the spec) describes what your app must do. In vibe coding, you do not need a big, complete one to start: the best results come from building the core first.
 >
-> You have three options when you run `/bootstrap`:
+> You have two options when you run `/bootstrap`:
 >
-> - **Option A**: I help you build it together, question by question. This is the best option if it's your first project. At the end, we have a clean file that I follow.
-> - **Option B**: You already have one (a .md file). I read it and use it.
-> - **Option C**: No spec, just a short description. The app will be simpler, but you'll be able to enrich it afterwards.
+> - **The core of your app (recommended)**: you describe the heart of the app, the one thing it must do well, in one or two screens. I build only that. You try it, ask for changes until it is right, then add the features one by one, as you need them.
+> - **A full spec**: I help you build it together, question by question, and I build everything it describes. Useful if you really want the whole app defined up front, but an app built all at once is harder to steer, and part of it usually has to be removed.
 >
-> A good spec covers: the pages of the app, what you see on each page, the actions the user can take, the visual mood, and the technical features (payments, emails, etc.).
->
-> You can run `/spec` at any time to build a guided spec, even outside of `/bootstrap`.
+> The full spec is the second option of `/bootstrap`: there is no separate command for it.
 
 ---
 

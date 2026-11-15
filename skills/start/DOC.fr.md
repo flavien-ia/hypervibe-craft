@@ -16,7 +16,7 @@ C'est la **toute première commande** à lancer juste après avoir installé le 
 6. **Connexions CLI** : un script ouvre une fenêtre dédiée et vous fait vous connecter à GitHub, Vercel, Cloudflare l'un après l'autre. Vous suivez les instructions à l'écran (un navigateur s'ouvre pour chaque connexion).
 7. **L'application GitHub de Vercel** : une fois Vercel connecté, la commande vérifie que l'application GitHub de Vercel est installée sur votre compte GitHub, avec l'accès à tous vos dépôts. C'est elle qui permet à chaque `git push` de remettre votre site en ligne tout seul. Si elle manque, ou si elle est limitée à certains dépôts, Hypervibe ouvre la bonne page et vous guide : c'est une autorisation à donner dans le navigateur, elle ne peut pas se faire à votre place.
 8. **Clé Neon** : si vous avez connecté la base de données Neon, vous générez une clé API (encore 30 secondes) que la commande sauvegarde. Ça active les sauvegardes automatiques de vos futures bases.
-9. **Récap final + commandes** : à la fin, vous avez un tour d'horizon des commandes disponibles (`/bootstrap`, `/spec`, `/prof`, etc.).
+9. **Récap final + commandes** : à la fin, vous avez un tour d'horizon des commandes disponibles (`/bootstrap`, `/prof`, etc.).
 10. **Règles globales** : un petit fichier de règles (`~/.claude/CLAUDE.md`) est créé pour que Claude Code suive vos conventions sur tous vos projets (pas de build pour rien, pas de push sans accord, etc.).
 
 ## Ce que ça crée pour vous

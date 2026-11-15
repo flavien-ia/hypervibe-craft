@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.4.31 (15 novembre 2026)
+
+### Nouveautés
+- **/bootstrap commence par le cœur de votre app** : deux options désormais, dans cet ordre. La première, recommandée : vous décrivez le cœur de l'app, la chose qu'elle doit bien faire, en un ou deux écrans. Hypervibe ne construit que lui, le garde dans la mémoire du projet, et vous dit la suite : l'essayer, demander des corrections jusqu'à ce qu'il soit juste, puis ajouter une fonction à la fois. En vibe coding, c'est ce qui donne les meilleurs résultats. La seconde : le cahier des charges complet, construit ensemble question par question. L'option « j'ai déjà un cahier des charges » disparaît, et le cahier des charges n'est plus une commande à part : il se fait dans /bootstrap.
+
+### Améliorations
+- **Une politique de sécurité de contenu (CSP) sur chaque nouveau site** : une base appliquée d'office empêche votre site d'être affiché à l'intérieur d'un autre et ferme quelques portes aux injections, sans rien bloquer de ce qu'il charge. La politique des scripts, elle, ne fait pour l'instant que signaler dans la console du navigateur ce qu'elle bloquerait : vous la rendez bloquante quand vous le décidez, une fois ces signalements lus. Les statistiques, la carte, le stockage de fichiers et Stripe y ajoutent leurs adresses en s'installant, et une politique que vous avez écrite vous-même n'est jamais touchée. /security la vérifie, et la mise à jour la propose aux projets existants, avec votre accord.
+- **Le coffre-fort reste ouvert douze heures au lieu de six** : un seul mot de passe maître pour une journée de travail. À la fin, il se referme toujours vraiment.
+- **Les images d'exemple s'affichent dès la création d'un projet** : les photos d'exemple (Lorem Picsum, Unsplash) étaient refusées par l'optimiseur d'images du site. Leurs adresses sont maintenant autorisées d'office, sans jamais toucher un réglage d'images que le projet a déjà.
+
+### Corrections
+- **La clé Cloudflare se crée de nouveau à la main quand la page préremplie ne suffit pas** : Cloudflare a changé son formulaire de création de clé, et la recette de secours décrivait des boutons qui n'existent plus. Elle suit maintenant le nouveau formulaire, bloc par bloc (compte, zones, utilisateur), et la liste des permissions est rangée de la même façon.
+- **La clé Cloudflare comprend la permission qui active Email Routing** (Zone Settings) : sans elle, Cloudflare refusait d'activer le transfert d'emails de /new-email-address. Avec une clé faite avant cette version, Hypervibe nomme maintenant la permission qui manque et propose les deux façons d'y remédier.
+- **/gsc ajoute de nouveau le site et son plan du site à la Search Console** : Google refusait ces deux envois (erreur 411). Et un refus juste après n'est plus pris pour un manque de droits.
+
 ## v3.4.30 (13 novembre 2026)
 
 ### Corrections

@@ -224,18 +224,18 @@ that ships hooks is announced on stderr at its first commit or push, never run,
 and `/start`, `/add-test` and `/update-hypervibe` all replace the older block on
 an existing machine.
 
-An unlocked vault stays open six hours, and then it is really locked: `bw lock`
+An unlocked vault stays open twelve hours, and then it is really locked: `bw lock`
 runs with the session in its environment, never on its command line, and the
 session's file is removed, so a token copied in the meantime stops opening the
 vault. The lock is scheduled at the unlock in the system's own scheduler (a
 one-time task on Windows, caught up at the next sign-in; a launchd agent on
-macOS; systemd-run or at on Linux), the first read after the six hours does it
+macOS; systemd-run or at on Linux), the first read after the twelve hours does it
 too, and so does the start of a Claude Code session, for a computer that was
 off at that time. A lock only ends the session it was made for, never a newer
-one. Outside Windows, the session's file is readable by its owner alone (0600). Until 3.4.16 the session lasted twelve hours and only the plugin's scripts
-refused an older one: nothing ran `bw lock`, and the token kept opening the
-vault to any program of the machine until the next unlock (security audit of
-23/10/2026).
+one. Outside Windows, the session's file is readable by its owner alone (0600). From 3.4.16 to 3.4.30 the session lasted half as long; until 3.4.16 only the
+plugin's scripts refused an older session: nothing ran `bw lock`, and the token
+kept opening the vault to any program of the machine until the next unlock
+(security audit of 23/10/2026).
 
 ## Verifying what you installed
 

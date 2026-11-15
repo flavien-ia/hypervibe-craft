@@ -11,6 +11,7 @@
 //        refused (exit 2, nothing changed) while the zone has mail servers other than Email
 //        Routing's own; otherwise enables it, then reads the zone's settings back:
 //        {ok, enabled, status, already}
+//        A refusal for lack of the key's right "Zone · Zone Settings · Edit" names it (`missingRight`).
 //
 // Exit codes: 0 done, 1 a read failed or Cloudflare refused (its words in `error`), 2 the domain
 // receives its mail elsewhere (`foreignMx`), 3 the vault is locked or its session expired, 4 no
@@ -57,6 +58,12 @@ async function cf(base, key, path, method = "GET") {
   return { status: res.status, json, ok: res.status === 200 && json?.success === true };
 }
 const said = (r) => r.json?.errors?.[0]?.message ?? `HTTP ${r.status}`;
+/** Reading Email Routing's settings and enabling it need the key's right "Zone · Zone Settings ·
+ *  Edit" (3.4.31 / 2.5.10): a key made before it was in the lists is refused (403, Cloudflare's
+ *  codes 10000 or 9109). The refusal then names that right. */
+export const ZONE_SETTINGS_RIGHT = "Zone · Zone Settings · Edit";
+const refused = (r) => r.status === 401 || r.status === 403 || (r.json?.errors ?? []).some((e) => e.code === 10000 || e.code === 9109);
+const lacksRight = (r) => (refused(r) ? ` The Cloudflare key lacks the right "${ZONE_SETTINGS_RIGHT}": add it to the key (https://dash.cloudflare.com/profile/api-tokens, the key's line, Edit, then the Zone policy block), or enable Email Routing once in the dashboard (the domain, Email, Email Routing).` : "");
 
 /** The zone's MX and routing settings: {zoneId, mx, settings} or {error}. */
 async function read(base, key, domain) {
@@ -68,7 +75,7 @@ async function read(base, key, domain) {
   const mx = await cf(base, key, `/zones/${zoneId}/dns_records?type=MX&per_page=100`);
   if (!mx.ok) return { error: `The zone's mail servers could not be read: ${said(mx)}` };
   const settings = await cf(base, key, `/zones/${zoneId}/email/routing`);
-  if (!settings.ok) return { error: `The zone's Email Routing settings could not be read: ${said(settings)}` };
+  if (!settings.ok) return { error: `The zone's Email Routing settings could not be read: ${said(settings)}.${lacksRight(settings)}`, ...(refused(settings) ? { missingRight: ZONE_SETTINGS_RIGHT } : {}) };
   return { zoneId, mx: (mx.json.result ?? []).map((r) => String(r.content ?? "").toLowerCase()), settings: settings.json.result ?? {} };
 }
 
@@ -82,7 +89,7 @@ async function main(argv, env = process.env) {
   if (!k.key) return { code: k.code, out: { ok: false, error: k.error } };
   try {
     const before = await read(base, k.key, domain);
-    if (before.error) return { code: EXIT.UNREADABLE, out: { ok: false, domain, error: before.error } };
+    if (before.error) return { code: EXIT.UNREADABLE, out: { ok: false, domain, error: before.error, ...(before.missingRight ? { missingRight: before.missingRight } : {}) } };
     const foreignMx = before.mx.filter((h) => !isRoutingMx(h));
     const state = { domain, enabled: before.settings.enabled === true, status: before.settings.status ?? null, foreignMx };
     if (verb === "status") return { code: EXIT.OK, out: { ok: true, ...state } };
@@ -91,7 +98,7 @@ async function main(argv, env = process.env) {
     }
     if (state.enabled) return { code: EXIT.OK, out: { ok: true, ...state, already: true } };
     const on = await cf(base, k.key, `/zones/${before.zoneId}/email/routing/enable`, "POST");
-    if (!on.ok) return { code: EXIT.UNREADABLE, out: { ok: false, ...state, error: `Cloudflare refused to enable Email Routing: ${said(on)}` } };
+    if (!on.ok) return { code: EXIT.UNREADABLE, out: { ok: false, ...state, error: `Cloudflare refused to enable Email Routing: ${said(on)}.${lacksRight(on)}`, ...(refused(on) ? { missingRight: ZONE_SETTINGS_RIGHT } : {}) } };
     const after = await cf(base, k.key, `/zones/${before.zoneId}/email/routing`);
     if (!after.ok) return { code: EXIT.UNREADABLE, out: { ok: false, ...state, error: `Email Routing's settings could not be read back: ${said(after)}` } };
     const enabled = after.json.result?.enabled === true;

@@ -7,7 +7,7 @@
 //
 //   node scripts/tests/test-skill-texts.mjs
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -167,6 +167,34 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   const doc = read("skills/update-hypervibe/DOC.md");
   const docFr = read("skills/update-hypervibe/DOC.fr.md");
   check("... and the DOC pages say it in both languages", /still brings this computer's Claude rules and machine-wide git hooks in step/.test(doc) && /remet quand même à niveau les règles de Claude et les hooks git communs de cet ordinateur/.test(docFr));
+}
+
+// 3.4.31 / 2.5.10 (passe apprenante du 13/11/2026) : un PUT sans corps ni Content-Length reçoit 411 de
+// Google, et le 403 qui suit sur le sitemap passe pour un manque de droits.
+{
+  const gscPut = read("skills/gsc/SKILL.md");
+  const puts = gscPut.split("\n").filter((l) => /curl [^\n]*-X PUT "https:\/\/www\.googleapis\.com\/webmasters\/v3\/sites\//.test(l));
+  check("/gsc : les deux PUT (ajout du site, sitemap) portent Content-Length: 0", puts.length === 2 && puts.every((l) => /-H "Content-Length: 0" -X PUT/.test(l)));
+  check("/gsc : le piège dit (411 = Content-Length absent ; un 403 juste après = l'ajout a échoué, pas un droit)", /\*\*411 Length Required\*\*/.test(gscPut) && /A 403 on the sitemap right after it does not mean a missing right: the property was never added/.test(gscPut));
+}
+
+// 3.4.31 / 2.5.10 (décision de Flavien du 15/11/2026) : /bootstrap propose d'abord le cœur de l'app (un ou
+// deux écrans, recommandé), le cahier des charges complet ensuite, plus aucune option pour déposer un
+// cahier existant. Avec le cœur, l'Étape 6 ne construit que lui, le CLAUDE.md du projet le garde, et le
+// récapitulatif dit d'itérer. Le cahier complet n'est plus une commande : la skill interne _spec.
+{
+  const boot = read("skills/bootstrap/SKILL.md");
+  const s4a = boot.slice(boot.indexOf("### 4a - "), boot.indexOf("### 4b - "));
+  check("/bootstrap 4a : deux options, le cœur d'abord et recommandé, le cahier complet ensuite", /Suggestions: \["The core of my app, then we iterate \(recommended\)", "A full spec, built together step by step"\]/.test(s4a) && (s4a.match(/^- Suggestions: /gm) ?? []).length === 1 && s4a.indexOf("**If the user chooses the core (recommended):**") > 0 && s4a.indexOf("**If the user chooses the core (recommended):**") < s4a.indexOf("**If the user chooses the full spec:**"));
+  check("... plus d'option pour déposer un cahier existant, ni de renvoi à ses branches B et C", !/I already have a spec|J'ai déjà un cahier|provide an existing spec|branches B and C|option A or B|option A ou B|If the user chooses [ABC]\b/.test(boot));
+  check("... la raison dite, les modules déduits du cœur seul, et _spec pour le cahier complet", /the best results come from building the core of the app first/.test(s4a) && /silently infer the addons from \*\*the core only\*\*/.test(s4a) && /Read and execute the internal `_spec` skill from this plugin/.test(s4a) && !/the `spec` skill/.test(boot));
+  check("/bootstrap 6 : avec le cœur, rien que le cœur", /\*\*Build ONLY the core: its one or two screens and what they need to work\*\*/.test(boot) && /Stay inside the core\./.test(boot) && !/Be generous with features|All the pages the app logically needs/.test(boot));
+  check("/bootstrap 7a et 8c : le cœur gardé dans le CLAUDE.md du projet, puis la suite dite (essayer, corriger, une fonction à la fois)", /heading `## The app's core`/.test(boot) && /\*\*Next - Try the core, then grow it\*\*/.test(boot));
+  const spec = existsSync(join(ROOT, "skills/_spec/SKILL.md")) ? read("skills/_spec/SKILL.md") : "";
+  check("_spec : skill interne (user-invocable: false), sans page DOC, plus de commande /spec", /^name: _spec$/m.test(spec) && /^user-invocable: false$/m.test(spec) && !existsSync(join(ROOT, "skills/spec")) && !existsSync(join(ROOT, "skills/_spec/DOC.md")) && !existsSync(join(ROOT, "skills/_spec/DOC.fr.md")));
+  const noms = ["README.md", "README.fr.md", "skills/prof/SKILL.md", "skills/add-test/SKILL.md", "skills/bootstrap/SKILL.md", "skills/add-test/DOC.md", "skills/add-test/DOC.fr.md", "skills/start/DOC.md", "skills/start/DOC.fr.md", "skills/bootstrap/DOC.md", "skills/bootstrap/DOC.fr.md"].filter((r) => existsSync(join(ROOT, r)));
+  const encore = noms.filter((r) => /`\/spec`|\*\*\/spec\*\*|\*\*`\/spec`\*\*/.test(read(r)));
+  check(`... et plus personne n'envoie vers /spec (README, /prof, /add-test, /bootstrap, pages DOC)${encore.length ? ` : encore ${encore.join(", ")}` : ""}`, encore.length === 0);
 }
 
 console.log(`\n${checks - failures}/${checks} checks`);

@@ -51,6 +51,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { ensureToolsInPath } from "./_ensure-tools-path.mjs";
 import { isI18nSetUp } from "./_i18n-detect.mjs";
+import { addCspPreset } from "./csp.mjs";
 
 ensureToolsInPath();
 
@@ -343,6 +344,16 @@ if (upgrade) {
       `REVIEW_MAP_COMMENTS: ${toReview.join(", ")} still mention the old v5 pin or map.transform - reword those comments by hand.`,
     );
   }
+}
+
+// ─── 4b. Content-Security-Policy: the tiles' host ───────────────────
+// The visitor's browser fetches the style, tiles, sprites and fonts from OpenFreeMap: its host goes
+// into the reported part of the site's policy (scripts/csp.mjs keeps the list, preset
+// "openfreemap"). A policy of the person's own is never touched: what to add by hand is said.
+{
+  const csp = addCspPreset(webDir, "openfreemap");
+  if (csp.state === "written" || csp.state === "current") actions.push(`✓ ${csp.file}: the Content-Security-Policy lets the map's tiles through`);
+  else warnings.push(`CSP_REVIEW: ${csp.reason ?? csp.state}`);
 }
 
 // ─── 5. Handoff JSON ─────────────────────────────────────────────────

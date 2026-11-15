@@ -17,7 +17,7 @@ Audits the security of your app and automatically fixes common flaws. Hypervibe 
   - **Authentication and access control**: verify that admin/protected pages are not accessible without login, that access rules are enforced server-side, that each user can only reach their own data (not someone else's by changing an id in the request), and that changing the email, the password or deleting the account asks for the current password
   - **Input validation**: verify that user data is validated server-side (zod, etc.), including file uploads (type and size)
   - **SQL injection and database queries**: verify that queries are parameterized (no string concatenation)
-  - **Security headers**: CSP, HSTS, X-Content-Type-Options, etc.
+  - **Security headers**: CSP, HSTS, X-Content-Type-Options, etc. The CSP Hypervibe sets on every site has two parts: a base, enforced, that blocks nothing the site loads, and a script policy that only reports, in the browser's console, what it would block. An older project receives it through the fixes. Making it blocking stays your decision, once those reports are read, and the audit never does it on its own; a CSP you wrote yourself is never touched
   - **CORS**: cross-origin request configuration
   - **Vulnerable dependencies**: `npm audit` on production dependencies, including the framework itself
   - **Rate limiting and abuse protection**: protection against brute force and abuse (e.g. on login)

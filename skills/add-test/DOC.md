@@ -17,7 +17,7 @@ Gives your project **automated tests** and a **cahier de recette** (an acceptanc
 
 2. **Installation of vitest**, the test runner: fast (seconds, no browser), and configured so that server modules load without a real database or real keys.
 
-3. **Inventory**: Hypervibe lists every server feature (each tRPC procedure) and every page of your application, and reads your specification (`cahier-des-charges.md`, if `/spec` wrote one) for the business rules.
+3. **Inventory**: Hypervibe lists every server feature (each tRPC procedure) and every page of your application, and reads your specification (`cahier-des-charges.md`, if you chose the full spec in `/bootstrap`) for the business rules.
 
 4. **The cahier de recette** (`docs/recette.md`): one line per feature. What it does, how it is checked, the expected result, whether a test or a person verifies it, and its status. Written in business words, not code. Pages get a scenario a human can follow in a browser.
 

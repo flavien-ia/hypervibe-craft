@@ -248,9 +248,9 @@ Order matters here: open the input window **before** the user closes the provide
 
 - URL: `https://dash.cloudflare.com/profile/api-tokens`
 - Instructions:
-  1. **Create Token → Custom token**
-  2. Permissions to add (depending on usage): Workers Scripts:Edit, R2:Edit, Workers KV Storage:Edit, etc.
-  3. Account Resources: your account
+  1. **Create Token** opens the form: **Token name**, then under **Policies** **Start from scratch (Custom)**
+  2. **Start with an Account policy**; at the top of the block, **Include** · your account (or **All accounts**)
+  3. Permissions to add (depending on usage): type each one's name in **Search for permission groups...** and tick its level on its row (Workers Scripts · Edit, Workers R2 Storage · Edit, Workers KV Storage · Edit, etc.). A zone or user permission goes in its own block: **+ Add new policy**, then a Zone policy or a User policy
   4. **Continue to summary → Create Token**
   5. Copy the value
 

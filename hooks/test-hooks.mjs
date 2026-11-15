@@ -1057,6 +1057,9 @@ expect(`printf 'header = "Authorization: Bearer %s"\\n' "$K" | curl -sf --config
 expect(`CFTOK=$(node vault.mjs get CLOUDFLARE api_token) && printf 'header = "Authorization: Bearer %s"\\n' "$CFTOK" | curl -s --config - -X DELETE \\\n  "https://api.cloudflare.com/client/v4/zones/$Z/dns_records/$RID"`, "ask");
 expect(`printf 'header = "Authorization: Bearer %s"\\n' "$K" | curl -s --config - https://console.neon.tech/api/v2/projects`, "pass");
 expect(`printf 'header = "Authorization: Bearer %s"\\n' "$TOK" | curl -s --config - -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Aexemple.fr"`, "pass");
+// Les deux PUT de /gsc, tels que la skill les écrit depuis 3.4.31 / 2.5.10 (Content-Length: 0, sans quoi Google répond 411).
+expect(`printf 'header = "Authorization: Bearer %s"\\n' "$TOK" | curl -s --config - -H "Content-Length: 0" -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Aexemple.fr"`, "pass");
+expect(`printf 'header = "Authorization: Bearer %s"\\n' "$TOK" | curl -s --config - -H "Content-Length: 0" -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Aexemple.fr/sitemaps/https%3A%2F%2Fexemple.fr%2Fsitemap.xml"`, "pass");
 expect(`printf 'request = "DELETE"\\n' | curl -s --config - https://api.vercel.com/v9/projects/prj_1`, "ask");
 expect(`printf 'header = "Authorization: Bearer %s"\\nurl = "https://api.vercel.com/v9/projects/prj_1"\\nrequest = "DELETE"\\n' "$VT" | curl -s -K -`, "ask");
 expect(`printf 'request = "%s"\\n' DELETE | curl --config - https://api.vercel.com/v9/projects/prj_1`, "ask");

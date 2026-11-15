@@ -268,6 +268,14 @@ if (status === "authenticated") return null;
 
 Only offer this option if a `SessionProvider` already wraps the app (otherwise `useSession` crashes). By default, URL-prefix exclusion is enough and stays simpler.
 
+**Then let Google's addresses through the site's Content-Security-Policy** (the reported part, which only watches: nothing is blocked either way). The list of Google's domains lives in the plugin, never here:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/csp.mjs" preset google-analytics --web-dir "<WEB_DIR>"
+```
+
+`state: "written"` or `"current"` → nothing to say. `state: "own"` → the project sets a policy of its own, which the plugin never touches: pass on its `reason` (the domains to add to it by hand) in one sentence. `state: "review"` → pass on its `reason`.
+
 ## Step 5 - Create CookieConsent banner
 
 Create a `CookieConsent` component alongside the GoogleAnalytics component, at `src/components/CookieConsent.tsx`.

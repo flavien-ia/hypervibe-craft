@@ -14,16 +14,15 @@ Le bootstrap se déroule en **8 étapes**, avec deux phases d'autonomie totale e
 1. Vous donnez le **nom du projet** et une **description courte**.
 2. Hypervibe construit le squelette de l'app : structure du code, repo GitHub, configuration Vercel, première page en ligne, vérifications de sécurité. Vous regardez défiler les étapes ; à la fin, votre site répond déjà avec une page minimale et le déploiement automatique est validé.
 
-**Phase 2 : Cahier des charges** (durée variable, discussion)
-3. Hypervibe vous demande **comment vous voulez définir le projet** :
-  - **Option A** : construire un cahier des charges ensemble, question par question (recommandé pour un premier projet)
-  - **Option B** : vous avez déjà un fichier `.md`, il le lit
-  - **Option C** : pas de cahier des charges, juste la description initiale (l'app sera plus simple, vous l'enrichirez en vibe coding)
+**Phase 2 : Ce qu'on construit** (durée variable, discussion)
+3. Hypervibe vous demande **comment vous voulez définir le projet**, avec deux options :
+  - **Le cœur de votre app** (recommandé) : vous décrivez la chose que votre app doit bien faire, en un ou deux écrans. En vibe coding, c'est ce qui donne les meilleurs résultats : le cœur fonctionne d'abord, vous l'ajustez jusqu'à ce qu'il soit juste, puis vous ajoutez les fonctions une par une, au fil de vos besoins. Une app construite d'un bloc se pilote mal, et une partie finit souvent par être retirée.
+  - **Un cahier des charges complet** : vous le construisez ensemble, question par question (pages, design, fonctionnalités), et Hypervibe construit tout ce qu'il décrit.
 4. Hypervibe vous présente un **récap** des fonctionnalités déduites (base de données, authentification, emails, paiements, etc.) et attend votre validation. Vous pouvez modifier la liste autant que vous voulez avant de valider.
 
 **Phase 3 : Construction de l'app** (~10-15 minutes, sans intervention)
 5. **Configuration des modules** (un par un) : base de données, authentification, emails, paiements, multilingue, stockage… selon votre validation.
-6. **Construction de l'application** : pages, formulaires, espace admin si nécessaire, design, mise en page responsive.
+6. **Construction de l'application** : avec le cœur, uniquement ses un ou deux écrans (et l'espace admin si le cœur en a besoin), finis et soignés ; avec le cahier des charges complet, toutes les pages qu'il décrit. Mise en page responsive dans les deux cas.
 7. **Pages légales** automatiquement créées (mentions légales, politique de confidentialité conforme RGPD).
 8. **Audit sécurité + push final + récap** : vérification des dépendances, déploiement, et un récap complet de ce qui a été fait et de ce qui reste éventuellement à faire de votre côté (créer un compte sur tel service, configurer un domaine, etc.).
 
@@ -37,7 +36,7 @@ Le bootstrap se déroule en **8 étapes**, avec deux phases d'autonomie totale e
 - Une **URL en ligne** où votre app est accessible immédiatement
 - Selon ce que vous avez choisi : base de données, authentification, emails, paiements, multilingue, stockage, analytics
 - Les **pages légales** (mentions légales + politique de confidentialité RGPD-friendly)
-- Un fichier `CLAUDE.md` qui sert de mémoire à Claude pour ce projet
+- Un fichier `CLAUDE.md` qui sert de mémoire à Claude pour ce projet (avec le cœur, il garde ce qu'est le cœur, ses écrans et ce que vous avez laissé pour plus tard)
 - Le tout **hébergé en Europe** (Frankfurt) pour la latence et la conformité RGPD
 
 ## Prérequis
@@ -53,6 +52,10 @@ Le bootstrap est long. Si la conversation Claude est interrompue en cours de rou
 
 {{callout:info|Vous n'écrivez aucune ligne de code}}
 Vous décrivez votre projet en langage naturel, vous validez les choix qu'on vous propose. Tout le reste, code, configuration, déploiement, sécurité, est entièrement automatisé. Vous n'avez **rien** à taper dans un terminal.
+{{/callout}}
+
+{{callout:tip|Commencer par le cœur, puis le faire grandir}}
+Avec le cœur, le récap final vous dit la suite : essayez le cœur, demandez les corrections que vous voulez jusqu'à ce qu'il soit juste, puis ajoutez une fonction à la fois, simplement en la décrivant en une phrase.
 {{/callout}}
 
 {{callout:warning|Choix du nom = définitif}}

@@ -244,7 +244,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" account 2>/dev/null   #
 - `"signedIn": false` (no connected account) → **immediately launch the `_add-keyring` skill by default, WITHOUT asking for confirmation**: the vault is MANDATORY, there is nothing to decide. NEVER ask a question like "do you want to set up your vault now?", do not wait for confirmation: go straight to `_add-keyring`, which guides the creation of the Bitwarden account (free, master password to write down offline, 2FA), the login, and the first unlock. Non-technical language.
 - `locked`/`expired` (account connected but vault closed) → open it: `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking).
 
-> **Your key vault**: an encrypted place where I store your access keys (database, email, hosting, etc.). You type your master password, the vault stays open six hours and then locks itself again, and in between I use it without you having to copy anything over. ⚠️ This master password cannot be recovered by anyone. Write it down offline.
+> **Your key vault**: an encrypted place where I store your access keys (database, email, hosting, etc.). You type your master password, the vault stays open twelve hours and then locks itself again, and in between I use it without you having to copy anything over. ⚠️ This master password cannot be recovered by anyone. Write it down offline.
 
 Re-confirm `vault.mjs status` = `unlocked` before continuing.
 
@@ -283,7 +283,7 @@ Present a clear report:
 
 ⚠️ The Cloudflare token must be configured **before** running the CLIs script, because `wrangler` detects the env var at install/usage time. If the token is missing or invalid, ask first:
 
-The token is made on a page that Cloudflare fills in from its address, every permission already ticked: the person checks and clicks, instead of adding thirteen lines one by one (that list is where people got stuck, pre-training sessions of November 2026). The page and its fallback list come from one place, `scripts/cloudflare-token-page.mjs`, whose keys were read at the source:
+The token is made on a page that Cloudflare fills in from its address, every permission already ticked: the person checks and clicks, instead of adding fourteen lines one by one (that list is where people got stuck, pre-training sessions of November 2026). The page and its fallback list come from one place, `scripts/cloudflare-token-page.mjs`, whose keys were read at the source:
 
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/cloudflare-token-page.mjs" account
@@ -301,27 +301,34 @@ Once they say so, open the page (`url`, as the script printed it):
 node "${CLAUDE_SKILL_DIR}/../../scripts/open-url.mjs" "<url>"
 ```
 
-> **2.** On the page that just opened, the token is already named `Claude Code`, with its permissions in three groups (Zone, Account, User). Click **Continue to summary**, check the list, then click **Create Token**.
+> **2.** On the page that just opened, the token is already named `Claude Code`, with its permissions in three blocks (**Zone policy**, **Account policy**, **User policy**). Click **Continue to summary**, check the list, then click **Create Token**.
 > **3.** Copy the token shown: **a window opens for you to paste it** (I never see it).
 >
 > If the page does not look like this, take a screenshot and paste it here: I'll guide you.
 
-Always show the `url` in plain text as well: some setups do not open it. **The page shows the list of tokens instead of a form** (the person was not logged in yet, or logged in on the way): open it again, once. **The form is there but some lines are missing, or the page no longer fills itself in** (Cloudflare changed it): fall back to the manual recipe, with the screenshot if the person sent one: **Create Token** → **Create Custom token** → **Get started**, name `Claude Code`, then one line per permission below (`lines`, the same list; **+ Add more** for each additional line), **Account Resources**: Include All accounts, **Zone Resources**: Include All zones, then **Continue to summary** → **Create Token**.
+Always show the `url` in plain text as well: some setups do not open it. **The page shows the list of tokens instead of a form** (the person was not logged in yet, or logged in on the way): open it again, once. **The form is there but some lines are missing, or the page no longer fills itself in** (Cloudflare changed it): fall back to the manual recipe, with the screenshot if the person sent one. **Create Token** opens the form: **Token name** `Claude Code`, then under **Policies** choose **Start from scratch (Custom)**. The list below makes one block per label: **Start with an Account policy**, leave **Include** · **All accounts** at its top, then for each of its lines type the permission's name in **Search for permission groups...** and tick its level on its row (**Read**, **Edit** or **Purge**). **+ Add new policy** (under the block) starts the next one: a **Zone policy** (Include · All zones), then a **User policy**, filled the same way. Then **Continue to summary** → **Create Token**.
 
-Fallback list (the same as `lines`: a recette holds the two together):
+Fallback list (the same as `lines`: a recette holds the two together), one block per label:
+
+**Account policy** (Include · All accounts)
 - Account · Workers Scripts · Edit
 - Account · Workers R2 Storage · Edit
 - Account · Workers AI · Read
 - Account · Email Routing Addresses · Edit
 - Account · Account Settings · Read
 - Account · Account Analytics · Read
-- User · User Details · Read
-- User · Memberships · Read
+
+**Zone policy** (Include · All zones)
 - Zone · Zone · Edit
 - Zone · DNS · Edit
+- Zone · Zone Settings · Edit   *(to enable Email Routing)*
 - Zone · Email Routing Rules · Edit
 - Zone · Bot Management · Read
 - Zone · Cache Purge · Purge
+
+**User policy**
+- User · User Details · Read
+- User · Memberships · Read
 
 Store it in the vault (masked input in a window, outside Claude's context):
 ```bash

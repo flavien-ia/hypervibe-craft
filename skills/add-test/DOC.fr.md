@@ -17,7 +17,7 @@ Donne à votre projet des **tests automatisés** et un **cahier de recette** lis
 
 2. **Installation de vitest**, le lanceur de tests : rapide (quelques secondes, pas de navigateur), et configuré pour que les modules du serveur se chargent sans vraie base ni vraies clés.
 
-3. **Inventaire** : Hypervibe liste chaque fonctionnalité du serveur (chaque procédure tRPC) et chaque page de votre application, et relit votre cahier des charges (`cahier-des-charges.md`, si `/spec` l'a écrit) pour les règles métier.
+3. **Inventaire** : Hypervibe liste chaque fonctionnalité du serveur (chaque procédure tRPC) et chaque page de votre application, et relit votre cahier des charges (`cahier-des-charges.md`, si vous avez choisi le cahier des charges complet dans `/bootstrap`) pour les règles métier.
 
 4. **Le cahier de recette** (`docs/recette.md`) : une ligne par fonctionnalité. Ce qu'elle fait, comment on la vérifie, le résultat attendu, si c'est un test ou une personne qui vérifie, et son statut. Écrit en mots métier, pas en code. Les pages ont un scénario qu'un humain peut suivre dans un navigateur.
 

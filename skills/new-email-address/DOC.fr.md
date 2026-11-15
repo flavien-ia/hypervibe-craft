@@ -51,3 +51,7 @@ Email Routing ne **reçoit** que les emails. Pour **envoyer** depuis votre domai
 {{callout:warning|Vérifiez vos spams au premier ajout}}
 La première fois que vous utilisez une destination, Cloudflare envoie un email de vérification, il atterrit parfois dans le dossier spam de votre boîte mail. Pensez à vérifier avant de dire à Hypervibe "c'est fait", sinon la règle ne fonctionnera pas.
 {{/callout}}
+
+{{callout:info|Une clé Cloudflare faite avant cette version}}
+Activer Email Routing chez Cloudflare demande une permission que les clés faites par les versions précédentes d'Hypervibe n'ont pas : **Zone Settings** (Edit). Si Cloudflare refuse pour cette raison, Hypervibe vous le dit et vous propose deux issues : ajouter cette permission à votre clé chez Cloudflare (une minute, la clé garde sa valeur), ou activer Email Routing une fois vous-même dans le tableau de bord de Cloudflare. Les clés faites désormais l'incluent.
+{{/callout}}

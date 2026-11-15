@@ -3,7 +3,7 @@
 //
 // This is the workhorse called by every skill that needs to READ a secret.
 // It never prompts (no interactivity): it reads the session token written by the
-// interactive `unlock` step, checks its age (6 hours, TTL_SECONDS of session.mjs), sets
+// interactive `unlock` step, checks its age (12 hours, TTL_SECONDS of session.mjs), sets
 // BW_SESSION, and shells out to `bw`. A session found over is locked for real on the way
 // (`bw lock`, then its file removed): session.mjs.
 //
@@ -25,7 +25,7 @@
 //                                          is an account connected on this machine? (unlocks nothing)
 //
 // EXIT CODES (mirror the perso bw-get convention, relied on by the auto-unlock pattern)
-//   0 ok | 2 vault locked (no session) | 3 session expired (>6h, locked on the way) | 4 item not found
+//   0 ok | 2 vault locked (no session) | 3 session expired (>12h, locked on the way) | 4 item not found
 //   5 field not found | 1 other error
 //
 // MODULE USAGE
@@ -270,7 +270,7 @@ export function putItem(name, fields, { service, folder = "Global", allowEmpty =
 
 /** Returns "unlocked" | "locked" | "expired". Probes bw with the stored token so it reflects
  *  whether the vault is ACTUALLY usable, not just the file timestamp (a token can be revoked /
- *  rejected before its 6 hours are over). We use `unlock --check`, which validates the token against the
+ *  rejected before its 12 hours are over). We use `unlock --check`, which validates the token against the
  *  unlocked session and returns non-zero ("Vault is locked.") when it is NOT genuinely usable.
  *  Hardened with --nointeraction (+ BW_NOINTERACTION) so a stale token can NEVER make bw hang on
  *  an interactive master-password prompt - it fails fast as "expired" instead.

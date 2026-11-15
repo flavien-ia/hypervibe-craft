@@ -51,3 +51,7 @@ Email Routing only **receives** emails. To **send** from your domain (`contact@m
 {{callout:warning|Check your spam on the first add}}
 The first time you use a destination, Cloudflare sends a verification email, it sometimes lands in your mailbox's spam folder. Remember to check before telling Hypervibe "done", otherwise the rule will not work.
 {{/callout}}
+
+{{callout:info|A Cloudflare key made before this version}}
+Turning Email Routing on through Cloudflare needs one permission that keys made by earlier versions of Hypervibe do not have: **Zone Settings** (Edit). If Cloudflare refuses for that reason, Hypervibe says so and offers two ways out: add that permission to your key on Cloudflare (a minute, the key keeps its value), or turn Email Routing on once yourself in the Cloudflare dashboard. Keys made from now on include it.
+{{/callout}}

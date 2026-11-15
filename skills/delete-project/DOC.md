@@ -63,7 +63,7 @@ You choose: delete everything, or keep certain pieces (the database, the DNS, th
 
 Hypervibe chains the deletions in parallel where possible (Vercel, R2, Workers, DNS, Stripe webhooks, Render, Upstash, Email Routing) then serially where there are dependencies (Neon, then removal of the project from the shared `db-backup` worker, then its scheduled tasks on the shared worker, then Claude memory, and the GitHub repo last).
 
-If your vault has closed in the meantime (its session lasts six hours, and confirming can take an evening), nothing is deleted at all, the site included: Hypervibe asks you to open the vault again, then resumes with the same inventory. A project is never left half deleted for a key that could not be read.
+If your vault has closed in the meantime (its session lasts twelve hours, and confirming can take an evening), nothing is deleted at all, the site included: Hypervibe asks you to open the vault again, then resumes with the same inventory. A project is never left half deleted for a key that could not be read.
 
 At the end, a report shows you:
 - ✅ What was deleted automatically

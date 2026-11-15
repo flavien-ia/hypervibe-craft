@@ -202,6 +202,28 @@ Then, for each project chosen, one after the other:
 
 To finish, one sentence: this repair closes the admin space, and a complete audit of each project remains the job of `/security`.
 
+## Step 3g - Give the current project the base of the Content-Security-Policy
+
+Since 3.4.31 the plugin writes a Content-Security-Policy into every new site (`next.config`, one marked block): a base, enforced, that blocks nothing a site loads (no plugin, no `<base>` tag, no page shown in another site's frame, forms sent to the site only), and a script policy that is only **reported**: the browser says in its console what it would block, and blocks nothing. A project made before has none. This step also runs when you are already up to date. If the current folder is a web project (`package.json` with `next`), read it (nothing is written):
+
+```bash
+PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
+node "$PLUGIN_DIR/scripts/csp.mjs" status --web-dir "<web-dir>"
+```
+
+- `state: "block"` or `"present"` (a policy of the project's own, never touched) or `"none"` → say nothing.
+- `state: "absent"` → say it in one sentence, then what the addition does, in plain words: the base protects the site against being shown inside another site and against a few injections, and changes nothing the visitor sees; the second part only watches. Run it only if the user agrees:
+
+```bash
+PLUGIN_DIR="${CLAUDE_SKILL_DIR}/../.."
+node "$PLUGIN_DIR/scripts/csp.mjs" adopt --web-dir "<web-dir>"
+node "$PLUGIN_DIR/scripts/csp.mjs" storage --project-dir "<project-root>" --web-dir "<web-dir>"
+```
+
+The first writes the block and adds the domains of what the project already loads (analytics, a map, a video, Vercel's toolbar on previews: `presets` lists them); the second adds the addresses of the project's files, and answers `state: "none"` when the project has no storage (say nothing of it then). A `state: "review"` or `"own"` names what to do by hand: pass it on. **Never make the script policy blocking here**: that is a decision for each project, after reading its reports (`/security` says how). Then offer to commit `next.config` by name (`git add -- <its file>` then `git commit -m "Content-Security-Policy" -- <its file>`), and say that the base applies from the next deployment, which stays the user's yes.
+
+Other projects made by `/bootstrap` need the same pass: mention it once, with the command to run from each project's folder.
+
 ## Step 4 - Wrap up
 
 > **Update installed (version `<version>`)! ✨**

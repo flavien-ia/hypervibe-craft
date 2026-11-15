@@ -132,7 +132,7 @@ pnpm add stripe@^23
 
 The major version is named because the plugin writes the code that calls it: the router and the webhook of Step 6 are checked against that major, and a new major can remove a parameter the template sends (stripe 23 did, on 2026-09-30, and the generated router stopped typechecking). The pin moves when the template has been read again against the next major. A project that already has another major of `stripe` keeps it: say so, and run `pnpm tsc --noEmit` after Step 6 to see whether the generated files fit.
 
-Only the server SDK. Hosted Checkout redirects to `session.url`, so nothing on the page ever loads Stripe.js: `@stripe/stripe-js` was an unused dependency in every project (removed 2026-09-09). Add it back only if you move to Stripe Elements or the embedded pricing table, which do run in the browser.
+Only the server SDK. Hosted Checkout redirects to `session.url`, so nothing on the page ever loads Stripe.js: `@stripe/stripe-js` was an unused dependency in every project (removed 2026-09-09). Add it back only if you move to Stripe Elements or the embedded pricing table, which do run in the browser, and then let Stripe.js through the site's Content-Security-Policy (the list of its domains lives in the plugin): `node "${CLAUDE_SKILL_DIR}/../../scripts/csp.mjs" preset stripe-js --web-dir "<WEB_DIR>"`. Hosted Checkout needs nothing there: a redirection is not governed by the policy.
 
 ## Step 4 - Get API keys from the user
 
