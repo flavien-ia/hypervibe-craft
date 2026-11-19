@@ -110,7 +110,7 @@ Launch the connection with the server of the region remembered at Step 3 (EU by 
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" login --lang <LANG> --server https://vault.bitwarden.eu
 # (US account: replace with --server https://vault.bitwarden.com)
 ```
-The command **blocks until the window is closed and now returns the real exit code** (0 = success, non-zero = failure: wrong password or wrong 2FA code). **NEVER assume success just because the window closed.** Always re-check with `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" account`:
+The command **blocks until the window is closed and now returns the real exit code** (0 = success, 8 = no internet, any other non-zero = failure: wrong password or wrong 2FA code). **Exit 8**: the vault's server did not answer, nothing was refused; say in one sentence that internet is needed to sign in to the vault, wait for the user to say they are connected again, then launch the same window once more. Never speak of wrong credentials for an exit 8. **NEVER assume success just because the window closed.** Always re-check with `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" account`:
 - `"signedIn": true` → connection succeeded, go to Step 5.
 - still `"signedIn": false` → the connection failed: explain it to the user and offer to retry (wrong credentials or wrong 2FA code; or wrong region: if they thought they were on EU but it did not work, retry with the US server). The window already asked **3 times** before closing, so a failure here means three wrong attempts: ask the user before opening another one, never relaunch it on reflex. **Do not move on to Step 5 until `vault.mjs account` confirms the connection.**
 
@@ -123,7 +123,7 @@ The command **blocks until the window is closed and now returns the real exit co
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>
 ```
-Blocks until closed. The window **self-repairs and re-checks the state before unlocking**: if the `bw` tool is missing, it reinstalls it automatically; if it shows "No account connected" (`vault.mjs account` = `"signedIn": false`), **do NOT loop back on the unlock**, return to **Step 3** (login) first. Then confirm the result:
+Blocks until closed. **Exit 8 = no internet**: the server did not answer and the password was not asked; say in one sentence that internet is needed to open the vault, wait for the user to be connected again, then run the same command once more, never in a loop and never speaking of a wrong password. The window **self-repairs and re-checks the state before unlocking**: if the `bw` tool is missing, it reinstalls it automatically; if it shows "No account connected" (`vault.mjs account` = `"signedIn": false`), **do NOT loop back on the unlock**, return to **Step 3** (login) first. Then confirm the result:
 ```bash
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" status
 ```

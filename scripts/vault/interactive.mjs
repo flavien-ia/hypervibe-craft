@@ -28,6 +28,7 @@ import { resolveLang, makeT } from "./i18n.mjs";
 import { bwAnswers, useBwHome } from "./bw-home.mjs";
 import { isExpired, lockSession, readSessionFile, scheduleLock, sessionFile, writeSessionFile } from "./session.mjs";
 import { dotenvLine } from "../_env-line.mjs";
+import { configuredServer, DEFAULT_SERVER, exitCodeOf, failureKind, offlineError, requireServer, tryAttempts } from "./offline.mjs";
 
 const IS_WIN = platform() === "win32";
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -181,7 +182,9 @@ const pause = () => promptVisible(t("pressEnter"));
 
 // ── commands ──────────────────────────────────────────────────────────
 async function doLogin() {
-  const server = flags.server || "https://vault.bitwarden.eu";
+  const server = flags.server || DEFAULT_SERVER;
+  // No server, no sign-in: said before anything is asked (offline.mjs).
+  await requireServer(server, t("offline"));
   let status = parseJson(bw(["status"]).stdout, {});
   if (!status.serverUrl || status.serverUrl !== server) {
     if (status.status && status.status !== "unauthenticated") bw(["logout"]);
@@ -212,33 +215,50 @@ async function doLogin() {
   // the ORDINARY case. We re-ask HERE instead of closing the window and making the user launch
   // the whole sign-in again. The email is kept between attempts and Enter accepts it, so only
   // what was actually wrong has to be typed a second time.
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    if (attempt > 1) {
-      const again = (await promptVisible(t("emailAgain", { email }))).trim();
-      if (again) email = again;
-    }
-    const pwd = await promptMasked(t("masterPassword"));
-    console.log("");
-    console.log(t("signingIn"));
-    console.log("");
-    const res = spawnSync(loginCmd, ["login", email, "--passwordenv", "BW_PASSWORD_LOGIN"], {
-      encoding: "utf8",
-      env: { ...process.env, BW_PASSWORD_LOGIN: pwd },
-      stdio: "inherit",      // keep stdin live so bw can prompt for the 2FA code if needed
-      shell: IS_WIN && loginCmd === "bw",
-      windowsHide: true,
-    });
-    if (res.status === 0) {
-      console.log(t("signedIn"));
-      return;
-    }
-    if (attempt < MAX_ATTEMPTS) console.log(t("signInRetry", { attempt, total: MAX_ATTEMPTS }));
+  //
+  // bw writes its own error on the screen (stdio inherited, for its 2FA question), so a failure is
+  // read by asking the server again (offline.mjs, tryAttempts): a network never counts as a try.
+  const signedIn = await tryAttempts({
+    max: MAX_ATTEMPTS,
+    server,
+    offline: t("offline"),
+    ask: async (attempt) => {
+      if (attempt > 1) {
+        const again = (await promptVisible(t("emailAgain", { email }))).trim();
+        if (again) email = again;
+      }
+      return promptMasked(t("masterPassword"));
+    },
+    run: async (pwd) => {
+      console.log("");
+      console.log(t("signingIn"));
+      console.log("");
+      const res = spawnSync(loginCmd, ["login", email, "--passwordenv", "BW_PASSWORD_LOGIN"], {
+        encoding: "utf8",
+        env: { ...process.env, BW_PASSWORD_LOGIN: pwd },
+        stdio: "inherit",      // keep stdin live so bw can prompt for the 2FA code if needed
+        shell: IS_WIN && loginCmd === "bw",
+        windowsHide: true,
+      });
+      return res.status === 0 ? { ok: true, value: true } : { ok: false, res };
+    },
+    onRefused: (attempt) => console.log(t("signInRetry", { attempt, total: MAX_ATTEMPTS })),
+  });
+  if (signedIn) {
+    console.log(t("signedIn"));
+    return;
   }
   // Thrown = non-zero exit, so the caller knows no account got signed in.
   throw new Error(t("signInFailedFinal", { total: MAX_ATTEMPTS }));
 }
 
 async function doUnlock() {
+  // The server first, before bw (offline, every bw command first waits for it) and before the
+  // password: without it the vault does not open, and the person is told so without being asked
+  // anything (offline.mjs).
+  useBwHome();
+  const server = configuredServer();
+  await requireServer(server, t("offline"));
   // Distinguish "bw not found" from "genuinely not logged in". A null status means bw could not
   // run at all (resolution/PATH problem) - different message + non-zero exit so the caller does
   // NOT loop on unlock. `unauthenticated` means bw ran fine but no account is logged in here.
@@ -259,28 +279,39 @@ async function doUnlock() {
   // or the wrong keyboard layout is one retry away. We stop after MAX_ATTEMPTS instead of
   // looping forever - past that point the cause is rarely a typo (wrong account, forgotten
   // password), and an endless prompt would only hide it.
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const pwd = await promptMasked(t("masterPassword"));
-    const res = spawnSync(unlockCmd, ["unlock", "--passwordenv", "BW_PASSWORD_UNLOCK", "--raw"], {
-      encoding: "utf8",
-      env: { ...process.env, BW_PASSWORD_UNLOCK: pwd },
-      shell: IS_WIN && unlockCmd === "bw",
-      windowsHide: true,
-    });
-    const token = (res.stdout || "").trim();
-    if (token) {
-      if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true });
-      const ts = Math.floor(Date.now() / 1000);
-      writeSessionFile(SESSION_FILE, ts, token);
-      console.log(t("unlocked"));
-      // The real end of this session, in the system's scheduler (session.mjs). A schedule that
-      // fails never undoes the unlock: the session is locked at the first read after its end, or
-      // at the next start of Claude Code, and the window says so.
-      const scheduled = scheduleLock({ at: ts });
-      if (!scheduled.ok) console.log(t("lockNotScheduled", { detail: scheduled.detail || "?" }));
-      return;
-    }
-    if (attempt < MAX_ATTEMPTS) console.log(t("unlockWrongPassword", { attempt, total: MAX_ATTEMPTS }));
+  //
+  // What failed is read in what bw said and in the server asked again (offline.mjs, tryAttempts): a
+  // network never counts as a try and never shows as a wrong password (Flavien, 18/11/2026: three
+  // right master passwords refused, offline).
+  const token = await tryAttempts({
+    max: MAX_ATTEMPTS,
+    server,
+    offline: t("offline"),
+    signedOut: t("notSignedIn"),
+    ask: () => promptMasked(t("masterPassword")),
+    run: async (pwd) => {
+      const res = spawnSync(unlockCmd, ["unlock", "--passwordenv", "BW_PASSWORD_UNLOCK", "--raw"], {
+        encoding: "utf8",
+        env: { ...process.env, BW_PASSWORD_UNLOCK: pwd },
+        shell: IS_WIN && unlockCmd === "bw",
+        windowsHide: true,
+      });
+      const value = (res.stdout || "").trim();
+      return value ? { ok: true, value } : { ok: false, res };
+    },
+    onRefused: (attempt) => console.log(t("unlockWrongPassword", { attempt, total: MAX_ATTEMPTS })),
+  });
+  if (token) {
+    if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true });
+    const ts = Math.floor(Date.now() / 1000);
+    writeSessionFile(SESSION_FILE, ts, token);
+    console.log(t("unlocked"));
+    // The real end of this session, in the system's scheduler (session.mjs). A schedule that
+    // fails never undoes the unlock: the session is locked at the first read after its end, or
+    // at the next start of Claude Code, and the window says so.
+    const scheduled = scheduleLock({ at: ts });
+    if (!scheduled.ok) console.log(t("lockNotScheduled", { detail: scheduled.detail || "?" }));
+    return;
   }
   // Thrown = non-zero exit, so the caller knows the vault stayed closed and does not loop blindly.
   throw new Error(t("unlockFailedFinal", { total: MAX_ATTEMPTS }));
@@ -305,6 +336,10 @@ async function doAdd() {
     return { name: n.trim(), type: t.trim().toLowerCase() };
   });
   for (const s of specs) if (s.type !== "secret" && s.type !== "text") throw new Error(t("badFieldType", { type: s.type }));
+
+  // Writing an item goes through the server: without it, said before the values are typed.
+  const server = configuredServer();
+  await requireServer(server, t("offlineSave"));
 
   bw(["sync", "--quiet"], { session });
   const folders = parseJson(bw(["list","folders"],{session}).stdout, []);
@@ -349,7 +384,10 @@ async function doAdd() {
   const res = existing
     ? bw(["edit", "item", existing.id], { input: enc, session })
     : bw(["create", "item"], { input: enc, session });
-  if (res.status !== 0) throw new Error(t("saveFailed", { name }));
+  if (res.status !== 0) {
+    if ((await failureKind(res, { server })) === "network") throw offlineError(t("offlineSave"));
+    throw new Error(t("saveFailed", { name }));
+  }
   console.log(t(existing ? "savedUpdated" : "savedCreated", { name }));
 }
 
@@ -475,6 +513,8 @@ async function doCollectEnv() {
   } catch (e) {
     console.error("\n" + (e.message || String(e)));
     await pause();
-    process.exit(1);
+    // A window closed for want of a network says so with its own code (offline.mjs, OFFLINE_EXIT):
+    // the skills then wait for the connection instead of reopening the window.
+    process.exit(exitCodeOf(e));
   }
 })();

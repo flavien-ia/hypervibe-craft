@@ -1,0 +1,102 @@
+{
+  "about": "What bw 2026.4.2 REALLY printed on 18/11/2026, in a throwaway data folder (BITWARDENCLI_APPDATA_DIR), its server set to an address that cannot be reached: a closed port (ECONNREFUSED), a name that does not exist (ENOTFOUND), an address that never answers (ETIMEDOUT); and, on the EU cloud, a sign-in refused for an account that does not exist. Verbatim, except the line that named the throwaway folder. A refused master password at unlock could not be captured without a real account.",
+  "bw": "2026.4.2",
+  "runs": [
+    {
+      "server": "https://vault.invalid",
+      "command": "bw status",
+      "status": 0,
+      "stdout": "{\"serverUrl\":\"https://vault.invalid\",\"lastSync\":null,\"status\":\"unauthenticated\"}",
+      "stderr": "Unable to fetch ServerConfig from https://vault.invalid/api FetchError: request to https://vault.invalid/api/config failed, reason: getaddrinfo ENOTFOUND vault.invalid\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ENOTFOUND',\n  code: 'ENOTFOUND'\n}\n",
+      "succeeded": true
+    },
+    {
+      "server": "https://vault.invalid",
+      "command": "bw login <email> --passwordenv HV_FAKE_PWD",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Unable to fetch ServerConfig from https://vault.invalid/api FetchError: request to https://vault.invalid/api/config failed, reason: getaddrinfo ENOTFOUND vault.invalid\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ENOTFOUND',\n  code: 'ENOTFOUND'\n}\nFetchError: request to https://vault.invalid/identity/accounts/prelogin/password failed, reason: getaddrinfo ENOTFOUND vault.invalid",
+      "expect": "network"
+    },
+    {
+      "server": "https://vault.invalid",
+      "command": "bw unlock --passwordenv HV_FAKE_PWD --raw",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Unable to fetch ServerConfig from https://vault.invalid/api FetchError: request to https://vault.invalid/api/config failed, reason: getaddrinfo ENOTFOUND vault.invalid\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ENOTFOUND',\n  code: 'ENOTFOUND'\n}\nYou are not logged in.",
+      "expect": "network"
+    },
+    {
+      "server": "https://127.0.0.1:9",
+      "command": "bw status",
+      "status": 0,
+      "stdout": "{\"serverUrl\":\"https://127.0.0.1:9\",\"lastSync\":null,\"status\":\"unauthenticated\"}",
+      "stderr": "Unable to fetch ServerConfig from https://127.0.0.1:9/api FetchError: request to https://127.0.0.1:9/api/config failed, reason: connect ECONNREFUSED 127.0.0.1:9\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ECONNREFUSED',\n  code: 'ECONNREFUSED'\n}\n",
+      "succeeded": true
+    },
+    {
+      "server": "https://127.0.0.1:9",
+      "command": "bw login <email> --passwordenv HV_FAKE_PWD",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Unable to fetch ServerConfig from https://127.0.0.1:9/api FetchError: request to https://127.0.0.1:9/api/config failed, reason: connect ECONNREFUSED 127.0.0.1:9\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ECONNREFUSED',\n  code: 'ECONNREFUSED'\n}\nFetchError: request to https://127.0.0.1:9/identity/accounts/prelogin/password failed, reason: connect ECONNREFUSED 127.0.0.1:9",
+      "expect": "network"
+    },
+    {
+      "server": "https://127.0.0.1:9",
+      "command": "bw unlock --passwordenv HV_FAKE_PWD --raw",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Unable to fetch ServerConfig from https://127.0.0.1:9/api FetchError: request to https://127.0.0.1:9/api/config failed, reason: connect ECONNREFUSED 127.0.0.1:9\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ECONNREFUSED',\n  code: 'ECONNREFUSED'\n}\nYou are not logged in.",
+      "expect": "network"
+    },
+    {
+      "server": "https://10.255.255.1",
+      "command": "bw status",
+      "status": 0,
+      "stdout": "{\"serverUrl\":\"https://10.255.255.1\",\"lastSync\":null,\"status\":\"unauthenticated\"}",
+      "stderr": "Unable to fetch ServerConfig from https://10.255.255.1/api FetchError: request to https://10.255.255.1/api/config failed, reason: connect ETIMEDOUT 10.255.255.1:443\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ETIMEDOUT',\n  code: 'ETIMEDOUT'\n}\n",
+      "succeeded": true
+    },
+    {
+      "server": "https://10.255.255.1",
+      "command": "bw login <email> --passwordenv HV_FAKE_PWD",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Unable to fetch ServerConfig from https://10.255.255.1/api FetchError: request to https://10.255.255.1/api/config failed, reason: connect ETIMEDOUT 10.255.255.1:443\n    at ClientRequest.<anonymous> (C:\\snapshot\\clients\\node_modules\\node-fetch\\lib\\index.js:1501:11)\n    at ClientRequest.emit (node:events:518:28)\n    at emitErrorEvent (node:_http_client:104:11)\n    at TLSSocket.socketErrorListener (node:_http_client:518:5)\n    at TLSSocket.emit (node:events:518:28)\n    at emitErrorNT (node:internal/streams/destroy:170:8)\n    at emitErrorCloseNT (node:internal/streams/destroy:129:3)\n    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {\n  type: 'system',\n  errno: 'ETIMEDOUT',\n  code: 'ETIMEDOUT'\n}\nFetchError: request to https://10.255.255.1/identity/accounts/prelogin/password failed, reason: connect ETIMEDOUT 10.255.255.1:443",
+      "expect": "network"
+    },
+    {
+      "server": "https://10.255.255.1",
+      "command": "bw unlock --passwordenv HV_FAKE_PWD --raw",
+      "status": 1,
+      "stdout": "",
+      "stderr": "You are not logged in.",
+      "expect": "signed-out"
+    },
+    {
+      "server": "https://vault.bitwarden.eu",
+      "command": "bw status",
+      "status": 0,
+      "stdout": "{\"serverUrl\":\"https://vault.bitwarden.eu\",\"lastSync\":null,\"status\":\"unauthenticated\"}",
+      "stderr": "",
+      "succeeded": true
+    },
+    {
+      "server": "https://vault.bitwarden.eu",
+      "command": "bw login <email> --passwordenv HV_FAKE_PWD",
+      "status": 1,
+      "stdout": "",
+      "stderr": "Invalid master password. Confirm your email is correct and your account was created on vault.bitwarden.eu.",
+      "expect": "password"
+    },
+    {
+      "server": "https://vault.bitwarden.eu",
+      "command": "bw unlock --passwordenv HV_FAKE_PWD --raw",
+      "status": 1,
+      "stdout": "",
+      "stderr": "You are not logged in.",
+      "expect": "signed-out"
+    }
+  ]
+}

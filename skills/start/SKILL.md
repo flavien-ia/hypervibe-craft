@@ -242,7 +242,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" account 2>/dev/null   #
 ```
 - `unlocked` → vault already ready, move on to Step 4.
 - `"signedIn": false` (no connected account) → **immediately launch the `_add-keyring` skill by default, WITHOUT asking for confirmation**: the vault is MANDATORY, there is nothing to decide. NEVER ask a question like "do you want to set up your vault now?", do not wait for confirmation: go straight to `_add-keyring`, which guides the creation of the Bitwarden account (free, master password to write down offline, 2FA), the login, and the first unlock. Non-technical language.
-- `locked`/`expired` (account connected but vault closed) → open it: `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking).
+- `locked`/`expired` (account connected but vault closed) → open it: `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking). Exit 8 = no internet: say in one sentence that internet is needed to open the vault and wait for the user to be connected again, never reopening the window in a loop (`_get-secret`).
 
 > **Your key vault**: an encrypted place where I store your access keys (database, email, hosting, etc.). You type your master password, the vault stays open twelve hours and then locks itself again, and in between I use it without you having to copy anything over. ⚠️ This master password cannot be recovered by anyone. Write it down offline.
 

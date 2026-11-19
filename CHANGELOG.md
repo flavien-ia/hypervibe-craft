@@ -1,5 +1,11 @@
 # Changelog
 
+## v3.4.32 (19 novembre 2026)
+
+### Corrections
+
+- **Sans connexion internet, la fenêtre du coffre le dit.** Elle prévient qu'il faut internet pour ouvrir le coffre, sans demander le mot de passe maître, au lieu de répondre « mot de passe incorrect » à un bon mot de passe. Une coupure du réseau ne consomme plus aucun des trois essais, et Claude attend que vous soyez reconnecté avant de rouvrir la fenêtre.
+
 ## v3.4.31 (15 novembre 2026)
 
 ### Nouveautés

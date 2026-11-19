@@ -30,6 +30,9 @@ const STRINGS = {
     installing: "Vault tool not found, running automatic installation...\n",
     bwMissing: "The vault tool was not found and automatic installation failed. Check your connection, or install it manually: https://bitwarden.com/help/cli/",
     bwCannotRun: "Cannot run the vault tool. Set up the vault again to reinstall it.",
+    // The vault's server did not answer (offline.mjs): nothing is asked, no try is counted.
+    offline: "No internet connection: the vault needs one to open. Connect again, then start over.",
+    offlineSave: "No internet connection: the vault needs one to save a key. Connect again, then start over.",
 
     email: "Email: ",
     emailRequired: "An email address is required.",
@@ -100,6 +103,8 @@ const STRINGS = {
     installing: "Outil de coffre introuvable, installation automatique en cours...\n",
     bwMissing: "L'outil de coffre est introuvable et l'installation automatique a echoue. Verifie ta connexion, ou installe-le manuellement : https://bitwarden.com/help/cli/",
     bwCannotRun: "Impossible de lancer l'outil de coffre. Relance la configuration du coffre pour le reinstaller.",
+    offline: "Pas de connexion internet : il en faut une pour ouvrir le coffre. Reconnecte-toi, puis relance.",
+    offlineSave: "Pas de connexion internet : il en faut une pour enregistrer une cle dans le coffre. Reconnecte-toi, puis relance.",
 
     email: "Email : ",
     emailRequired: "Une adresse email est necessaire.",

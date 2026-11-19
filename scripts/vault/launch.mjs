@@ -30,6 +30,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { platform, tmpdir } from "node:os";
 import { resolveLang, makeT } from "./i18n.mjs";
+import { OFFLINE_EXIT, OFFLINE_NOTE } from "./offline.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const INTERACTIVE = join(__dirname, "interactive.mjs");
@@ -145,8 +146,15 @@ async function sessionOk() {
   return sessionStatus() === "unlocked";
 }
 
+/** Leaves with the window's code, untouched. A window closed for want of a network (OFFLINE_EXIT,
+ *  offline.mjs) is also said to Claude, who reads this output: no wrong password, no new window. */
+function leave(code) {
+  if (code === OFFLINE_EXIT) console.error(OFFLINE_NOTE);
+  process.exit(code);
+}
+
 if (cmd === "unlock") {
   const { unlockOnce } = await import("./unlock-once.mjs");
-  process.exit(await unlockOnce({ openWindow, sessionOk, pollMs: STANDIN ? 100 : 1000 }));
+  leave(await unlockOnce({ openWindow, sessionOk, pollMs: STANDIN ? 100 : 1000 }));
 }
-process.exit(await openWindow());
+leave(await openWindow());

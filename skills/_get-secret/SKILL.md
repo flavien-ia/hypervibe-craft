@@ -87,7 +87,7 @@ VAL=$(node "$VAULT" get CLOUDFLARE api_token); RC=$?
 
 The master password is typed **in the window**, never in the chat. The session stays valid for 12h, then the vault is locked for real (`bw lock`): one unlock per working day.
 
-The window asks up to **3 times** before giving up, so a typo is fixed on the spot. If `launch.mjs unlock` still exits non-zero, the three attempts were wrong: say so in the chat and ask before opening another window, rather than looping on the same `get`.
+The window asks up to **3 times** before giving up, so a typo is fixed on the spot. **Exit 8 = no internet**: the vault's server did not answer, the password was not refused and no attempt was used. Say in one sentence that internet is needed to open the vault, then wait for the user to say they are connected again before opening the window once more. Never reopen it in a loop, and never speak of a wrong password. Any other non-zero exit: the three attempts were wrong, say so in the chat and ask before opening another window, rather than looping on the same `get`.
 
 `launch.mjs unlock` opens one window at a time on the machine. A vault already open exits 0 with no window; a call made while another window is open (two scheduled tasks at the same minute) waits for it, then exits 0 if the vault opened, 1 if it did not, without opening its own.
 

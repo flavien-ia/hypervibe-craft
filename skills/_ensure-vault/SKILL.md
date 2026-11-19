@@ -34,7 +34,7 @@ Depending on `ST`:
   node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>
   node "$VAULT" status   # should return "unlocked"
   ```
-  The window asks for the master password up to **3 times** before giving up, so a typo is fixed on the spot. If it still exits non-zero, the three attempts were wrong: say so in the chat and ask the user before opening another window. Never reopen one on your own - that is how a mistyped password turns into an endless chain of windows.
+  The window asks for the master password up to **3 times** before giving up, so a typo is fixed on the spot. **Exit 8 = no internet**: the vault's server did not answer, the password was not refused and no attempt was used. Say in one sentence that internet is needed to open the vault, then wait for the user to say they are connected again before opening the window once more. Never reopen it in a loop, and never speak of a wrong password. If it exits non-zero with any other code, the three attempts were wrong: say so in the chat and ask the user before opening another window. Never reopen one on your own - that is how a mistyped password turns into an endless chain of windows.
   Only one unlock window opens at a time on the machine: a call made while another is open waits for it, and exits 0 if the vault opened, 1 if not.
 - **Empty output / error** (no `bw`, no account connected → vault never configured) → the vault does not exist yet: **delegate to `_add-keyring`** (installs bw + creates the account + login + unlock), then re-check. If the user declines to set up the vault, flag it and stop cleanly (the skill will not be able to retrieve its keys).
 
