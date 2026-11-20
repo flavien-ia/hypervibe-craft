@@ -1625,6 +1625,157 @@ console.log("\n── Un dossier hooks/ recopie seul garde ses regles (revue ext
   console.log(`${ok ? "OK  " : "FAIL"} hooks/ seul : exit ${r.status}, decision ${decision}${ok ? "" : `, stderr ${r.stderr.trim().split("\n")[0]}`}`);
 }
 
+console.log("\n── Un programme suffixé, cité, donné par son chemin ou lancé par un autre : la décision de sa forme nue (relecture du 19/11/2026) ──");
+// La lecture POSIX est aussi celle de Git Bash sous Windows, où un programme se nomme souvent par
+// son suffixe ou par un chemin entre guillemets : jusqu'à la 3.4.32 chaque règle passait à côté.
+expect("git.exe push origin main", "ask");
+expect("GIT.EXE push", "ask");
+expect("git.exe add -A", "deny");
+expect("git.exe push --no-verify", "deny");
+expect("\"C:/Program Files/Git/cmd/git.exe\" push origin main", "ask");
+expect("'C:/Program Files/Git/cmd/git.exe' add .", "deny");
+expect("\"/Applications/Mes Outils/git\" push", "ask");
+expect("/mingw64/bin/git.exe push", "ask");
+expect("node.exe C:/p/scripts/delete-project/execute-deletions.mjs --go", "ask");
+expect("\"C:/Program Files/nodejs/node\" C:/p/scripts/delete-project/execute-deletions.mjs --go", "ask");
+expect("node.exe scripts/neon/run-sql.mjs \"DROP TABLE clients\"", "deny");
+expect("wrangler deploy", "ask");
+expect("wrangler.cmd deploy", "ask");
+expect("vercel.cmd --prod", "ask");
+expect("pnpm.cmd db:push", "ask");
+expect("bun run db:push", "ask");
+expect("bun db:push", "ask");
+expect("winpty git push", "ask");
+expect("winpty -Xallow-non-tty git push origin main", "ask");
+expect("npm exec -- vercel --prod", "ask");
+expect("npm exec vercel --prod", "ask");
+expect("npm x vercel --prod", "ask");
+expect("npm exec -c \"git push\"", "ask");
+expect("bun x vercel --prod", "ask");
+expect("pnpm vercel --prod", "ask");
+expect("pnpm wrangler deploy", "ask");
+expect("yarn wrangler deploy", "ask");
+expect("bun run wrangler deploy", "ask");
+// ... et ce qui passait passe toujours : le suffixe ne fait pas le geste.
+expect("git.exe status", "pass");
+expect("git.exe push --dry-run", "pass");
+expect("\"C:/Program Files/Git/cmd/git.exe\" log --oneline -5", "pass");
+expect("node.exe --version", "pass");
+expect("wrangler.cmd deploy --dry-run", "pass");
+expect("winpty node", "pass");
+expect("npm exec -- eslint .", "pass");
+expect("npm x prettier --check .", "pass");
+expect("bun install", "pass");
+expect("bun run dev", "pass");
+expect("pnpm install", "pass");
+expect("pnpm vercel ls", "pass");
+expect("yarn wrangler tail", "pass");
+expect("cat notes.exe", "pass");
+expect("echo \"git.exe push\"", "pass");
+expect("./build.bat", "pass");
+
+console.log("\n── Retirer quelque chose chez un fournisseur par sa ligne de commande : demandé (relecture du 19/11/2026) ──");
+expect("vercel rm site --yes", "ask");
+expect("vercel remove site", "ask");
+expect("vercel env rm DATABASE_URL production -y", "ask");
+expect("vercel project rm site", "ask");
+expect("vercel domains rm exemple.fr", "ask");
+expect("npx vercel env rm CLE preview", "ask");
+expect("wrangler delete hypervibe-jobs", "ask");
+expect("wrangler delete --name hypervibe-jobs", "ask");
+expect("wrangler r2 bucket delete seau", "ask");
+expect("wrangler r2 object delete seau/image.png", "ask");
+expect("wrangler d1 delete base", "ask");
+expect("wrangler secret delete CLE", "ask");
+expect("scw rdb instance delete 11111111-2222-3333-4444-555555555555", "ask");
+expect("aws s3 rb s3://seau --force", "ask");
+expect("aws s3 rm s3://seau/dossier --recursive", "ask");
+expect("aws s3api delete-bucket --bucket seau", "ask");
+expect("T=rm; vercel env $T CLE production", "ask");
+// Lire, créer, déployer ailleurs : rien n'est demandé de plus qu'avant.
+expect("vercel ls", "pass");
+expect("vercel env ls", "pass");
+expect("vercel env add CLE production", "pass");
+expect("vercel inspect dpl_1", "pass");
+expect("vercel rm --help", "pass");
+expect("wrangler r2 bucket list", "pass");
+expect("wrangler r2 object put seau/image.png --file image.png", "pass");
+expect("wrangler delete --dry-run", "pass");
+expect("wrangler tail hypervibe-jobs", "pass");
+expect("scw rdb instance list", "pass");
+expect("aws s3 ls s3://seau", "pass");
+expect("aws s3 cp image.png s3://seau/image.png", "pass");
+expect("rm vercel.json", "pass");
+expect("grep -rn \"vercel rm\" docs", "pass");
+expect("git commit -m \"retire wrangler delete du guide\"", "pass");
+// Le script de suppression du harnais pose déjà sa propre question : une seule, la sienne.
+{
+  const executor = bash("node C:/p/scripts/delete-project/execute-deletions.mjs --project site");
+  const inventory = bash("node C:/p/scripts/delete-project/discover-resources.mjs site");
+  checks += 1;
+  const own = executor?.permissionDecision === "ask" && /\/delete-project/.test(executor.permissionDecisionReason ?? "") && !/through its command line/.test(executor.permissionDecisionReason ?? "") && inventory === null;
+  if (!own) failures += 1;
+  console.log(`${own ? "OK  " : "FAIL"} le script de suppression du harnais garde sa propre question, son inventaire passe : la règle des lignes de commande ne s'y ajoute pas`);
+}
+
+console.log("\n── Un appel brut qui détruit au stockage d'objets ou à une forge à soi (relecture du 19/11/2026) ──");
+expect("curl -X DELETE https://0123456789abcdef.r2.cloudflarestorage.com/seau/image.png", "ask");
+expect("curl -X DELETE https://0123456789abcdef.eu.r2.cloudflarestorage.com/seau/image.png", "ask");
+expect("curl -X DELETE https://s3.fr-par.scw.cloud/seau", "ask");
+expect("curl -s -X DELETE https://seau.s3.nl-ams.scw.cloud/image.png", "ask");
+expect("curl -X DELETE https://codeberg.org/api/v1/repos/acme/site", "ask");
+expect("curl -X DELETE https://gitlab.exemple.fr/api/v4/projects/3", "ask");
+expect("curl https://codeberg.org/api/v1/repos/acme/site", "pass");
+expect("curl -X PUT https://0123456789abcdef.r2.cloudflarestorage.com/seau/image.png -T image.png", "pass");
+expect("curl -X DELETE https://exemple.fr/api/v1/articles/3", "pass");
+expect("curl -X DELETE https://api.exemple.fr/v1/repos/3", "pass");
+expect("curl -X DELETE https://s3.exemple.fr/seau", "pass");
+
+console.log("\n── Un secret lu à l'écran : refusé quand rien ne prend ce que la lecture imprime (relecture du 19/11/2026) ──");
+// Ce qu'une commande imprime revient dans la conversation. Les skills lisent toujours dans une
+// variable du shell : cela passe. La lecture nue, elle, laissait la valeur dans la conversation.
+expect("node \"/p/scripts/vault/vault.mjs\" get OPENAI api_key", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key 2>&1", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key; echo \"exit:$?\"", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key && echo ok", "deny");
+expect("VAULT=\"/p/scripts/vault/vault.mjs\"; node \"$VAULT\" get OPENAI api_key", "deny");
+expect("bash -c 'node /p/scripts/vault/vault.mjs get OPENAI api_key'", "deny");
+expect("node.exe /p/scripts/vault/vault.mjs get OPENAI api_key", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key >&2", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key > /dev/tty", "deny");
+expect("node /p/scripts/vault/vault.mjs get OPENAI \"$FIELD\"", "deny");
+expect("if node /p/scripts/vault/vault.mjs get OPENAI api_key; then echo present; fi", "deny");
+// Dans l'autre sens : la valeur prise par une variable, un test, un tube ou un fichier, les champs
+// qui sont un nom, un identifiant ou une date, et tout ce qui ne lance pas la lecture.
+expect("KEY=$(node \"/p/scripts/vault/vault.mjs\" get OPENAI api_key)", "pass");
+expect("KEY=$(node \"/p/scripts/vault/vault.mjs\" get OPENAI api_key); RC=$?; echo \"rc=$RC\"", "pass");
+expect("VAULT=\"/p/scripts/vault/vault.mjs\"; VAL=$(node \"$VAULT\" get CLOUDFLARE api_token); RC=$?", "pass");
+expect("VAULT=\"/p/scripts/vault/vault.mjs\"; node \"$VAULT\" get CLOUDFLARE api_token | wc -c", "pass");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key > /dev/null 2>&1; echo \"exit:$?\"", "pass");
+expect("node /p/scripts/vault/vault.mjs get OPENAI api_key | wc -c", "pass");
+expect("[ -n \"$(node /p/scripts/vault/vault.mjs get OPENAI api_key 2>/dev/null)\" ] && echo present || echo absent", "pass");
+expect("curl -s https://api.exemple.fr -H \"Authorization: Bearer $(node /p/scripts/vault/vault.mjs get OPENAI api_key)\"", "pass");
+expect("node \"/p/scripts/vault/vault.mjs\" get GITHUB org_name", "pass");
+expect("node \"/p/scripts/vault/vault.mjs\" get VERCEL rotated_at", "pass");
+expect("node \"/p/scripts/vault/vault.mjs\" get GOOGLE client_id", "pass");
+expect("cat /p/scripts/vault/vault.mjs", "pass");
+expect("grep -n \"get\" /p/scripts/vault/vault.mjs", "pass");
+expect("node /p/scripts/vault/vault.mjs status", "pass");
+expect("WHSEC=$(stripe listen --print-secret default 2>/dev/null)", "pass");
+// La lecture PowerShell garde la capture, le tube et la redirection : mêmes décisions.
+for (const [command, attendu] of [
+  ["node \"C:/p/scripts/vault/vault.mjs\" get OPENAI api_key", "deny"],
+  ["$v = node \"C:/p/scripts/vault/vault.mjs\" get OPENAI api_key", "pass"],
+  ["node \"C:/p/scripts/vault/vault.mjs\" get OPENAI api_key | Out-Null", "pass"],
+  ["node \"C:/p/scripts/vault/vault.mjs\" get OPENAI api_key > $null", "pass"],
+]) {
+  checks += 1;
+  const obtenu = call({ tool_name: "PowerShell", tool_input: { command }, hook_event_name: "PreToolUse" })?.permissionDecision ?? "pass";
+  if (obtenu !== attendu) failures += 1;
+  console.log(`${obtenu === attendu ? "OK  " : "FAIL"} ${attendu.padEnd(4)} PowerShell : ${command.slice(0, 48)}${obtenu === attendu ? "" : `   (obtenu: ${obtenu})`}`);
+}
+
 const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const own = median(gaps);
 checks += 1;

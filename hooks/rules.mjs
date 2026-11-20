@@ -403,13 +403,38 @@ function normaliseGit(seg) {
  *  pnpm dlx, yarn dlx, pnpm exec) only prefixes the real command: strip it,
  *  and its own flags, so the rules below see the tool they name. Found by an
  *  outside reader on 2.9.5: `pnpm dlx vercel --prod` walked past rule 3, and
- *  it is the very form the plugin recommends elsewhere. */
+ *  it is the very form the plugin recommends elsewhere.
+ *  npm's own runner (`npm exec`, `npm x`, with or without the `--` that ends its options) and
+ *  bun's (`bun x`) are the same prefix (review of 19/11/2026: `npm exec -- vercel --prod` passed).
+ *  `npm exec -c "<line>"` is left whole: it hands a shell a command line, judged as one (decide). */
 function withoutLauncher(seg) {
   const m =
-    /^(?:npx|bunx|(?:pnpm|yarn)\s+(?:dlx|exec))\s+(?:(?:-y|-q|--yes|--quiet|--silent|-p\s+\S+|--package[= ]\S+)\s+)*/.exec(
+    /^(?:npx|bunx|(?:pnpm|yarn)\s+(?:dlx|exec)|npm\s+(?:exec|x)(?![^\n]*\s(?:-c|--call)(?:[=\s]|$))|bun\s+x)\s+(?:(?:-y|-q|--yes|--quiet|--silent|-p\s+\S+|--package[= ]\S+)\s+)*(?:--\s+)?/.exec(
       seg,
     );
   return m ? seg.slice(m[0].length) : seg;
+}
+
+/** The command lines of the providers and of the forge, which a package manager also runs from the
+ *  project's own node_modules (`pnpm vercel --prod`, `yarn wrangler deploy`, `bun run wrangler
+ *  deploy`): the same tool, the same question. Only before one of these names: `pnpm install` or
+ *  `pnpm db:push` stay what they are, for the rules that read them whole. */
+const RUN_BY_PACKAGE_MANAGER = /^(?:pnpm|yarn|bun|npm\s+run)\s+(?:(?:run|exec|x)\s+)?(?:--\s+)?(?=(?:vercel|wrangler|gh|glab|scw|aws|neonctl|supabase|tea)(?:\.(?:cmd|exe|bat))?(?:\s|$))/i;
+
+/** A program named by a quoted or escaped word that holds a path or a space (`"C:/Program
+ *  Files/Git/cmd/git.exe" push`, `'/Applications/My Tools/git' push`): the word as the shell hands
+ *  it over, reduced to the program it names. Left as typed when the line hides it (a variable, a
+ *  substitution: read elsewhere), and when what is left is no single word. The POSIX reading is the
+ *  one of Git Bash on Windows, where such a path is how a program is often named; the PowerShell
+ *  reading already reduced it (review of 19/11/2026). */
+function bareProgram(seg) {
+  const list = words(seg);
+  const head = list[0];
+  if (!head || head.raw === head.value || /[$`]/.test(head.raw)) return seg;
+  if (!/[\\/\s]/.test(head.value) && !/\.(?:exe|cmd|bat)$/i.test(head.value)) return seg;
+  const base = head.value.split(/[\\/]/).pop();
+  if (!base || /\s/.test(base)) return seg;
+  return [base, ...list.slice(1).map((w) => w.raw)].join(" ");
 }
 
 /** `wrangler@latest deploy` is `wrangler deploy`: a version pin on the head
@@ -463,6 +488,9 @@ const LAUNCHERS = {
   nohup: { long: ["help", "version"] },
   exec: { value: "a" },
   setsid: { long: ["ctty", "fork", "help", "version", "wait"] },
+  // Git Bash's own (review of 19/11/2026): `winpty` runs the program that follows in a console,
+  // after its options (`-Xallow-non-tty`, `-Xplain`, `--mouse`...).
+  winpty: { anyDash: true, long: ["help", "mouse", "showkey", "version"] },
   // macOS (outside review, 3.3.4). `arch` reads whole words after one dash: an architecture
   // (`-arm64`, `-x86_64`), or `-arch <name>`, `-d <name>`, `-e <name=value>`.
   arch: { words: { arch: true, d: true, e: true }, anyDash: true },
@@ -608,10 +636,17 @@ function normalise(raw) {
     s = s.replace(/^(?:command(?:\s+-p)?|builtin|eval)\s+/, "");
     // A quoted or escaped head: `"git" push`, `\git push`.
     s = s.replace(/^(["'])([^"'\s]+)\1(?=\s|$)/, "$2").replace(/^\\(?=\S)/, "");
+    // ... and one whose quotes hold a path with a space in it.
+    s = bareProgram(s);
     // A launcher, a version pin, a path: `npx wrangler@latest deploy`,
     // `/usr/bin/git push`, `./node_modules/.bin/vercel --prod`.
-    s = withoutVersion(withoutLauncher(s));
+    s = withoutVersion(withoutLauncher(s)).replace(RUN_BY_PACKAGE_MANAGER, "");
     s = s.replace(/^(?:[A-Za-z]:)?[^\s"'=]*\/(?=[^\s/]+(?:\s|$))/, "");
+    // Windows finds a program with or without its suffix: `git.exe push` is `git push`,
+    // `wrangler.cmd deploy` is `wrangler deploy`, whatever the case. The PowerShell reading said
+    // so; this one, which also reads Git Bash on Windows, did not, and every rule walked past a
+    // suffixed program (review of 19/11/2026).
+    s = s.replace(/^([A-Za-z0-9_+-][A-Za-z0-9_.+-]*?)\.(?:exe|cmd|bat)(?=\s|$)/i, (_all, name) => name.toLowerCase());
     s = normaliseGit(s);
     if (s === before) break;
   }
@@ -1291,6 +1326,22 @@ export const MANAGED_API_HOSTS = [
 // branch): elsewhere the plugin's skills PUT to create (a site in Search Console, a sender).
 const OVERWRITING_API_HOSTS = ["console.neon.tech", "api.vercel.com", "api.cloudflare.com"];
 
+/** The hosts of the same kind that no fixed name says (review of 19/11/2026): object storage, whose
+ *  address carries a region, an account or a bucket (Cloudflare R2's
+ *  `<account>.r2.cloudflarestorage.com`, its European jurisdiction included; an S3 storage at
+ *  Scaleway, `s3.<region>.scw.cloud`, with or without the bucket before it). A DELETE there
+ *  destroys a file or a bucket. */
+export const MANAGED_API_HOST_PATTERNS = [
+  /https?:\/\/(?:[a-z0-9][a-z0-9.-]*\.)?s3\.[a-z]{2}-[a-z]{3}\.scw\.cloud(?=[/:?"'\s]|$)/i,
+  /https?:\/\/[a-z0-9]+(?:\.eu)?\.r2\.cloudflarestorage\.com(?=[/:?"'\s]|$)/i,
+];
+
+/** A forge whose address is the person's own (a Forgejo or a GitLab instance) has no fixed name
+ *  either. Its API has a shape: Forgejo's and Gitea's `/api/v1/` under repos, orgs, user(s), teams,
+ *  admin or packages; GitLab's `/api/v4/` under projects, groups or users. A DELETE on such a path
+ *  destroys a repository, a branch, a secret, an access, whatever the host (review of 19/11/2026). */
+export const FORGE_API_PATHS = /https?:\/\/[^\s"'/]+(?:\/[^\s"'?#]*)?\/api\/(?:v1\/(?:repos|orgs|user|users|teams|admin|packages)|v4\/(?:projects|groups|users))(?=[/?"'\s]|$)/i;
+
 /** The registrars the plugin's skills operate (the sub-skills /add-domain hands a domain's
  *  nameservers to), and how each one says a change. A change there moves a whole domain, its
  *  site and its mail: its nameservers, or the records the registrar keeps for it. Most of them
@@ -1440,7 +1491,47 @@ function destructiveApiCall(seg, parts = [], k = -1, vars = new Map()) {
   const method = ["DELETE", "PATCH", "PUT"].find((m) => methods.some((x) => x.toUpperCase() === m));
   if (!method) return false;
   const hosts = method === "DELETE" ? MANAGED_API_HOSTS : OVERWRITING_API_HOSTS;
-  return hosts.some((host) => new RegExp(`https?://${host.replace(/\./g, "\\.")}(?=[/:?"'\\s]|$)`, "i").test(text));
+  if (hosts.some((host) => new RegExp(`https?://${host.replace(/\./g, "\\.")}(?=[/:?"'\\s]|$)`, "i").test(text))) return true;
+  // What no fixed name says: the object storage's addresses, and the API of a forge of one's own.
+  return method === "DELETE" && (MANAGED_API_HOST_PATTERNS.some((re) => re.test(text)) || FORGE_API_PATHS.test(text));
+}
+
+/** The gestures that destroy, in the command lines of the providers the harness operates (rule 3c,
+ *  review of 19/11/2026). Each tool's own words, read on its operands (options aside): what removes a
+ *  site, a variable, a domain, a worker, a bucket, a file, a database, a key. Reads, creations and
+ *  deployments are other rules' or nobody's. The harness's own scripts never go through these tools
+ *  on a command line the model types: they run them themselves, behind their own confirmation. */
+const REMOVES = new Set(["rm", "remove", "del", "delete", "destroy", "terminate"]);
+export const PROVIDER_CLI_REMOVALS = {
+  // `vercel rm <site>`, `vercel remove`, and `vercel <thing> rm` (env, project, domains, alias, dns, certs...).
+  vercel: (ops) => ["rm", "remove"].includes(ops[0]) || REMOVES.has(ops[1]),
+  // `wrangler delete`, `wrangler r2 bucket delete`, `wrangler r2 object delete`, `wrangler d1 delete`,
+  // `wrangler kv namespace delete`, `wrangler secret delete`, `wrangler pages project delete`...
+  wrangler: (ops) => ops.slice(0, 4).includes("delete"),
+  // `scw <product> <thing> delete` (rdb instance, container namespace, registry, secret, iam api-key...).
+  scw: (ops) => ops.slice(1, 4).some((o) => REMOVES.has(o)),
+  // An S3 storage, whatever its endpoint: `aws s3 rb`, `aws s3 rm`, `aws s3api delete-...`.
+  aws: (ops) => (ops[0] === "s3" && ["rb", "rm"].includes(ops[1])) || (ops[0] === "s3api" && /^delete-/.test(ops[1] ?? "")),
+  neonctl: (ops) => ops.slice(0, 3).includes("delete"),
+  neon: (ops) => ops.slice(0, 3).includes("delete"),
+  supabase: (ops) => ops.slice(0, 3).includes("delete"),
+  // Gitea's and Forgejo's unofficial command line.
+  tea: (ops) => ops.slice(0, 3).some((o) => REMOVES.has(o)),
+};
+
+/** Whether a segment removes something through one of those command lines. A word the line does
+ *  not show among the first ones (a variable, a substitution) is taken for a removal: what it runs
+ *  cannot be read. `--help` and a dry run remove nothing. */
+function providerCliRemoves(seg, substituted) {
+  const list = operandsOf(words(seg));
+  const judge = PROVIDER_CLI_REMOVALS[list[0]?.value];
+  if (!judge) return false;
+  const rest = list.slice(1);
+  if (rest.some((w) => w.value === "--help" || w.value === "-h")) return false;
+  if (!substituted && rest.some((w) => w.value === "--dry-run" || w.value === "--dryrun")) return false;
+  const operands = rest.filter((w) => !w.value.startsWith("-"));
+  if (judge(operands.map((w) => w.value))) return true;
+  return operands.slice(0, 3).some((w) => /[$`]/.test(w.raw.replace(/'[^']*'/g, ""))) && operands.length > 0;
 }
 
 /** A raw curl that changes a domain at its registrar (REGISTRAR_APIS). Its options are read as
@@ -1843,7 +1934,56 @@ function forgeDestroys(seg) {
   return createsPublicRepo(api);
 }
 
-export function decide(command, inherited = new Map(), vars = new Map(), carried = false) {
+// ── A secret read onto the screen ─────────────────────────────────────────────────────────────
+// What a command prints in this tool comes back into the conversation. The scripts that read the
+// vault print the raw value, for a shell variable to take: left on the screen, the value is in the
+// conversation for good (review of the Enterprise harnesses, 19/11/2026).
+
+/** Where the terminal itself is: a redirection there sends nothing away. */
+const TO_SCREEN = /^\/dev\/(?:tty|stdout|stderr|fd\/[12])$/;
+
+/** Whether the segment sends its standard output away from the screen: `> file`, `>> file`,
+ *  `1> file`, `&> file`, `>| file`. `2> file` and `>&2` leave it where it was. */
+function outputSentAway(seg) {
+  const list = words(seg);
+  for (let w = 0; w < list.length; w += 1) {
+    const m = /^(?:1|&)?(?:>>|>\||>)(?!&)(.*)$/.exec(list[w].raw);
+    if (!m) continue;
+    const target = m[1] !== "" ? m[1] : (list[w + 1]?.value ?? "");
+    if (!TO_SCREEN.test(target.replace(/^["']|["']$/g, ""))) return true;
+  }
+  return false;
+}
+
+/** A field whose name says an identifier, a name or a date (`org_name`, `client_id`,
+ *  `rotated_at`, `login`): the skills read those to show them, they are not secrets. Any other
+ *  name, no name at all (the default field is the secret itself) and a name the command line does
+ *  not show are read as a secret. */
+const PLAIN_FIELD = /(?:^|_)(?:id|name|at|login|user|username|email|slug|region|host|handle)$/i;
+
+/** Whether the segment is a runtime launching a reading of the vault that PRINTS a secret:
+ *  `vault.mjs get <item> [field]`, the organisation side's `bw-org.mjs get-secret <space> <name> [field]`, and
+ *  `apply-bienvenue.mjs --print-secret`. Reading the script's own file (`cat`, `grep`) is not
+ *  launching it, and its other verbs print no secret. */
+function printsSecret(seg) {
+  const list = operandsOf(words(seg));
+  if (!RUNTIMES.test(list[0]?.value ?? "")) return false;
+  const base = (w) => String(w?.value ?? "").split(/[\\/]/).pop();
+  const launched = (name) => list.findIndex((w, i) => i > 0 && base(w) === name);
+  const vault = launched("vault.mjs");
+  if (vault > 0 && list[vault + 1]?.value === "get") return !PLAIN_FIELD.test(list[vault + 3]?.value ?? "");
+  for (const name of ["bw-org.mjs"]) {
+    const org = launched(name);
+    if (org > 0 && list[org + 1]?.value === "get-secret") return !PLAIN_FIELD.test(list[org + 4]?.value ?? "");
+  }
+  const welcome = launched("apply-bienvenue.mjs");
+  return welcome > 0 && list.slice(welcome + 1).some((w) => /^--print-secret(?:=|$)/.test(w.value));
+}
+
+const SECRET_ON_SCREEN =
+  "This would print a secret's value into the conversation: nothing takes the output of this read. Read it into a shell variable and use it in the same command (`VAL=$(node <script> get <ITEM> <field>)`), or send the output to /dev/null when only the exit code matters. A secret is never displayed.";
+
+export function decide(command, inherited = new Map(), vars = new Map(), carried = false, quiet = false) {
   if (!command || typeof command !== "string") return null;
 
   let worst = null;
@@ -1865,7 +2005,9 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     for (const [k, v] of inherited) if (!env.has(k)) env.set(k, v);
     for (const payload of inner) {
       // A substitution runs in a shell that inherits the variables set so far.
-      const verdict = decide(payload, env, vars);
+      // What it prints is taken by the command line (a variable, a test, another command's words):
+      // it does not land on the screen (`quiet`).
+      const verdict = decide(payload, env, vars, false, true);
       if (verdict) keep(verdict.decision, verdict.reason);
     }
     // A segment that only sets variables: their values are kept for the scripts launched after
@@ -1885,13 +2027,20 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     }
     if (!seg) continue;
 
+    // 0. A secret read onto the screen (printsSecret). Refused when the read is the whole command
+    //    and nothing takes what it prints: not captured by a substitution (`quiet`, from the line
+    //    that holds it), not piped into another command, not sent to a file. The skills always
+    //    capture it (`VAL=$(node "$VAULT" get ITEM field)`), and that passes.
+    const unseen = quiet || Boolean(parts[index + 1]?.piped) || outputSentAway(seg);
+    if (!unseen && printsSecret(seg)) keep(DENY, SECRET_ON_SCREEN);
+
     // A runtime launching a script whose path the command line put in a variable: judged as the
     // line it runs, the path written out (every reading of it, see above). The lines are judged
     // on their own, without the variables: what is left in them is as typed.
     const written = throughVariables(seg, vars);
     if (written) {
       for (const line of written) {
-        const verdict = decide(line, env, undefined, substituted);
+        const verdict = decide(line, env, undefined, substituted, unseen);
         if (verdict) keep(verdict.decision, verdict.reason);
       }
       continue;
@@ -1904,7 +2053,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     const spelled = wordsThroughVariables(seg, vars);
     if (spelled) {
       for (const line of spelled) {
-        const verdict = decide(line, env, undefined, substituted);
+        const verdict = decide(line, env, undefined, substituted, unseen);
         if (verdict) keep(verdict.decision, verdict.reason);
       }
     }
@@ -1944,7 +2093,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       /^\S+(?:\s+-[A-Za-z-]+)*\s+-[A-Za-z]*c[A-Za-z]*\s/.test(seg)
     ) {
       for (const payload of quotedPayloads(seg)) {
-        const inner = decide(payload, env, vars);
+        const inner = decide(payload, env, vars, false, unseen);
         if (inner) keep(inner.decision, inner.reason);
       }
       continue;
@@ -2081,6 +2230,28 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       continue;
     }
 
+    // 3c. Removing something at a provider through its own command line: a site, one of its
+    //     variables or domains (`vercel rm`, `vercel env rm`), a worker, a bucket, a file, a
+    //     database (`wrangler delete`, `wrangler r2 bucket delete`, `wrangler d1 delete`), a bucket
+    //     or a file of an S3 storage (`aws s3 rb`, `aws s3 rm`). The raw calls to the same providers
+    //     already asked (5b); their command lines passed (review of 19/11/2026).
+    if (providerCliRemoves(seg, substituted)) {
+      keep(
+        ASK,
+        "This removes something at a provider through its command line (a site, one of its variables or domains, a worker, a bucket and its files, a database, a key). Say exactly what is targeted, by name, and confirm with the user. Prefer the plugin's scripts, which check what they remove and read it back.",
+      );
+      continue;
+    }
+
+    // `npm exec -c "<command line>"` hands a shell a command line, as `sh -c` does: judged the same.
+    if (/^npm\s+(?:exec|x)\s/.test(seg) && /\s(?:-c|--call)(?:[=\s]|$)/.test(seg)) {
+      for (const payload of quotedPayloads(seg)) {
+        const handed = decide(payload, env, vars, false, unseen);
+        if (handed) keep(handed.decision, handed.reason);
+      }
+      continue;
+    }
+
     // 4. Schema push. On this stack the local database IS production.
     //    Escape hatch, but NOT the same shape as the push and sweep ones: the
     //    hook cannot tell a throwaway database (a demo built live on stage)
@@ -2093,7 +2264,7 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
     //    The monorepo form (`pnpm --filter web db:push`, `pnpm -r db:push`) is
     //    the one _convert-to-turborepo generates: same push, same question.
     if (
-      /(^|\s)(pnpm|npm|yarn)\s+(?:(?:--filter(?:=\S+|\s+\S+)|-F\s+\S+|-r|--recursive|-w|--workspace(?:=\S+|\s+\S+)?|--prefix(?:=\S+|\s+\S+)|-C\s+\S+|--dir\s+\S+)\s+)*(?:run\s+)?db:push\b/.test(seg) ||
+      /(^|\s)(pnpm|npm|yarn|bun)\s+(?:(?:--filter(?:=\S+|\s+\S+)|-F\s+\S+|-r|--recursive|-w|--workspace(?:=\S+|\s+\S+)?|--prefix(?:=\S+|\s+\S+)|-C\s+\S+|--dir\s+\S+)\s+)*(?:run\s+)?db:push\b/.test(seg) ||
       /drizzle-kit\s+push\b/.test(seg)
     ) {
       if (process.env.HYPERVIBE_GUARD_ALLOW_DB_PUSH === "1") continue;

@@ -197,5 +197,16 @@ check("... et pose le routeur de contact s'il manque, par le seul mode qui ne fa
   check(`... et plus personne n'envoie vers /spec (README, /prof, /add-test, /bootstrap, pages DOC)${encore.length ? ` : encore ${encore.join(", ")}` : ""}`, encore.length === 0);
 }
 
+// 3.4.33 / 2.5.12 : le récapitulatif de /bootstrap annonçait « le mot de passe admin de production est :
+// <generated password> ». Claude ne l'a pas (l'installation l'écrit dans un fichier de la personne, et
+// seul son hash part au projet) : il affichait un texte de remplacement, ou allait lire le fichier.
+{
+  const boot = read("skills/bootstrap/SKILL.md");
+  const at = boot.indexOf("**If Credentials auth was configured:**");
+  const item = at < 0 ? "" : boot.slice(at, boot.indexOf("**If Resend was configured:**", at));
+  check("/bootstrap, récapitulatif : le point 4 donne le chemin du fichier des identifiants, jamais un mot de passe", item.includes("`<CREDENTIALS_FILE>`") && /`credentialsFile`/.test(item) && !/generated password|mot de passe généré/i.test(boot) && !/(password for production is|pour la production est) ?:/.test(boot));
+  check("... il interdit d'afficher ou de lire le mot de passe, et dit quoi faire sans fichier", item.includes("never open or read that file to show it") && item.includes("Without a `credentialsFile`") && /\/rotate-secret/.test(item));
+}
+
 console.log(`\n${checks - failures}/${checks} checks`);
 process.exitCode = failures ? 1 : 0;

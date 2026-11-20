@@ -38,6 +38,7 @@ const TIERS = [
   [/^.*\bvercel\b.*$/gi, "une ligne qui nomme Vercel parle de l'équipe Vercel"],
   [/Bitwarden Teams|\b(?:plan|org|en) (?:\*\*)?Teams\b|\bTeams (?:plan|organization|subscription)\b/g, "le plan Teams de Bitwarden"],
   [/GitHub Team\b|Collaborators and teams/g, "l'offre Team de GitHub, et l'écran de ses collaborateurs"],
+  [/user\(s\), teams,|\|users\|teams\|admin\|/g, "les chemins de l'API d'une forge (Forgejo, Gitea), qui nomme teams ses groupes : la règle du garde-fou sur les suppressions par appel direct"],
   [/TURBO_TEAM|orm\.drizzle\.team/g, "Turborepo et le site de Drizzle"],
 ];
 

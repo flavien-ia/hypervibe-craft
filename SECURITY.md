@@ -114,6 +114,26 @@ the same way (`CF="https://api.cloudflare.com/client/v4"`, then
 `curl -X DELETE "$CF/zones/..."`), on one line or two (outside review, 3.4.11),
 and inside a config curl reads from its standard input too
 (`echo "url = \"$CF/zones/...\"" | curl -K -`, outside review, 3.4.13).
+A program is read as what runs, however it is named: with its Windows suffix
+(`git.exe push`, `wrangler.cmd deploy`), by a quoted path that holds a space
+(`"C:/Program Files/Git/cmd/git.exe" push`), behind `winpty`, `npm exec`,
+`npm x`, `bun x`, or a package manager that runs the project's own copy of a
+provider's tool (`pnpm vercel --prod`). The Bash tool is Git Bash on Windows,
+and until 3.4.33 every rule walked past these spellings there, while the
+PowerShell reading already saw through them.
+Removing something at a provider through its own command line asks, as the raw
+call to the same provider does: `vercel rm`, `vercel env rm`, `wrangler delete`,
+`wrangler r2 bucket delete`, `wrangler d1 delete`, `aws s3 rb`, `aws s3 rm`; and
+a raw `DELETE` to the object storage (`<account>.r2.cloudflarestorage.com`) or
+to the API of a forge of one's own (Forgejo's `/api/v1/repos`, GitLab's
+`/api/v4/projects`).
+A secret read from the vault is refused when its value would be left on the
+screen: `node .../scripts/vault/vault.mjs get <ITEM> <field>` typed as the whole
+command, with nothing that captures, redirects or pipes what it prints (3.4.33).
+What a command prints comes back into the conversation. The skills always read
+into a shell variable (`VAL=$(...)`), which passes, and so does a field whose
+name says an identifier, a name or a date. The rule stops the accident, not a
+detour: a value read into a variable and then echoed is still printed.
 A command's own words kept in a variable the line sets are read as the shell
 spells them out: `G=git; $G push --force origin main` is a push, and
 `A=-A; git add $A` is `git add -A` (outside review, 3.4.14).

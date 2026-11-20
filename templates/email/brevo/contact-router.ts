@@ -36,6 +36,8 @@ export const contactRouter = createTRPCRouter({
           /\{\{/g,
           "{ {",
         ),
+        // A visitor's own words, and no link of the site's: never refused for an address they quote.
+        allowLocalLinks: true,
       });
       return { success: true };
     }),

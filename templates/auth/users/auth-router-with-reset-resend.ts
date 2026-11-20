@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { eq, and, isNull, gt } from "drizzle-orm";
-import { randomBytes } from "crypto";
+import { createHash, randomBytes } from "crypto";
 import {
   createTRPCRouter,
   protectedProcedure,
@@ -14,6 +14,15 @@ import { checkRateLimit } from "~/lib/rate-limit";
 import { sendMail, escapeHtml } from "~/server/mail";
 
 const RESET_TOKEN_TTL_MS = 60 * 60 * 1000; // 1h
+
+/**
+ * What the database keeps of a reset link: the SHA-256 of its token, never the token. A token is
+ * 256 random bits: it needs no slow, salted hash (that is for passwords, which people choose), and
+ * a plain one is what lets the database FIND a link by its index. Hashed like a password, every
+ * reset had to try the link against every link alive, of every account, one slow hash each: a
+ * few hundred requests made resetting a password impossible for everyone (review of 19/11/2026).
+ */
+const tokenHashOf = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export const authRouter = createTRPCRouter({
   signup: rateLimitedProcedure
@@ -92,14 +101,23 @@ export const authRouter = createTRPCRouter({
         where: eq(users.email, input.email),
       });
 
-      if (user) {
+      // A second count, by account, whatever address asks (five requests in 15 minutes): nobody
+      // fills a person's mailbox by asking from many addresses. Never told to the caller: beyond
+      // it the answer is the same, and nothing is sent.
+      const mayAsk = user ? checkRateLimit(`reset:account:${user.id}`).allowed : false;
+
+      if (user && mayAsk) {
         const rawToken = randomBytes(32).toString("base64url");
-        const tokenHash = await hashPassword(rawToken);
         const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MS);
 
+        // One link at a time: asking again ends the links asked before.
+        await db
+          .update(passwordResetTokens)
+          .set({ consumedAt: new Date() })
+          .where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.consumedAt)));
         await db.insert(passwordResetTokens).values({
           userId: user.id,
-          tokenHash,
+          tokenHash: tokenHashOf(rawToken),
           expiresAt,
         });
 
@@ -119,10 +137,8 @@ export const authRouter = createTRPCRouter({
           console.error("[auth] password reset email not sent:", e instanceof Error ? e.message : String(e));
         }
       } else {
-        // No account for this email. Do equivalent CPU work (a throwaway hash),
-        // then wait about as long as a send takes, so the response time does not
-        // reveal whether the account exists.
-        await hashPassword(randomBytes(32).toString("base64url"));
+        // No account for this email (or too many requests for it): wait about as long
+        // as a send takes, so the response time does not reveal whether the account exists.
         await new Promise((resolve) => setTimeout(resolve, 250 + Math.floor(Math.random() * 400)));
       }
 
@@ -141,22 +157,20 @@ export const authRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      const candidates = await db.query.passwordResetTokens.findMany({
-        columns: { id: true, userId: true, tokenHash: true },
-        where: and(
-          isNull(passwordResetTokens.consumedAt),
-          gt(passwordResetTokens.expiresAt, new Date()),
-        ),
-      });
-
-      let matched: (typeof candidates)[number] | null = null;
-      for (const c of candidates) {
-        if (await verifyPassword(input.token, c.tokenHash)) {
-          matched = c;
-          break;
-        }
-      }
-      if (!matched) {
+      // The link is found by its hash (an index), and consumed in the SAME statement that finds
+      // it: one row at most, and two requests that carry the same link cannot both pass.
+      const [used] = await db
+        .update(passwordResetTokens)
+        .set({ consumedAt: new Date() })
+        .where(
+          and(
+            eq(passwordResetTokens.tokenHash, tokenHashOf(input.token)),
+            isNull(passwordResetTokens.consumedAt),
+            gt(passwordResetTokens.expiresAt, new Date()),
+          ),
+        )
+        .returning({ userId: passwordResetTokens.userId });
+      if (!used) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Lien invalide ou expiré.",
@@ -168,11 +182,12 @@ export const authRouter = createTRPCRouter({
         .update(users)
         // The time of the change ends every session opened before it (src/server/auth.ts).
         .set({ passwordHash: newHash, passwordChangedAt: new Date() })
-        .where(eq(users.id, matched.userId));
+        .where(eq(users.id, used.userId));
+      // Every other link of the account ends with the change: none outlives the password it reset.
       await db
         .update(passwordResetTokens)
         .set({ consumedAt: new Date() })
-        .where(eq(passwordResetTokens.id, matched.id));
+        .where(and(eq(passwordResetTokens.userId, used.userId), isNull(passwordResetTokens.consumedAt)));
 
       return { success: true };
     }),

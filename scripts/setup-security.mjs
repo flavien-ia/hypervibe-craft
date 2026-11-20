@@ -202,8 +202,12 @@ function patchTrpcFile() {
     // to the project's language right after running this script.
     const procedureBlock = `
 export const rateLimitedProcedure = publicProcedure.use(async ({ ctx, next }) => {
-  const ip = ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const { allowed, retryAfterMs } = checkRateLimit(ip);
+  // A request that carries no address falls in one of twenty counts drawn at random: no single
+  // count of five closes the door on everyone (the old "unknown" did), and a flood still meets a
+  // ceiling, twenty times wider.
+  const forwarded = ctx.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+  const ip = forwarded === "" ? null : forwarded;
+  const { allowed, retryAfterMs } = checkRateLimit(ip ?? \`no-address:\${Math.floor(Math.random() * 20)}\`);
   if (!allowed) {
     throw new TRPCError({
       code: "TOO_MANY_REQUESTS",

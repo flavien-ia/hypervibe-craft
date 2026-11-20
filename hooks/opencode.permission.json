@@ -240,7 +240,31 @@
       "*gh api*user/repos*-*": "ask",
       "*gh api *-*user/repos*": "ask",
       "*gh api*orgs/*/repos*-*": "ask",
-      "*gh api *-*orgs/*/repos*": "ask"
+      "*gh api *-*orgs/*/repos*": "ask",
+      "git.exe push*": "ask",
+      "*git.exe* push*": "ask",
+      "*git.exe\" push*": "ask",
+      "*wrangler.cmd deploy*": "ask",
+      "*winpty* git* push*": "ask",
+      "*bun* db:push*": "ask",
+      "*vercel rm*": "ask",
+      "*vercel remove*": "ask",
+      "*vercel * rm *": "ask",
+      "*vercel * remove *": "ask",
+      "*wrangler delete*": "ask",
+      "*wrangler * delete*": "ask",
+      "*scw * delete*": "ask",
+      "*aws s3 rb*": "ask",
+      "*aws s3 rm*": "ask",
+      "*aws s3api delete-*": "ask",
+      "*curl*DELETE*.r2.cloudflarestorage.com*": "ask",
+      "*curl*.r2.cloudflarestorage.com*DELETE*": "ask",
+      "*curl*DELETE*.scw.cloud*": "ask",
+      "*curl*.scw.cloud*DELETE*": "ask",
+      "*curl*DELETE*/api/v1/repos*": "ask",
+      "*curl*/api/v1/repos*DELETE*": "ask",
+      "*curl*DELETE*/api/v4/projects*": "ask",
+      "*curl*/api/v4/projects*DELETE*": "ask"
     }
   }
 }

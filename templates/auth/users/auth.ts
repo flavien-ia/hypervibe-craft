@@ -20,7 +20,10 @@ declare module "next-auth" {
 }
 
 /**
- * Too many sign-in attempts from one address (at most 5 in 15 minutes, ~/lib/rate-limit).
+ * Too many sign-in attempts: from one address (at most 5 in 15 minutes, ~/lib/rate-limit), or on
+ * one account from every address together (at most 20 in 15 minutes: a second count, which does
+ * not depend on the address). A request that carries no address is counted on the account only,
+ * never in a count shared by everyone, which five attempts of anyone would close for all.
  * Thrown by authorize(): Auth.js answers the sign-in form as it answers a wrong
  * password, with `code: "too_many_attempts"`, and the form says so. The limit lives
  * here and not in the API route: a 429 sent by the route broke next-auth's client
@@ -66,12 +69,20 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
-        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-        if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
+        const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+        const ip = forwarded === "" ? null : forwarded;
+        if (ip && !checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
 
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
         if (!email || !password) return null;
+        // The account's own count, whatever address asks: what stops its password being guessed
+        // from many addresses at once. Four counts of five, chosen by the address: twenty tries in
+        // 15 minutes, and one address fills only its own quarter. By the address typed, whether an
+        // account bears it or not: the refusal never says that the account exists.
+        let slot = 0;
+        for (const ch of ip ?? "") slot = (slot * 31 + ch.charCodeAt(0)) % 4;
+        if (!checkRateLimit(`login:account:${email.trim().toLowerCase().slice(0, 320)}:${slot}`).allowed) throw new TooManyAttempts();
 
         // Only the columns this check uses (the project's rule on database reads).
         const user = await db.query.users.findFirst({

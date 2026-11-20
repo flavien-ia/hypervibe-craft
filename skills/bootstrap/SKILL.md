@@ -890,8 +890,9 @@ For the actions that remain (genuinely manual), give **step-by-step** instructio
 **If Credentials auth was configured:**
 
 > **4. Save the prod admin password**
-> The admin password for production is: `<generated password>`
-> It is stored nowhere in the code - only the hash. Note it somewhere secure (password manager).
+> Your admin identifier and password for the live site are in a file I put on your computer: `<CREDENTIALS_FILE>`. I never see that password and it is not in our conversation: only its hash is on the site. Copy it into your password manager, then **delete that file**.
+
+`<CREDENTIALS_FILE>` is the `credentialsFile` path the admin installation returned (`_setup-auth-admin`, Step 1). **The password itself never appears in this summary, nor anywhere in the conversation**: you do not have it, never open or read that file to show it, and never write a placeholder that looks like one. Without a `credentialsFile` (the installation failed before writing it), say that no admin password exists yet and offer to make one (`/rotate-secret`), instead of this item.
 
 **If Resend was configured:**
 

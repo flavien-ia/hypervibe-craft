@@ -15,7 +15,10 @@ declare module "next-auth" {
 }
 
 /**
- * Too many sign-in attempts from one address (at most 5 in 15 minutes, ~/lib/rate-limit).
+ * Too many sign-in attempts: from one address (at most 5 in 15 minutes, ~/lib/rate-limit), or on
+ * the account from every address together (at most 20 in 15 minutes: a second count, which does
+ * not depend on the address). A request that carries no address is counted on the account only,
+ * never in a count shared by everyone, which five attempts of anyone would close for all.
  * Thrown by authorize(): Auth.js answers the sign-in form as it answers a wrong
  * password, with `code: "too_many_attempts"`, and the form says so. The limit lives
  * here and not in the API route: a 429 sent by the route broke next-auth's client
@@ -35,8 +38,9 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials, request) {
-        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-        if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
+        const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+        const ip = forwarded === "" ? null : forwarded;
+        if (ip && !checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
 
         const username = credentials?.username as string | undefined;
         const password = credentials?.password as string | undefined;
@@ -45,6 +49,13 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // Always run the password verification (even on a username mismatch) so
         // the response time does not reveal whether the username was correct.
         const expectedUsername = process.env.ADMIN_USERNAME ?? "admin";
+        // The account's own count, whatever address asks: what stops its password being guessed
+        // from many addresses at once. Four counts of five, chosen by the address: twenty tries in
+        // 15 minutes, and one address fills only its own quarter. Only the one name that can sign
+        // in is counted.
+        let slot = 0;
+        for (const ch of ip ?? "") slot = (slot * 31 + ch.charCodeAt(0)) % 4;
+        if (username === expectedUsername && !checkRateLimit(`login:account:admin:${slot}`).allowed) throw new TooManyAttempts();
         const hash = getAdminPasswordHash();
         const ok = await verifyPassword(password, hash);
         if (username !== expectedUsername || !ok) return null;

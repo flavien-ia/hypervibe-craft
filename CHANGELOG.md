@@ -1,5 +1,20 @@
 # Changelog
 
+## v3.4.33 (20 novembre 2026)
+
+### Corrections
+
+- **Un message de contact qui cite une adresse locale vous parvient.** Quand un visiteur écrivait dans votre formulaire de contact une adresse comme « http://localhost:3000 », son message était refusé et perdu. Il arrive maintenant dans votre boîte. Les mails que votre site écrit lui-même restent protégés contre un lien vers votre ordinateur.
+- **La fin de /bootstrap dit où se trouve votre mot de passe admin.** Le récapitulatif annonçait « le mot de passe admin de production est : » alors que Claude ne le connaît pas. Il vous donne maintenant le chemin du fichier posé sur votre ordinateur : copiez le mot de passe dans votre gestionnaire de mots de passe, puis supprimez le fichier.
+
+### Sécurité
+
+- **Le garde-fou reconnaît une commande quelle que soit sa façon de s'écrire.** `git.exe push`, un chemin entre guillemets, `winpty git push`, `npm exec`, `bun x` ou `pnpm vercel --prod` : Claude vous demande votre accord comme pour la commande simple. Sous Windows, ces écritures passaient sans question.
+- **Supprimer quelque chose chez un fournisseur demande votre accord.** Retirer un site, une variable, un worker, un espace de fichiers ou une base par la ligne de commande de Vercel ou de Cloudflare (`vercel rm`, `wrangler delete`, `wrangler r2 bucket delete`...), ou par un appel direct au stockage de fichiers : Claude s'arrête et vous pose la question.
+- **Une clé du coffre ne peut plus s'afficher par mégarde.** Quand Claude lisait une clé du coffre sans la ranger aussitôt dans une variable, sa valeur apparaissait dans la conversation. Cette lecture est maintenant refusée. Les skills, qui lisent toujours dans une variable, ne changent pas.
+- **Un lien de réinitialisation de mot de passe ne sert qu'une fois.** Dans les projets où vous installez les comptes utilisateurs à partir de cette version : demander un nouveau lien annule les précédents, changer le mot de passe annule tous les liens du compte, et le même lien utilisé deux fois en même temps ne passe qu'une fois. Un projet déjà en place garde son code actuel.
+- **La connexion résiste mieux aux essais répétés.** Dans les projets où vous installez la connexion à partir de cette version : en plus de la limite par adresse, chaque compte a la sienne (20 essais en 15 minutes), le code à 6 chiffres de la double authentification aussi (5 essais en 15 minutes), et les demandes de réinitialisation sont limitées par compte. Une demande dont l'adresse n'est pas connue ne peut plus bloquer tous les autres visiteurs.
+
 ## v3.4.32 (19 novembre 2026)
 
 ### Corrections

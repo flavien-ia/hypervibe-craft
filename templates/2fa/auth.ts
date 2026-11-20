@@ -51,8 +51,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
         // tentative, clé `login:<ip>`), mais une requête envoyée droit à la route
         // d'API. Elle compte sur la même clé : une fausse preuve n'achète aucune
         // tentative de plus, et une vraie n'est jamais comptée deux fois.
-        const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-        if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
+        // Sans adresse, rien n'est compté ici (jamais un seau commun à tout le monde) : une fausse
+        // preuve ne se devine pas (HMAC de AUTH_SECRET).
+        const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
+        const ip = forwarded === "" ? null : forwarded;
+        if (ip && !checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();
         return null;
       },
     }),

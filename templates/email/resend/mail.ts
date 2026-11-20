@@ -34,6 +34,13 @@ interface SendMailOptions {
   html: string;
   text?: string;
   from?: string;
+  /**
+   * This mail carries what a VISITOR wrote, and no link of the site's own (the contact form): the
+   * refusal of links to the development machine does not read it. A visitor who quotes such an
+   * address ("your link points to http://localhost:3000") must reach the site's owner, where the
+   * refusal turned their message into an error and lost it.
+   */
+  allowLocalLinks?: boolean;
 }
 
 /**
@@ -42,7 +49,8 @@ interface SendMailOptions {
  * `.env` whose public URL is `http://localhost:3000`, and it reached real
  * recipients once (Hypervibe 3.1.5 announcement, 2026-09-13). The send is
  * refused with an error that names the cause. `MAIL_ALLOW_LOCAL_LINKS=1`, set
- * by a person in the environment, lifts the refusal for a test bench.
+ * by a person in the environment, lifts the refusal for a test bench. It reads the
+ * site's own mails only: one that carries a visitor's words says so (allowLocalLinks).
  */
 const LOCAL_LINK = /https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?/i;
 
@@ -56,7 +64,7 @@ function refuseLocalLinks(subject: string, ...bodies: (string | undefined)[]): v
 }
 
 export async function sendMail(options: SendMailOptions) {
-  refuseLocalLinks(options.subject, options.html, options.text);
+  if (options.allowLocalLinks !== true) refuseLocalLinks(options.subject, options.html, options.text);
   const { data, error } = await resend().emails.send({
     from: options.from ?? process.env.RESEND_FROM_EMAIL!,
     to: options.to,

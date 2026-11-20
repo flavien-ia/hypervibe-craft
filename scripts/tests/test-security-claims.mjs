@@ -630,7 +630,7 @@ check(
 // ── Les substitutions sont depliees, aucun rapport ne dicte l'accord (revue externe, 3.1.8) ──
 {
   const r = lire("hooks/rules.mjs");
-  check("rules.mjs deplie les substitutions de commande avant de juger un segment, heredocs et substitutions de processus compris", /function readCommandLine\(/.test(r) && /function readHeredocBody\(/.test(r) && /decide\(payload, env, vars\)/.test(r));
+  check("rules.mjs deplie les substitutions de commande avant de juger un segment, heredocs et substitutions de processus compris", /function readCommandLine\(/.test(r) && /function readHeredocBody\(/.test(r) && /decide\(payload, env, vars, false, true\)/.test(r));
   {
     // Three sentences of the guard's section, each held against the rules themselves (3.3.10).
     const { decide } = await import(pathToFileURL(join(ROOT, "hooks/rules.mjs")).href);

@@ -85,11 +85,25 @@ console.log("── Les gabarits de cette version ──");
   for (const [rel, first] of [["auth/users/auth.ts", true], ["auth/admin/auth.ts", true], ["2fa/auth.ts", false]]) {
     const t = tpl(rel);
     check(`${rel} : TooManyAttempts étend CredentialsSignin (de next-auth), code "too_many_attempts"`, /import NextAuth, \{ CredentialsSignin, type DefaultSession \} from "next-auth";/.test(t) && /class TooManyAttempts extends CredentialsSignin \{\n {2}code = "too_many_attempts";\n\}/.test(t));
-    check(`... authorize(credentials, request), l'adresse lue dans x-forwarded-for, la clé login:<ip>`, /async authorize\(credentials, request\) \{/.test(t) && t.includes('const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";') && t.includes("if (!checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();") && t.includes('import { checkRateLimit } from "~/lib/rate-limit";'));
+    // 3.4.33 : l'adresse est lue comme avant, mais une demande SANS adresse ne tombe plus dans un
+    // compteur commun (« unknown ») que cinq essais de n'importe qui fermaient pour tous.
+    check(`... authorize(credentials, request), l'adresse lue dans x-forwarded-for, la clé login:<ip>, jamais un seau « unknown »`, /async authorize\(credentials, request\) \{/.test(t) && t.includes('const forwarded = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";') && t.includes('const ip = forwarded === "" ? null : forwarded;') && !/trim\(\) \|\| null/.test(t) && t.includes("if (ip && !checkRateLimit(`login:${ip}`).allowed) throw new TooManyAttempts();") && t.includes('import { checkRateLimit } from "~/lib/rate-limit";') && !/\?\? "unknown"/.test(t));
     if (first) {
       const at = t.indexOf("async authorize(credentials, request) {");
-      const body = t.slice(at).split("\n").slice(1, 3).map((l) => l.trim());
-      check(`... la limite d'abord, avant toute lecture des identifiants`, body[0].startsWith("const ip = request.headers") && body[1].startsWith("if (!checkRateLimit("), JSON.stringify(body));
+      const body = t.slice(at).split("\n").slice(1, 4).map((l) => l.trim());
+      check(`... la limite d'abord, avant toute lecture des identifiants`, body[0].startsWith("const forwarded = request.headers") && body[1].startsWith("const ip = forwarded") && body[2].startsWith("if (ip && !checkRateLimit("), JSON.stringify(body));
+      // Une seconde clé, par compte, quelle que soit l'adresse : quatre compteurs de cinq choisis par
+      // l'adresse (vingt essais en quinze minutes), comptée avant de vérifier le mot de passe.
+      const account = t.indexOf("checkRateLimit(`login:account:");
+      const verify = t.indexOf("await verifyPassword(");
+      const slotLine = /for \(const ch of ip \?\? ""\) slot = \(slot \* 31 \+ ch\.charCodeAt\(0\)\) % 4;/.exec(t);
+      const slotOf = (ip) => {
+        let slot = 0;
+        for (const ch of ip ?? "") slot = (slot * 31 + ch.charCodeAt(0)) % 4;
+        return slot;
+      };
+      const slots = new Set(Array.from({ length: 200 }, (_x, i) => slotOf(`203.0.113.${i}`)));
+      check(`... une seconde clé, par compte, avant le mot de passe : quatre compteurs choisis par l'adresse, le même pour une même adresse, et sans adresse le premier`, account > at && verify > account && Boolean(slotLine) && /:\$\{slot\}`\)\.allowed\) throw new TooManyAttempts\(\);/.test(t) && slots.size === 4 && slotOf("203.0.113.7") === slotOf("203.0.113.7") && slotOf(null) === 0, `${account} ${verify} ${[...slots].join()}`);
     } else {
       const proofAt = t.indexOf("verifyLoginProof(username, proof)");
       const limitAt = t.indexOf("checkRateLimit(`login:${ip}`)");
@@ -99,6 +113,20 @@ console.log("── Les gabarits de cette version ──");
     }
   }
   check("l'action de connexion à deux étapes compte sur la même clé (login:<ip>)", tpl("2fa/signin-actions.ts").includes("checkRateLimit(`login:${ip}`)"));
+  {
+    // 3.4.33 : le code à 6 chiffres a son compteur (cinq essais en quinze minutes, atteignable
+    // seulement avec le bon mot de passe), le compte le sien, et plus de seau « unknown ».
+    const a = tpl("2fa/signin-actions.ts");
+    const codeAt = a.indexOf('checkRateLimit("login:code:admin")');
+    const accountAt = a.indexOf("checkRateLimit(`login:account:admin:${slot}`)");
+    const passwordAt = a.indexOf("await verifyPassword(password, getAdminPasswordHash())");
+    check("... le code à 6 chiffres a son propre compteur, demandé après le bon mot de passe et avant de vérifier le code", codeAt > passwordAt && passwordAt > 0 && codeAt < a.indexOf("verifyTotp(code)"));
+    check("... le compte a le sien, avant le mot de passe ; sans adresse, aucun compteur commun", accountAt > 0 && accountAt < passwordAt && !/"unknown"/.test(a) && a.includes("const byAddress = ip ? limited(checkRateLimit(`login:${ip}`)) : null;"));
+    for (const script of ["scripts/setup-security.mjs", "scripts/setup-auth-users.mjs"]) {
+      const s = readFileSync(join(ROOT, script), "utf8");
+      check(`${script} : la procédure limitée ne range plus les demandes sans adresse dans un seul compteur`, !/\?\? "unknown"/.test(s) && /checkRateLimit\(ip \?\? \\`no-address:\\\$\{Math\.floor\(Math\.random\(\) \* 20\)\}\\`\)/.test(s));
+    }
+  }
   const forms = [
     ["auth/admin/pages/signin.tsx", "signin", false],
     ["auth-signin/plain.tsx", "signin", false],

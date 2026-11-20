@@ -1,8 +1,10 @@
 // ─── Password reset tokens (appended by /add-auth when email is configured) ──
 //
-// Stores hashed reset tokens. We hash via scrypt the same way as passwords -
-// never store raw tokens in DB. Tokens expire 1h after creation. One use only:
-// `consumedAt` flips when the user successfully resets their password.
+// Stores hashed reset tokens, never the raw ones: the SHA-256 of a token of 256 random bits (no
+// slow, salted hash: that is for passwords, and it would keep the index below from finding a
+// link). Tokens expire 1h after creation. One use only: `consumedAt` is set by the statement
+// that finds the link, and on every other link of the account when its password changes or when
+// a new link is asked.
 
 export const passwordResetTokens = createTable(
   "password_reset_token",

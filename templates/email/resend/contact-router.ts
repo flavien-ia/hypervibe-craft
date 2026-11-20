@@ -27,6 +27,8 @@ export const contactRouter = createTRPCRouter({
         subject: `Contact form: ${input.name}`,
         html: `<p><strong>From:</strong> ${safeName} (${safeEmail})</p><p>${safeMessage}</p>`,
         text: `From: ${input.name} (${input.email})\n\n${input.message}`,
+        // A visitor's own words, and no link of the site's: never refused for an address they quote.
+        allowLocalLinks: true,
       });
       return { success: true };
     }),
