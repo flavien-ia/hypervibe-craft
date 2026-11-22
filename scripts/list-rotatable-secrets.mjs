@@ -40,7 +40,8 @@ const PATTERNS = [
   { match: /^STRIPE_WEBHOOK_SECRET$/, provider: "Stripe", label: "Stripe webhook secret", category: "payments", autoGen: false },
   { match: /^STRIPE_/, provider: "Stripe", label: "Stripe configuration", category: "payments", autoGen: false },
   // Email
-  { match: /^BREVO_API_KEY$/, provider: "Brevo", label: "Brevo API key", category: "email", autoGen: false },
+  { match: /^BREVO_CLIENT_(ID|SECRET)$/, provider: "Brevo", label: "Brevo: the project's sending application", category: "email", autoGen: false, group: "brevo-app" },
+  { match: /^BREVO_API_KEY$/, provider: "Brevo", label: "Brevo API key (made by hand, of the earlier kind)", category: "email", autoGen: false },
   { match: /^RESEND_API_KEY$/, provider: "Resend", label: "Resend API key", category: "email", autoGen: false },
   // OAuth
   { match: /^AUTH_GOOGLE_(ID|SECRET)$/, provider: "Google OAuth", label: "Google login (OAuth)", category: "auth", autoGen: false, group: "google-oauth" },

@@ -1,5 +1,19 @@
 # Changelog
 
+## v3.4.34 (22 novembre 2026)
+
+### Sécurité
+
+- **Chaque projet reçoit chez Brevo une application d'envoi qui ne sait qu'envoyer.** Jusqu'ici, vous faisiez vous-même la clé Brevo d'un projet dans la console de Brevo, et cette clé pouvait ouvrir tout votre compte : vos contacts, vos campagnes, vos domaines. Désormais `/add-email` fait lui-même au projet une application d'envoi, par l'API de Brevo, limitée aux emails transactionnels. Elle n'ouvre rien d'autre, et vous n'avez plus de clé à créer ni à coller. Si Brevo refusait un jour de la faire, vous seriez guidé pour créer la clé à la main, comme avant, sans être bloqué.
+- **Vos projets Brevo déjà en place passent à leur application sans coupure.** Relancez `/add-email` dans chacun : il vous propose le passage. Il fait l'application, remplace le fichier d'envoi d'emails du projet (en vous demandant d'abord si vous l'aviez modifié), vous demande de mettre le site en ligne, attend que ce soit fait, puis retire l'ancienne clé du projet. Il vous reste un geste : supprimer l'ancienne clé dans la console de Brevo.
+- **Une clé Brevo qui a fuité se coupe tout de suite.** `/rotate-secret` renouvelle le secret de l'application d'envoi sur place : l'ancien est refusé aussitôt, et le site repart dès qu'il est remis en ligne. Pour un renouvellement ordinaire, il fait une nouvelle application et ne supprime l'ancienne qu'une fois le site passé à la nouvelle.
+- **Supprimer un projet supprime son application d'envoi chez Brevo.** `/delete-project` la retire avec le reste, et vous rappelle qu'un accès déjà donné reste valable une heure au plus.
+- **Le garde-fou protège les secrets d'envoi de tous vos projets.** Une lecture directe des applications de Brevo ferait apparaître dans la conversation le secret de chacun de vos projets : Claude vous demande votre accord avant tout appel direct à ces adresses. Les outils du plugin, qui ne montrent jamais un secret, ne changent pas.
+
+### Corrections
+
+- **Le conseil laissé dans le CLAUDE.md d'un projet Brevo est juste.** Il recommandait une façon de neutraliser les accolades dans un email qui laissait passer `{{{`. Il donne maintenant celle qui les sépare toutes.
+
 ## v3.4.33 (20 novembre 2026)
 
 ### Corrections

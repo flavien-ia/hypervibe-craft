@@ -210,12 +210,18 @@ function checkEmail() {
 
   const resend = env.RESEND_API_KEY;
   const brevo = env.BREVO_API_KEY;
+  // Brevo since 3.4.34 / 2.5.13: the project's own sending application, its two variables together.
+  // A key made by hand (BREVO_API_KEY) still counts: a project set up before, or the fallback.
+  const brevoApp = looksReal(env.BREVO_CLIENT_ID) && looksReal(env.BREVO_CLIENT_SECRET);
 
   const resendReal = looksReal(resend);
   const brevoReal = looksReal(brevo);
 
   if (resendReal) {
     return { ok: true, provider: "resend", reason: "RESEND_API_KEY présente et non-placeholder" };
+  }
+  if (brevoApp) {
+    return { ok: true, provider: "brevo", reason: "BREVO_CLIENT_ID et BREVO_CLIENT_SECRET présentes et non-placeholder" };
   }
   if (brevoReal) {
     return { ok: true, provider: "brevo", reason: "BREVO_API_KEY présente et non-placeholder" };
@@ -224,7 +230,7 @@ function checkEmail() {
   const reasons = [];
   if (!resend) reasons.push("RESEND_API_KEY absente");
   else if (!resendReal) reasons.push("RESEND_API_KEY ressemble à un placeholder");
-  if (!brevo) reasons.push("BREVO_API_KEY absente");
+  if (!brevo) reasons.push("ni BREVO_CLIENT_ID et BREVO_CLIENT_SECRET, ni BREVO_API_KEY");
   else if (!brevoReal) reasons.push("BREVO_API_KEY ressemble à un placeholder");
 
   return { ok: false, provider: null, reason: reasons.join(" ; ") };

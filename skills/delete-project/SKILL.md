@@ -293,11 +293,14 @@ themselves if they want to.
 
 A `kind: "email-key"` entry in the manifest is the project's own sending key (since 3.4.16 a project never holds the email account's key). Like the AI keys, the inventory script does not delete it: revoke it explicitly, in the execution phase, once the user has validated the scope, and only that one, by the identifier the entry carries:
 
-- `provider: "resend"` → revoked at Resend with the account's key from the vault (the command asks for a confirmation; it refuses an identifier the project's manifest does not record):
+- `provider: "resend"`, and `provider: "brevo"` with `made: "api"` (the project's sending application, 3.4.34) → revoked at Resend, or the application deleted at Brevo, with the account's key from the vault (the command asks for a confirmation; it refuses an identifier the project's manifest does not record):
   ```bash
   node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<project dir>" --id <id>
   ```
-- `provider: "brevo"` → made by hand, it goes by hand: section 2.2, *"delete the key `<name>` in Brevo's console (SMTP & API, API keys)"*.
+  At Brevo the answer carries `lingering`: a token the application gave keeps working until it expires, an hour at most. Say it in the recap, in one line.
+- `provider: "brevo"` with `made: "by-hand"` (no id) → made by hand, it goes by hand: section 2.2, *"delete the key `<name>` in Brevo's console (SMTP & API, API keys)"*.
+
+A `BREVO_API_KEY` among the project's variables, beside its application or alone, is a key a person made for it (a project set up before 3.4.34, or Brevo's fallback): it goes by hand too, section 2.2, unless it is the account's key (below).
 
 No entry, while the project's `.env` holds a `RESEND_API_KEY` or `BREVO_API_KEY`: a project set up before 3.4.16 may hold the ACCOUNT's key itself. Nothing to revoke for the project then (the account stays, the other projects may use it): say it in 4.3, and advise renewing the account's key at the provider once no project holds it any more.
 

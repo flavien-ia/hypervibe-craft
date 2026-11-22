@@ -21,6 +21,9 @@
 //   --no-contact-router, and the contact router is neither written nor registered.
 //   The contact router alone, for a project whose email was set up without it (the contact page
 //   asks for it): --contact-router-only.
+//   The mail layer alone, written over the project's own (3.4.34: a Brevo project moving from its
+//   key made by hand to its own sending application, once the person agreed to replace the file):
+//   --mail-only.
 //
 // Args:
 //   --provider <resend|brevo>     required
@@ -31,11 +34,14 @@
 //   --brevo-sender-name <name>    optional, default = project-name
 //   --no-contact-router           skip the contact router and its registration in root.ts
 //   --contact-router-only         write the contact router and register it, nothing else
+//   --mail-only                   write src/server/mail.ts from the template, replacing the one there,
+//                                 nothing else (no key read, no package, no variable pushed)
 //
 // Prerequisites assumed by the script:
 //   - The project's OWN sending key is in its .env and at its host (3.4.16): made by
-//     email-key.mjs mint for Resend, typed in the masked window then recorded for Brevo (Step 2 of
-//     the skill). This script reads it there, refuses the ACCOUNT's key (compared in this process
+//     email-key.mjs mint (Resend's key; at Brevo since 3.4.34 the project's sending application,
+//     BREVO_CLIENT_ID and BREVO_CLIENT_SECRET), or at Brevo, when its route refused, a key typed in
+//     the masked window then recorded (Step 2 of the skill). This script reads it there, refuses the ACCOUNT's key (compared in this process
 //     with the vault's item RESEND / BREVO, never shown), and never pushes it: the account's key
 //     stays in the vault, for the gestures on the account itself (domains, senders, quotas, and at
 //     Resend the projects' keys). No provider CLI is involved.
@@ -81,6 +87,7 @@ let brevoSender = "";
 let brevoSenderName = "";
 let noContactRouter = false;
 let contactRouterOnly = false;
+let mailOnly = false;
 
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -91,6 +98,7 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--brevo-sender-name" && args[i + 1]) brevoSenderName = args[++i];
   else if (a === "--no-contact-router") noContactRouter = true;
   else if (a === "--contact-router-only") contactRouterOnly = true;
+  else if (a === "--mail-only") mailOnly = true;
   else fail(`Unknown arg: ${a}`);
 }
 
@@ -113,7 +121,8 @@ const senderInPlace = {
   BREVO_SENDER_NAME: envValue(WEB_DIR, "BREVO_SENDER_NAME"),
 };
 if (noContactRouter && contactRouterOnly) fail("--no-contact-router and --contact-router-only cannot go together.");
-if (provider === "brevo" && !senderInPlace.BREVO_SENDER_EMAIL && !contactRouterOnly) {
+if (mailOnly && (contactRouterOnly || noContactRouter)) fail("--mail-only writes the mail layer alone: no other flag goes with it.");
+if (provider === "brevo" && !senderInPlace.BREVO_SENDER_EMAIL && !contactRouterOnly && !mailOnly) {
   if (!brevoSender) fail("--brevo-sender <email> is required when --provider brevo and the project has no BREVO_SENDER_EMAIL yet");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(brevoSender)) {
     fail(`--brevo-sender must be a valid email. Got: ${brevoSender}`);
@@ -135,7 +144,9 @@ const ROUTER = contactRouterPlan({
 });
 
 // ─── helpers ──────────────────────────────────────────────────────────
-const STEPS = contactRouterOnly
+const STEPS = mailOnly
+  ? ["preflight", "writeMailTs"]
+  : contactRouterOnly
   ? ["preflight", "writeContactRouter", "registerRouter"]
   : [
       "preflight",
@@ -244,6 +255,13 @@ async function preflight() {
     fail(`${WEB_DIR} doesn't depend on @trpc/server - the contact router requires tRPC.`);
   }
 
+  // The mail layer alone (--mail-only): nothing else is read or written. The file it replaces is
+  // the person's to keep or not: the skill showed what it holds and asked first.
+  if (mailOnly) {
+    ok(`Web dir OK: ${WEB_DIR} (the mail layer alone)`);
+    return;
+  }
+
   // The contact router uses rateLimitedProcedure (created by setup-security.mjs in /bootstrap):
   // without it, the router is not written (it would break the build), and that is said.
   if (!ROUTER.write) {
@@ -308,6 +326,15 @@ async function getApiKey() {
   // and pushed it into every project, which opened the whole account to anyone who saw one .env.
   const item = provider === "resend" ? "RESEND" : "BREVO";
   const service = provider === "resend" ? "Resend" : "Brevo";
+  // Brevo since 3.4.34: the project's own sending application (its client id and secret), made by
+  // email-key.mjs mint. A key made by hand in Brevo's console (BREVO_API_KEY) is the fallback of a
+  // route that refused, and the key of a project set up before: still read, never the account's.
+  if (provider === "brevo" && envValue(WEB_DIR, "BREVO_CLIENT_ID") && envValue(WEB_DIR, "BREVO_CLIENT_SECRET")) {
+    log("Reading the project's own Brevo sending application");
+    state.apiKey = "application";
+    ok("The project's own sending application (BREVO_CLIENT_ID, BREVO_CLIENT_SECRET) is in place");
+    return;
+  }
   const envVar = provider === "resend" ? "RESEND_API_KEY" : "BREVO_API_KEY";
 
   log(`Reading the project's own ${envVar}`);
@@ -318,9 +345,9 @@ async function getApiKey() {
         ? "The project holds no RESEND_API_KEY of its own yet. Make it first (Step 2 of the skill):\n" +
             "  node scripts/email-key.mjs mint --project-dir <web dir> --name <project>\n" +
             "then re-run this script."
-        : "The project holds no BREVO_API_KEY of its own yet (Step 2 of the skill): make it in Brevo's console, named\n" +
-            "after the project, type it in the masked window (launch.mjs collect-env), record it\n" +
-            "(node scripts/email-key.mjs record), then re-run this script.",
+        : "The project holds no sending application of its own yet (BREVO_CLIENT_ID, BREVO_CLIENT_SECRET). Make it first\n" +
+            "(Step 2 of the skill): node scripts/email-key.mjs mint --project-dir <web dir> --name <project> --provider brevo\n" +
+            "(when Brevo's route refuses, exit 7: the key made in Brevo's console, then record), then re-run this script.",
     );
   }
   // Compared with the account's key (the vault's item RESEND / BREVO) in this process, never shown.
@@ -353,15 +380,15 @@ async function installSdk() {
     run("pnpm add resend", WEB_DIR);
     ok("resend installed");
   } else {
-    log("Installing @getbrevo/brevo");
-    run("pnpm add @getbrevo/brevo", WEB_DIR);
-    ok("@getbrevo/brevo installed");
+    // Since 3.4.34 the Brevo mail layer asks its token and sends with fetch: no package (Brevo's
+    // SDK names no scope and does not answer a 401).
+    ok("No package for Brevo: the mail layer sends with fetch");
   }
 }
 
 // ─── Step 4: write src/server/mail.ts ─────────────────────────────────
 async function writeMailTs() {
-  log("Writing src/server/mail.ts");
+  log(mailOnly ? "Replacing src/server/mail.ts" : "Writing src/server/mail.ts");
   const dest = join(WEB_DIR, "src/server/mail.ts");
   // Templates: templates/email/<provider>/mail.ts (no vars to substitute).
   writeFileSync(dest, render(`email/${provider}/mail.ts`, {}));
@@ -454,6 +481,13 @@ async function pushEnvVars() {
 
 // ─── MAIN ─────────────────────────────────────────────────────────────
 await step("preflight", preflight);
+if (mailOnly) {
+  await step("writeMailTs", writeMailTs);
+  dumpHandoff(true);
+  console.log(`\n🎉 Mail layer in place (${provider}): src/server/mail.ts. Check it compiles (pnpm tsc --noEmit, pnpm lint), then deploy.`);
+  console.log(JSON.stringify({ success: true, provider, mail: "written" }));
+  process.exit(0);
+}
 if (contactRouterOnly) {
   await step("writeContactRouter", writeContactRouter);
   await step("registerRouter", registerRouter);

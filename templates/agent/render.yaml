@@ -39,8 +39,12 @@ services:
         sync: false  # set in dashboard, not committed
       - key: DATABASE_URL
         sync: false
-      - key: BREVO_API_KEY
+      - key: BREVO_CLIENT_ID
+        sync: false  # the project's Brevo sending application (3.4.34)
+      - key: BREVO_CLIENT_SECRET
         sync: false
+      - key: BREVO_API_KEY
+        sync: false  # only a project that still sends with a key made by hand
       - key: BREVO_SENDER_EMAIL
         sync: false
       - key: BREVO_SENDER_NAME

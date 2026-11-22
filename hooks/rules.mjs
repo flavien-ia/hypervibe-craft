@@ -1983,6 +1983,13 @@ function printsSecret(seg) {
 const SECRET_ON_SCREEN =
   "This would print a secret's value into the conversation: nothing takes the output of this read. Read it into a shell variable and use it in the same command (`VAL=$(node <script> get <ITEM> <field>)`), or send the output to /dev/null when only the exit code matters. A secret is never displayed.";
 
+/** Brevo's applications (3.4.34 / 2.5.13): the routes a project's sending application is made, read,
+ *  renewed and deleted at. Their READS give the secret of every project's application in clear, to
+ *  the account's key: a raw call there, whatever its method, would put them in the conversation, or
+ *  cut a project's mail. The plugin's email-key.mjs calls them in its own process and never prints a
+ *  secret (rule 5d). */
+export const BREVO_APP_STORE = /https?:\/\/api\.brevo\.com\/v3\/app-store\/apps(?=[/?#"'\s]|$)/i;
+
 export function decide(command, inherited = new Map(), vars = new Map(), carried = false, quiet = false) {
   if (!command || typeof command !== "string") return null;
 
@@ -2306,6 +2313,22 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       continue;
     }
 
+    // 5d. Any raw call to Brevo's applications (BREVO_APP_STORE, 3.4.34 / 2.5.13): a read there
+    //     gives every project's sending secret in clear, and the other calls make, delete or renew a
+    //     project's sending application. Read as 5b reads a call (its address in a variable the line
+    //     sets, the config curl takes on its standard input), and in a script a runtime is handed on
+    //     its command line. The plugin's email-key.mjs does these calls itself, and passes.
+    if (
+      (/^(?:curl|wget)\s/.test(seg) || /^(?:node|bun|deno|python3?|py)\b[\s\S]*?\s(?:-e|-c|-p|--eval|--print)\s/.test(seg)) &&
+      [...apiReadings, fedInput(parts, index) ?? ""].some((s) => BREVO_APP_STORE.test(s))
+    ) {
+      keep(
+        ASK,
+        "This calls Brevo's applications directly: a read there gives the sending secret of every project in clear, into the conversation, and the other calls make, delete or renew a project's sending application. The plugin's email-key.mjs does it without showing a secret (status, mint, revoke, renew). Say why the script does not do, and confirm with the user.",
+      );
+      continue;
+    }
+
     // 5c. A change at a domain's registrar: its nameservers, or the records the registrar keeps
     //     for it. The whole domain moves with it, its site and its mail, and a rewrite at
     //     Cloudflare already asked (5b) while this, heavier, passed (outside review, 3.4.10).
@@ -2495,9 +2518,11 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       }
     }
 
-    // 9 quater. The plugin's own sending-key script (3.4.16 / 2.4.15), which calls Resend in its
-    //    own process: revoke ends a key in service (a site that still sends with it stops
-    //    sending), like a raw DELETE of rule 5b. status, keys and compare read; mint, record and
+    // 9 quater. The plugin's own sending-key script (3.4.16 / 2.4.15), which calls Resend (and
+    //    Brevo's applications, 3.4.34 / 2.5.13) in its own process: revoke ends a key in service
+    //    (a site that still sends with it stops sending), like a raw DELETE of rule 5b; renew
+    //    refuses a project's Brevo secret at once (a leak), and retire-legacy takes a key of the
+    //    earlier kind off the site: both ask too. status, keys and compare read; mint, record and
     //    file-brevo make, record or file a project's own key (file-brevo then removes the admin's
     //    transit copy, once read back in the project's space), push writes it on its site again (a
     //    creation passes, as at rule 5b). A verb the command line does not show asks.
@@ -2506,7 +2531,11 @@ export function decide(command, inherited = new Map(), vars = new Map(), carried
       if (!verb || /[$`]/.test(verb.raw) || !/^(?:status|keys|mint|push|record|compare|file-brevo)$/.test(verb.value)) {
         keep(
           ASK,
-          "This revokes a project's sending key at the email provider: a site that still sends with it stops sending. Say which project and which key (its id), make sure the site already runs with its new key (a deployment followed to its end), and confirm with the user.",
+          verb?.value === "renew"
+            ? "This renews a project's sending secret at Brevo at once (a leak): the old one is refused from now on, and the live site cannot send until it is deployed with the new one. Say which project, and confirm with the user."
+            : verb?.value === "retire-legacy"
+              ? "This takes a project's Brevo key of the earlier kind (BREVO_API_KEY) out of its .env and its hosting: a site that still sends with it stops sending. Make sure the site already runs with its own sending application (a deployment followed to its end), and confirm with the user."
+              : "This revokes a project's sending key at the email provider: a site that still sends with it stops sending. Say which project and which key (its id), make sure the site already runs with its new key (a deployment followed to its end), and confirm with the user.",
         );
         continue;
       }

@@ -11,7 +11,10 @@
 //   2. a project that holds its own key is never given a second one in silence (--rotate), one
 //      that holds the account's is told so (--replace), a key nobody holds is revoked at once;
 //   3. revoke touches a key the project records, and nothing else;
-//   4. Brevo: the key typed by the person is recorded, never the account's;
+//   4. Brevo: the project's sending application made by the API (3.4.34), limited to sending, its
+//      two variables written together; rotated, deleted, its secret renewed; a key typed by the
+//      person (the fallback, and projects of before) recorded, never the account's, told apart
+//      (legacy) and moved to the application, then taken away; the route refusing falls back;
 //   5. setup-email.mjs reads the project's own key, refuses the account's, never pushes a key;
 //   6. the skills say it, and the guardrail asks before a revocation.
 // No network, no vault, no hosting: a fake Resend on 127.0.0.1 (HYPERVIBE_RESEND_API), the
@@ -25,7 +28,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SCRIPT = join(ROOT, "scripts", "email-key.mjs");
@@ -202,9 +205,69 @@ try {
     r = await run(["record", "--project-dir", p, "--provider", "brevo", "--key-name", "demo"], env);
     check("record de la clé du projet : inscrite par son nom, sans sa valeur", r.code === 0 && keysOf(p)[0]?.name === "demo" && keysOf(p)[0]?.provider === "brevo" && noKeyIn(manifestOf(p)), `${r.code} ${manifestOf(p)}`);
     r = await run(["status", "--project-dir", p], env);
-    check("status : « own »", r.json?.holds === "own" && r.json?.provider === "brevo", JSON.stringify(r.json));
+    check("status : « legacy » (une clé faite à la main, l'application pas encore là)", r.json?.holds === "legacy" && r.json?.provider === "brevo" && r.json?.legacyVariable === "BREVO_API_KEY" && r.json?.ownAlready === false, JSON.stringify(r.json));
     r = await run(["mint", "--project-dir", p, "--name", "demo"], env);
-    check("mint sur un projet Brevo : refus (Brevo ne fait pas de clé par son API)", r.code === 5 && /Brevo makes no key/.test(r.json?.error ?? ""), JSON.stringify(r.json));
+    check("mint sans --replace sur une clé d'avant : refus (code 5), rien de fait", r.code === 5 && r.json?.holds === "legacy", JSON.stringify(r.json));
+  }
+
+  console.log("\n── 4 bis. Brevo : l'application d'envoi du projet, faite par l'API (3.4.34) ──");
+  {
+    const { startFakeBrevo } = await import(pathToFileURL(join(ROOT, "scripts", "tests", "fixtures", "fake-brevo.mjs")).href);
+    const fake = await startFakeBrevo({ token: BREVO_ACCOUNT });
+    const env = { ...ENV, HYPERVIBE_BREVO_API: fake.url, HYPERVIBE_EMAIL_STANDIN_ACCOUNT_KEY: BREVO_ACCOUNT };
+    const noAppSecret = (text) => ![...fake.state.apps.values()].some((a) => text.includes(a.client_secret)) && ![...fake.state.tokens.keys()].some((t) => text.includes(t));
+    try {
+      const p = project({ deps: { next: "15.0.0" }, env: "BREVO_SENDER_EMAIL=contact@exemple.fr\n" });
+      let r = await run(["mint", "--project-dir", p, "--name", "demo", "--provider", "brevo"], env);
+      const app = [...fake.state.apps.values()][0];
+      check("mint --provider brevo : une application faite, limitée à l'envoi, nommée d'après le projet", r.code === 0 && r.json?.status === "created" && app?.scopes.join() === "transactional.email:write" && /^demo \d{4}-\d{2}-\d{2}$/.test(app?.name ?? ""), `${r.code} ${JSON.stringify(r.json)}`);
+      check("... un jeton demandé avec la portée nommée avant de rendre", fake.state.tokenCalls.some((c) => c.scope === "transactional.email:write" && c.clientId === app?.client_id));
+      check("... ses deux variables dans le .env du projet, en un geste", envOf(p, "BREVO_CLIENT_ID") === app?.client_id && envOf(p, "BREVO_CLIENT_SECRET") === app?.client_secret && !envOf(p, "BREVO_API_KEY"));
+      check("... inscrite au manifeste par son identifiant, sans aucun secret", keysOf(p).some((k) => k.id === app?.app_id && k.provider === "brevo" && k.made === "api") && noAppSecret(manifestOf(p)), manifestOf(p));
+      check("... et rien n'affiche le secret ni un jeton", noAppSecret(r.all), r.all);
+      r = await run(["status", "--project-dir", p], env);
+      check("status : « own »", r.json?.holds === "own" && r.json?.provider === "brevo" && noAppSecret(r.all), JSON.stringify(r.json));
+      r = await run(["mint", "--project-dir", p, "--name", "demo"], env);
+      check("une application déjà là : refus (code 5), rien de fait", r.code === 5 && fake.state.apps.size === 1, JSON.stringify(r.json));
+      r = await run(["mint", "--project-dir", p, "--name", "demo", "--rotate"], env);
+      check("--rotate : une nouvelle application, l'ancienne gardée jusqu'au déploiement (toRevoke)", r.code === 0 && r.json?.status === "rotated" && JSON.stringify(r.json?.toRevoke) === JSON.stringify([app?.app_id]) && fake.state.apps.has(app?.app_id) && envOf(p, "BREVO_CLIENT_ID") !== app?.client_id, JSON.stringify(r.json));
+      r = await run(["revoke", "--project-dir", p, "--id", app.app_id], env);
+      check("revoke : l'ancienne supprimée chez Brevo, relue absente, sortie du manifeste, la limite d'une heure dite", r.code === 0 && r.json?.revoked === true && !fake.state.apps.has(app.app_id) && !keysOf(p).some((k) => k.id === app.app_id) && /an hour/.test(r.json?.lingering ?? ""), JSON.stringify(r.json));
+      const before = envOf(p, "BREVO_CLIENT_SECRET");
+      r = await run(["renew", "--project-dir", p], env);
+      const now = [...fake.state.apps.values()].find((a) => a.client_id === envOf(p, "BREVO_CLIENT_ID"));
+      check("renew : le secret renouvelé sur place, le nouveau dans le .env, à déployer tout de suite", r.code === 0 && r.json?.status === "renewed" && envOf(p, "BREVO_CLIENT_SECRET") !== before && envOf(p, "BREVO_CLIENT_SECRET") === now?.client_secret && /now/.test(r.json?.deploy ?? "") && noAppSecret(r.all), JSON.stringify(r.json));
+
+      const old = project({ deps: { next: "15.0.0", "@getbrevo/brevo": "5.0.0" }, env: "BREVO_SENDER_EMAIL=contact@exemple.fr\nBREVO_API_KEY=xkeysib-projet-ancien-SECRET\n" });
+      r = await run(["retire-legacy", "--project-dir", old], env);
+      check("retire-legacy avant l'application : refus (code 5), rien de retiré", r.code === 5 && envOf(old, "BREVO_API_KEY") === "xkeysib-projet-ancien-SECRET", JSON.stringify(r.json));
+      r = await run(["mint", "--project-dir", old, "--name", "ancien", "--replace"], env);
+      check("--replace : l'application à côté de l'ancienne clé, qui reste jusqu'au déploiement", r.code === 0 && r.json?.status === "replaced" && r.json?.legacyVariable === "BREVO_API_KEY" && Boolean(envOf(old, "BREVO_CLIENT_ID")) && envOf(old, "BREVO_API_KEY") === "xkeysib-projet-ancien-SECRET", JSON.stringify(r.json));
+      r = await run(["status", "--project-dir", old], env);
+      check("status : « legacy », l'application déjà là (ownAlready)", r.json?.holds === "legacy" && r.json?.ownAlready === true, JSON.stringify(r.json));
+      r = await run(["mint", "--project-dir", old, "--name", "ancien", "--replace"], env);
+      check("... --replace une seconde fois : rien de fait (code 5)", r.code === 5 && r.json?.ownAlready === true, JSON.stringify(r.json));
+      r = await run(["retire-legacy", "--project-dir", old], env);
+      check("retire-legacy : l'ancienne clé sortie du .env, l'application reste, sa suppression chez Brevo demandée", r.code === 0 && r.json?.status === "retired" && !envOf(old, "BREVO_API_KEY") && Boolean(envOf(old, "BREVO_CLIENT_ID")) && Boolean(r.json?.toDeleteByHand), JSON.stringify(r.json));
+      r = await run(["status", "--project-dir", old], env);
+      check("... et le projet tient désormais sa propre application", r.json?.holds === "own", JSON.stringify(r.json));
+
+      fake.state.appStore = { status: 404, body: { code: "not_found", message: "Not found" } };
+      const fb = project({ deps: { next: "15.0.0" }, env: "BREVO_SENDER_EMAIL=contact@exemple.fr\n" });
+      r = await run(["mint", "--project-dir", fb, "--name", "repli", "--provider", "brevo"], env);
+      check("la route des applications refuse : code 7, fallback dashboard-key, rien d'écrit ni d'inscrit", r.code === 7 && r.json?.fallback === "dashboard-key" && !envOf(fb, "BREVO_CLIENT_ID") && keysOf(fb).length === 0, JSON.stringify(r.json));
+      fake.state.appStore = { status: 401, body: { code: "unauthorized", message: "Key not found" } };
+      r = await run(["mint", "--project-dir", fb, "--name", "repli", "--provider", "brevo"], env);
+      check("... un refus de la clé du compte (401) n'est pas un repli : code 1", r.code === 1 && !r.json?.fallback, JSON.stringify(r.json));
+      fake.state.appStore = null;
+      fake.state.appShape = "wide-scope";
+      const count = fake.state.apps.size;
+      r = await run(["mint", "--project-dir", fb, "--name", "large", "--provider", "brevo"], env);
+      check("une application qui tient plus que l'envoi : supprimée aussitôt, code 7, rien d'écrit", r.code === 7 && fake.state.apps.size === count && !envOf(fb, "BREVO_CLIENT_ID"), JSON.stringify(r.json));
+      fake.state.appShape = null;
+    } finally {
+      await fake.close();
+    }
   }
 
   console.log("\n── 5. setup-email.mjs lit la clé du projet, refuse celle du compte, ne pousse aucune clé ──");
@@ -212,6 +275,7 @@ try {
     const src = readFileSync(SETUP, "utf8");
     check("plus aucun repli sur la clé du compte (readUserEnv, getSecret de la clé)", !/readUserEnv\(/.test(src) && !/getSecret\(item/.test(src));
     check("la clé est lue dans le .env du projet, et jamais poussée", /const value = envValue\(WEB_DIR, envVar\)/.test(src) && /const kvs = pushed;/.test(src) && !/RESEND_API_KEY" : "BREVO_API_KEY"\}=\$\{state\.apiKey\}/.test(src));
+    check("Brevo : l'application du projet lue d'abord, plus aucun paquet installé, le mail.ts seul remplaçable (--mail-only)", /envValue\(WEB_DIR, "BREVO_CLIENT_ID"\) && envValue\(WEB_DIR, "BREVO_CLIENT_SECRET"\)/.test(src) && !/pnpm add @getbrevo\/brevo/.test(src) && /--mail-only/.test(src));
     const p = project({ deps: { next: "15.0.0", "@trpc/server": "11.0.0" }, env: `RESEND_FROM_EMAIL=onboarding@resend.dev\nRESEND_API_KEY=${ACCOUNT}\n` });
     mkdirSync(join(p, "src", "server", "api"), { recursive: true });
     writeFileSync(join(p, "src", "server", "api", "trpc.ts"), "export const rateLimitedProcedure = 1;\n");
@@ -226,13 +290,16 @@ try {
   {
     const read = (rel) => readFileSync(join(ROOT, rel), "utf8");
     const add = read("skills/add-email/SKILL.md");
-    check("/add-email fait la clé du projet (Resend par l'API, Brevo à la main puis record)", /email-key\.mjs" mint --project-dir/.test(add) && /collect-env/.test(add) && /email-key\.mjs" record --project-dir/.test(add));
+    check("/add-email fait la clé du projet (Resend par l'API, Brevo par l'API, la clé faite à la main en repli puis record)", /email-key\.mjs" mint --project-dir/.test(add) && /--provider brevo/.test(add) && /Exit 7/.test(add) && /collect-env/.test(add) && /email-key\.mjs" record --project-dir/.test(add));
+    check("... propose à un projet Brevo d'avant son application, sans coupure (mail.ts, déploiement suivi, puis l'ancienne variable retirée)", /holds: "legacy"/.test(add) && /--mail-only/.test(add) && /check-deploy\.mjs/.test(add) && /email-key\.mjs" retire-legacy --project-dir/.test(add));
     check("... propose de remplacer la clé du compte dans un projet qui la tient, puis de la renouveler", /email-key\.mjs" status --project-dir/.test(add) && /--replace/.test(add) && /renew the account's key/i.test(add));
     check("... et dit que la clé du compte reste au coffre, jamais dans le projet", /This is the ACCOUNT's key: it never goes into the project/.test(add) && /A project never holds the account's key/.test(add));
     const del = read("skills/delete-project/SKILL.md");
     check("/delete-project révoque la clé d'envoi du projet, et seulement elle", /email-key\.mjs" revoke --project-dir/.test(del) && /kind: "email-key"/.test(del));
     const rot = read("skills/rotate-secret/SKILL.md");
     check("/rotate-secret renouvelle la clé du projet (mint --rotate, puis revoke après le déploiement)", /mint --project-dir[^\n]*--rotate/.test(rot) && /revoke --project-dir/.test(rot));
+    check("... et pour un secret Brevo qui a fuité, le renouvelle sur place (renew)", /email-key\.mjs" renew --project-dir/.test(rot));
+    check("/delete-project supprime l'application Brevo du projet, et dit l'heure de sursis d'un jeton", /made: "api"/.test(del) && /lingering/.test(del));
     check("... et ne réécrit plus le coffre avec la clé d'un projet", !/`RESEND_API_KEY`→`RESEND\.api_key`/.test(rot) && !/`BREVO_API_KEY`→`BREVO\.api_key`/.test(rot));
     const rules = read("hooks/rules.mjs");
     check("le garde-fou demande avant une révocation, et les pages de sécurité le disent", /launchedBase === "email-key\.mjs"/.test(rules) && /\| `email-key\.mjs revoke` .*\| \*\*confirmation\*\* \|/.test(read("README.md")) && /\| `email-key\.mjs revoke` .*\| \*\*confirmation\*\* \|/.test(read("README.fr.md")) && /`email-key\.mjs revoke`/.test(read("SECURITY.md")) && /"\*email-key\.mjs\*": "ask"/.test(read("hooks/opencode.permission.json")));

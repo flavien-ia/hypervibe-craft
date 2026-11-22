@@ -452,7 +452,7 @@ echo "GOOGLE_OAUTH=$(has_real_env AUTH_GOOGLE_ID)"
 echo "GITHUB_OAUTH=$(has_real_env AUTH_GITHUB_ID)"
 echo "GA4=$( [ "$(has_real_env NEXT_PUBLIC_GA_MEASUREMENT_ID)" = yes ] || [ "$(has_real_env NEXT_PUBLIC_GA_ID)" = yes ] && echo yes || echo no)"
 echo "RESEND=$(has_real_env RESEND_API_KEY)"
-echo "BREVO=$(has_real_env BREVO_API_KEY)"
+echo "BREVO=$( [ "$(has_real_env BREVO_CLIENT_ID)" = yes ] || [ "$(has_real_env BREVO_API_KEY)" = yes ] && echo yes || echo no)"
 ```
 
 Capture each `KEY=yes/no` line in memory. Skip the blocks below for the integrations that return `no`.

@@ -64,7 +64,8 @@ This script reads `.env`, filters for the known patterns, and shows an organized
 | Pattern | Provider / Category |
 |---|---|
 | `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_*` | Stripe |
-| `BREVO_API_KEY` | Brevo |
+| `BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET` (one key: the project's sending application) | Brevo |
+| `BREVO_API_KEY` | Brevo (a key made by hand, of the earlier kind) |
 | `RESEND_API_KEY` | Resend |
 | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET` | Google OAuth |
 | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET` | GitHub OAuth |
@@ -84,7 +85,7 @@ This script reads `.env`, filters for the known patterns, and shows an organized
 >   2. Stripe - webhook secret (`STRIPE_WEBHOOK_SECRET`)
 >
 > **Email**
->   3. Brevo - the project's sending key (`BREVO_API_KEY`)
+>   3. Brevo - the project's sending application (`BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET`)
 >
 > **Login**
 >   4. Google - OAuth ID and secret (`AUTH_GOOGLE_ID` + `AUTH_GOOGLE_SECRET`)
@@ -132,13 +133,15 @@ Store `PROVIDER_URL` and `PROVIDER_INSTRUCTIONS`.
 
 - `DATABASE_URL` Neon → Strategy = `neon-special`. Renew the Postgres role password via the Neon REST API (key from the vault) or the dashboard. Much rarer and more delicate - see the dedicated Step 4.
 - `CLOUDFLARE_API_TOKEN` → Strategy = `external-rotate` with URL https://dash.cloudflare.com/profile/api-tokens, instructions: "Find the token, click **Roll**, confirm."
-- `RESEND_API_KEY` / `BREVO_API_KEY` → Strategy = `email-project-key`. Since 3.4.16 they are the project's own sending key, never the email account's. First, which key the project holds (compared in the script's process with the account's key from the vault, never printed):
+- `RESEND_API_KEY` / `BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET` / `BREVO_API_KEY` → Strategy = `email-project-key`. Since 3.4.16 they are the project's own sending key, never the email account's (at Brevo since 3.4.34, the project's sending application, its two variables one key). First, which key the project holds (compared in the script's process with the account's key from the vault, never printed):
   ```bash
   node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" status --project-dir "<WEB_DIR>"
   ```
   - `holds: "own"`, Resend → a new key made by Resend's API, written to `.env` and the hosting, recorded: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --rotate`. The older key is NOT revoked yet (the live site still sends with it): after the redeploy of Step 7, `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <each id of toRevoke>` (a confirmation is asked).
-  - `holds: "own"`, Brevo → by hand: a new key in Brevo's console (https://app.brevo.com/settings/keys/api) named `<PROJECT_NAME> <date>`, the masked window (`launch.mjs collect-env --keys "BREVO_API_KEY:secret"`), then `email-key.mjs record --project-dir "<WEB_DIR>" --provider brevo --key-name "<that name>"`. After the redeploy, the user deletes the old key in Brevo's console.
-  - `holds: "account"` → do NOT renew the account's key here: every project and the harness's own gestures use it. Give this project its own key first (`/add-email`, its Step 0: `mint --replace` for Resend, the manual key for Brevo). Then, once every project holds its own, the user renews the account's key at the provider and stores the new one in the vault (`launch.mjs add --name RESEND` or `--name BREVO`), and `/quotas` registers its alert again (the shared clock keeps a copy of the account's key to send it): the old copies stop working.
+  - `holds: "own"`, Brevo → a new sending application made by Brevo's API, its two variables written to `.env` and the hosting, recorded: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --rotate`. The older application is NOT deleted yet (the live site still sends with it): after the redeploy of Step 7, `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <each id of toRevoke>` (a confirmation is asked; a token it gave keeps working up to an hour). Exit 7: Brevo's route did not make the application this time; the project keeps the one it has, say so, and try again later.
+  - **The secret leaked** (Step 8), Brevo, `holds: "own"`: cutting it at once comes before avoiding a break. The application's secret is renewed in place, the old one refused at once (a confirmed gesture), the new one written to `.env` and the hosting in this process, never shown: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" renew --project-dir "<WEB_DIR>"`. The live site keeps the token it holds, an hour at most, and cannot send after it until it is deployed with the new secret: Step 7 right away, with nothing to revoke after.
+  - `holds: "legacy"`, Brevo → the project still holds `BREVO_API_KEY`, a key a person made for it, which may open the whole Brevo account. Renewing that old key would keep the risk: say so, and move the project to its own sending application with `/add-email` (its Step 0 does it without a break: the application, the mail layer, a deployment, then the old variable taken away and the old key deleted in Brevo's console). With `ownAlready: true`, the application is already beside it: `/add-email` only finishes the move. Only if Brevo's route refuses the application (exit 7) and the old key must be renewed all the same: by hand, a new key in Brevo's console (https://app.brevo.com/settings/keys/api) named `<PROJECT_NAME> <date>`, the masked window (`launch.mjs collect-env --keys "BREVO_API_KEY:secret"`), then `email-key.mjs record --project-dir "<WEB_DIR>" --provider brevo --key-name "<that name>"`; after the redeploy, the user deletes the old key in Brevo's console.
+  - `holds: "account"` → do NOT renew the account's key here: every project and the harness's own gestures use it. Give this project its own key first (`/add-email`, its Step 0: `mint --replace` for Resend, the move to its sending application for Brevo). Then, once every project holds its own, the user renews the account's key at the provider and stores the new one in the vault (`launch.mjs add --name RESEND` or `--name BREVO`), and `/quotas` registers its alert again (the shared clock keeps a copy of the account's key to send it): the old copies stop working.
 - `ADMIN_PASSWORD_HASH_PROD` (the admin's password in production) → Strategy = `admin-password`. A new password, which never goes through the conversation: see Step 3.
 
 
@@ -263,7 +266,7 @@ Read the exit code before continuing: non-zero means the user cancelled, so the 
 
 Some keys are **global** and have the **vault as the source of truth**: Cloudflare/Hostinger/Neon-api (read by the tooling). If you renew one of them, update the vault **too** - otherwise it keeps the old value and a future project would copy the stale key.
 
-Key → vault item mapping: `CLOUDFLARE_API_TOKEN`/`CF_API_TOKEN`→`CLOUDFLARE.api_token` · `HOSTINGER_API_TOKEN`→`HOSTINGER.api_token` · `NEON_API_KEY`→`NEON.api_key`. (`DATABASE_URL` is **not** concerned - per-project secret, not a global key.) `RESEND_API_KEY` and `BREVO_API_KEY` are not concerned either since 3.4.16: a project holds its own sending key, which never goes into the vault; the vault's `RESEND` / `BREVO` item is the account's key, never copied into a project (Category C, `email-project-key`).
+Key → vault item mapping: `CLOUDFLARE_API_TOKEN`/`CF_API_TOKEN`→`CLOUDFLARE.api_token` · `HOSTINGER_API_TOKEN`→`HOSTINGER.api_token` · `NEON_API_KEY`→`NEON.api_key`. (`DATABASE_URL` is **not** concerned - per-project secret, not a global key.) `RESEND_API_KEY`, `BREVO_CLIENT_ID`, `BREVO_CLIENT_SECRET` and `BREVO_API_KEY` are not concerned either since 3.4.16: a project holds its own sending key, which never goes into the vault; the vault's `RESEND` / `BREVO` item is the account's key, never copied into a project (Category C, `email-project-key`).
 
 If `SECRET_NAME` is in this mapping, write the new value into the vault (the value goes through an env var, never via argv nor displayed):
 
@@ -290,6 +293,7 @@ console.log("vault:" + putItem(process.env.VITEM, [{ name: process.env.VFIELD, v
 |---|---|---|---|
 | `ANTHROPIC_API_KEY` | ✅ (already done in Step 4) | - | - |
 | `RESEND_API_KEY` | ✅ | - | ✅ (agent if emails) |
+| `BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET` | ✅ | - | ✅ (agent if emails) |
 | `BREVO_API_KEY` | ✅ | - | ✅ (agent if emails) |
 | `CRON_SECRET` | ✅ | ✅ (the shared clock, and any dedicated cron worker; the repository too, below) | - |
 | `DATABASE_URL` | ✅ | - | ✅ (agent reads the DB) |
@@ -410,6 +414,7 @@ Load the value first, and stop if it is not there (`NEW_VALUE=$(node "${CLAUDE_S
 
 - `STRIPE_SECRET_KEY`: `printf 'user = "%s:"\n' "$NEW_VALUE" | curl -fsS --config - https://api.stripe.com/v1/balance` (should return 200)
 - `BREVO_API_KEY`: `printf 'header = "api-key: %s"\n' "$NEW_VALUE" | curl -fsS --config - https://api.brevo.com/v3/account`
+- `BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET`: nothing to test here, the plugin's script asked Brevo a token with them before filing them
 - `RESEND_API_KEY`: a project's key can only send, so Resend refuses it everything else, and that refusal is the proof: `printf 'header = "Authorization: Bearer %s"\n' "$NEW_VALUE" | curl -sS --config - https://api.resend.com/api-keys` answers `restricted_api_key` for a valid sending key (`API key is invalid` for a wrong one)
 - `OPENAI_API_KEY`: `printf 'header = "Authorization: Bearer %s"\n' "$NEW_VALUE" | curl -fsS --config - https://api.openai.com/v1/models`
 - `ANTHROPIC_API_KEY`: `printf 'header = "x-api-key: %s"\nheader = "anthropic-version: 2023-06-01"\n' "$NEW_VALUE" | curl -fsS --config - https://api.anthropic.com/v1/models`

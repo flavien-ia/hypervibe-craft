@@ -1049,6 +1049,20 @@ expect("curl -s https://api.vercel.com/v9/projects", "pass");
 expect("curl -s -X POST https://api.cloudflare.com/client/v4/zones/z/dns_records -d '{}'", "pass");
 expect('curl -s -X PUT "https://www.googleapis.com/webmasters/v3/sites/sc-domain%3Aexemple.fr" -H "Authorization: Bearer $TOK"', "pass");
 expect("curl -s -X PUT https://api.brevo.com/v3/senders/domains/exemple.fr/authenticate", "pass");
+// Les applications d'envoi de Brevo (3.4.34 / 2.5.13) : leurs lectures rendent en clair le secret
+// de chaque projet, les autres appels font, suppriment ou renouvellent l'application d'un projet.
+// Tout appel brut demande, quelle que soit la méthode ; ailleurs chez Brevo, une lecture passe.
+expect('curl -s "https://api.brevo.com/v3/app-store/apps?type=m2m"', "ask");
+expect('curl -s "https://api.brevo.com/v3/app-store/apps/3f8c1a2e"', "ask");
+expect('curl -s -X POST "https://api.brevo.com/v3/app-store/apps" --data @-', "ask");
+expect('curl -s -X POST "https://api.brevo.com/v3/app-store/apps/3f8c1a2e/secret/rotate"', "ask");
+expect('U=https://api.brevo.com/v3/app-store/apps\ncurl -s "$U"', "ask");
+expect('wget -qO- https://api.brevo.com/v3/app-store/apps', "ask");
+expect('node -e "fetch(\'https://api.brevo.com/v3/app-store/apps\')"', "ask");
+expect('curl -s "https://api.brevo.com/v3/senders"', "pass");
+expect('curl -s "https://api.brevo.com/v3/app-storefront"', "pass");
+expect(`node scripts/email-key.mjs renew --project-dir .`, "ask");
+expect(`node scripts/email-key.mjs retire-legacy --project-dir .`, "ask");
 expect("curl -s -X DELETE https://api.exemple.fr/v1/choses/3", "pass");
 expect("curl -s -X DELETE https://api.vercel.com.exemple.fr/v9/projects/x", "pass");
 // La forme des skills depuis 3.3.7 : la cle arrive a curl sur son entree standard. La methode et

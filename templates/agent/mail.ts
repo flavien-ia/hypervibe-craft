@@ -6,9 +6,13 @@
 // (Brevo or Resend). Env vars are passed at deploy time.
 //
 // Auto-detects which provider based on which env vars are present:
-//   - If BREVO_API_KEY is set     → uses Brevo
-//   - Else if RESEND_API_KEY      → uses Resend
-//   - Else                         → throws (no email provider configured)
+//   - If BREVO_CLIENT_ID and BREVO_CLIENT_SECRET are set → Brevo, through the project's sending
+//     application (Hypervibe 3.4.34): a token of an hour asked with the sending scope, kept until a
+//     minute before it expires, asked again once on a 401, never logged
+//   - Else if BREVO_API_KEY is set → Brevo, with the key a person made (a project of before, or
+//     whose application Brevo did not make)
+//   - Else if RESEND_API_KEY       → uses Resend
+//   - Else                          → throws (no email provider configured)
 
 import type { ToolName } from "./tools/index.js";
 
@@ -47,20 +51,59 @@ export async function sendMail(opts: SendMailOptions): Promise<void> {
   const cleanTo = opts.to.map((r) => (r.name?.trim() ? r : { email: r.email }));
   const cleanReplyTo = opts.replyTo?.name?.trim() ? opts.replyTo : opts.replyTo ? { email: opts.replyTo.email } : undefined;
 
-  if (process.env.BREVO_API_KEY) {
+  if ((process.env.BREVO_CLIENT_ID && process.env.BREVO_CLIENT_SECRET) || process.env.BREVO_API_KEY) {
     return sendViaBrevo({ ...opts, to: cleanTo, replyTo: cleanReplyTo });
   }
   if (process.env.RESEND_API_KEY) {
     return sendViaResend({ ...opts, to: cleanTo, replyTo: cleanReplyTo });
   }
-  throw new Error("No email provider configured (BREVO_API_KEY or RESEND_API_KEY missing)");
+  throw new Error("No email provider configured (BREVO_CLIENT_ID and BREVO_CLIENT_SECRET, BREVO_API_KEY or RESEND_API_KEY missing)");
+}
+
+let brevoToken: { value: string; expiresAt: number } | null = null;
+
+/** A token for the project's sending application, its scope always named. */
+async function brevoAccessToken(): Promise<string> {
+  if (brevoToken && Date.now() < brevoToken.expiresAt - 60_000) return brevoToken.value;
+  const res = await fetch("https://api.brevo.com/realms/partner/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+    body: new URLSearchParams({
+      grant_type: "client_credentials",
+      client_id: process.env.BREVO_CLIENT_ID!,
+      client_secret: process.env.BREVO_CLIENT_SECRET!,
+      scope: "transactional.email:write",
+    }).toString(),
+  });
+  const body = (await res.json().catch(() => null)) as { access_token?: unknown; expires_in?: unknown } | null;
+  if (!res.ok || typeof body?.access_token !== "string") {
+    throw new Error(`Brevo refused the project's sending application a token (HTTP ${res.status})`);
+  }
+  const seconds = typeof body.expires_in === "number" && body.expires_in > 0 ? body.expires_in : 3600;
+  brevoToken = { value: body.access_token, expiresAt: Date.now() + seconds * 1000 };
+  return brevoToken.value;
 }
 
 async function sendViaBrevo(opts: SendMailOptions): Promise<void> {
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+  const app = Boolean(process.env.BREVO_CLIENT_ID && process.env.BREVO_CLIENT_SECRET);
+  const auth = async (): Promise<Record<string, string>> =>
+    app ? { Authorization: `Bearer ${await brevoAccessToken()}` } : { "api-key": process.env.BREVO_API_KEY! };
+  let res = await postToBrevo(opts, await auth());
+  if (app && res.status === 401) {
+    brevoToken = null;
+    res = await postToBrevo(opts, await auth());
+  }
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Brevo API error (HTTP ${res.status}): ${text.slice(0, 200)}`);
+  }
+}
+
+function postToBrevo(opts: SendMailOptions, auth: Record<string, string>): Promise<Response> {
+  return fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      "api-key": process.env.BREVO_API_KEY!,
+      ...auth,
       "Content-Type": "application/json",
       Accept: "application/json",
     },
@@ -76,10 +119,6 @@ async function sendViaBrevo(opts: SendMailOptions): Promise<void> {
       ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
     }),
   });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Brevo API error (HTTP ${res.status}): ${text.slice(0, 200)}`);
-  }
 }
 
 async function sendViaResend(opts: SendMailOptions): Promise<void> {

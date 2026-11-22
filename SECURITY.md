@@ -83,7 +83,8 @@ asks for your confirmation before a push, a direct production deploy, a worker
 deploy (also when one of the plugin's own scripts would do it), a schema push,
 cloud deletions, a change of a domain at its registrar (its nameservers, or the
 records the registrar keeps), the revocation of a project's own sending key by
-the plugin's script (`email-key.mjs revoke`), a hard reset, or the opt-in that
+the plugin's script (`email-key.mjs revoke`, and at Brevo `renew` and
+`retire-legacy`), a raw call to Brevo's applications, a hard reset, or the opt-in that
 lets a checkout's versioned git hooks run. It asks the same on the forge's command line: before a merge
 into the main branch or a deployment run again (both publish), and before what
 deletes, exposes or moves something there (a repository deleted, renamed, created
@@ -215,8 +216,12 @@ assistant never sees. They are never printed in the chat, never committed, never
 written to a file. Project secrets stay in the project's `.env` and in Vercel.
 The email account's key is a global key that never goes into a project: each
 project holds a sending key of its own (made by Resend's API, limited to
-sending, and to the project's domain once verified; made by hand at Brevo,
-under the project's name), so one `.env` seen or leaked exposes that project's
+sending, and to the project's domain once verified; at Brevo, since 3.4.34,
+a sending application of the account made by its API, limited to
+transactional email, whose secret no read of the plugin ever shows: a raw
+call to Brevo's applications asks, their reads giving every project's secret
+in clear; until 3.4.33 a key made by hand, which /add-email now moves to
+its application), so one `.env` seen or leaked exposes that project's
 sending, never the whole account. Until 3.4.16 `/add-email` copied the
 account's key into every project.
 A secret the plugin writes or sends (a generated key, a key typed into the

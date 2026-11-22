@@ -70,7 +70,7 @@ Fields returned : `{ ok, reason, host?, drizzleConfig? }`.
 
 ### `email` - Resend or Brevo configured
 
-`ok: true` if `RESEND_API_KEY` OR `BREVO_API_KEY` is present in `.env` AND does not match a placeholder pattern (empty, `placeholder`, `your_api_key`, `xxx...`, `re_your...`, `xkeysib-your...`).
+`ok: true` if `RESEND_API_KEY`, `BREVO_CLIENT_ID` with `BREVO_CLIENT_SECRET` (the project's Brevo sending application, 3.4.34), OR `BREVO_API_KEY` is present in `.env` AND does not match a placeholder pattern (empty, `placeholder`, `your_api_key`, `xxx...`, `re_your...`, `xkeysib-your...`).
 
 Fields returned : `{ ok, provider: "resend"|"brevo"|null, reason }`.
 

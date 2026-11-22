@@ -735,7 +735,7 @@ process.stdout.write(JSON.stringify({
       `AGENT_MAIL_ALLOWLIST (who this agent may email: addresses or @domains, comma separated${opts.mailAllowlist ? `; set to ${opts.mailAllowlist}` : "; EMPTY, so it cannot send anything yet"})`,
       `AGENT_FETCH_WRITE_HOSTS (hosts it may POST/PUT to${opts.fetchWriteHosts ? `; set to ${opts.fetchWriteHosts}` : "; empty, so it only reads"})`,
       "DATABASE_URL (from your web .env)",
-      "BREVO_API_KEY + BREVO_SENDER_EMAIL + BREVO_SENDER_NAME (or RESEND_API_KEY)",
+      "BREVO_CLIENT_ID + BREVO_CLIENT_SECRET + BREVO_SENDER_EMAIL + BREVO_SENDER_NAME (or BREVO_API_KEY for a project that still holds a key made by hand, or RESEND_API_KEY)",
       "ADMIN_EMAIL (for agent error emails)",
       "AGENT_DAILY_BUDGET_USD (default 5)",
       "AGENT_MONTHLY_BUDGET_USD (default 50)",

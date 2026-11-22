@@ -19,6 +19,7 @@ Renouvelle une clé secrète partout où elle vit, en local et en ligne, en une 
 3. **Pour une clé tierce** : Hypervibe vous guide **clic-par-clic** dans le dashboard du provider concerné :
   - **Stripe** : dashboard.stripe.com/apikeys → Roll key
   - **Resend** : resend.com/api-keys → Revoke + Create new
+  - **La clé d’envoi du projet chez Brevo** : Hypervibe fait au projet une nouvelle application d’envoi, puis supprime l’ancienne une fois votre site en ligne redéployé avec la nouvelle (jamais avant : il cesserait d’envoyer). Pour un secret qui a fuité, il le renouvelle tout de suite à la place, et le site est à redéployer aussitôt
   - **Google OAuth** : Google Cloud Console → identifiants → reset secret
   - **GitHub OAuth** : github.com/settings/developers → ton app → Generate a new client secret
   - Etc.

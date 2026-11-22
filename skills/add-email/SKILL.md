@@ -10,7 +10,9 @@ Adds transactional email support to the current project. **Supports two provider
 
 The deterministic core (SDK install, `mail.ts` + contact tRPC router scaffolding, `root.ts` patching, env var push) is handled by `scripts/setup-email.mjs --provider <resend|brevo>`. This SKILL takes care of: provider selection, prereqs validation, re-config detection, the project's own sending key (`scripts/email-key.mjs`), post-install steps (domain config, contact page, RGPD update), and the final summary.
 
-**A project never holds the account's key** (3.4.16). The key of the whole email account (Resend or Brevo) stays in the vault, for the harness's gestures on the account itself: a sending domain and its records, the senders, the quotas, and at Resend the projects' keys. Each project gets a sending key of its own (Step 2b): one `.env` seen on a screen (a filmed training), one repository or hosting that leaks, and only that project's sending is exposed, never the whole account (its domains, its contacts, every other project).
+**A project never holds the account's key** (3.4.16). The key of the whole email account (Resend or Brevo) stays in the vault, for the harness's gestures on the account itself: a sending domain and its records, the senders, the quotas, and the projects' keys. Each project gets a sending key of its own (Step 2b): one `.env` seen on a screen (a filmed training), one repository or hosting that leaks, and only that project's sending is exposed, never the whole account (its domains, its contacts, every other project).
+
+**At Brevo, the project's key is a sending application** (3.4.34): an application of the Brevo account made by the plugin through Brevo's API, that can only send transactional emails (it opens neither the contacts, nor the campaigns, nor the account). The project holds its client id and its secret (`BREVO_CLIENT_ID`, `BREVO_CLIENT_SECRET`), and its `mail.ts` asks Brevo for a token of an hour with them. Until 3.4.33 the person made a key by hand in Brevo's console (`BREVO_API_KEY`), which opens the whole account: such a project is offered the move to its own application at Step 0, without a break in its emails. Two limits of Brevo, to say when they matter: a token already given keeps working up to an hour after the application is deleted or its secret renewed, and Brevo's applications route is not in its published reference (when it refuses, Step 2b falls back on the key made by hand, so that nothing blocks the user).
 
 ## Communication
 - Detect the user's language from the conversation (the user's own messages, anywhere in the session - not just this invocation: a bare slash command like `/bootstrap` carries no language signal by itself). If nothing in the conversation gives a signal, fall back to the OS locale (`node -e "console.log(Intl.DateTimeFormat().resolvedOptions().locale)"`) before defaulting to English. ALWAYS reply in that language for every user-facing message: questions, progress, confirmations, summaries, errors - including any example text quoted in this skill, which is illustrative and must be translated, never sent verbatim.
@@ -56,12 +58,35 @@ The project already has a provider installed (`$email_provider` is in {`resend`,
 node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" status --project-dir "<WEB_DIR>"
 ```
 
-- `holds: "own"` → the project holds its own key: nothing to do on it, go to the menu.
+- `holds: "own"` → the project holds its own key (at Brevo, its own sending application): nothing to do on it, go to the menu.
 - `holds: "account"` → the project holds the key of the WHOLE email account (projects set up before 3.4.16): anyone who sees its `.env` (a screen share, a filmed training), a repository or a hosting that leaks, opens the whole account. Say it plainly, and propose before the menu to give the project its own key (recommended):
   - Resend: `node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --replace`. The project's key, limited to sending, replaces the account's in `.env` and at the hosting; the site uses it from its next deployment (offer to deploy), and keeps sending with the account's key until then;
-  - Brevo: the key made by hand of Step 2b (Brevo), its window, then `record`.
+  - Brevo: the move of `holds: "legacy"` below (the project's own sending application, its `mail.ts`, a deployment, then the old variable taken away), followed by the renewal of the account's key said next.
   Then say it once: *"Once each of your projects holds its own key (re-run `/add-email` in each one), renew the account's key at <Resend: API Keys / Brevo: SMTP & API, API keys>, then store the new one in your vault (`launch.mjs add --name <RESEND|BREVO>`), and have `/quotas` register its alert again (the shared clock keeps a copy of the account's key to send it): the old copies of the account's key (in `.env` files, at the hosting, in recordings) then stop working."* Renewing it is the user's gesture at the provider, never done for them.
-- `holds: "other"` → the project holds a key this harness did not make (made by hand, or an account key renewed since). Say so, and offer the same replacement (`--replace`, or Brevo's manual key): the user decides.
+- `holds: "legacy"` (Brevo, 3.4.34) → the project still holds `BREVO_API_KEY`, a key a person made for it in Brevo's console, which may open the whole Brevo account, while the project can now hold a sending application that can only send. Say it plainly, and propose the move (recommended). It goes in this order, so that the site never stops sending:
+  1. Unless `ownAlready: true` (the project's application is already there, beside the old key): its sending application, made and written to `.env` and the hosting, `BREVO_API_KEY` left where it is for now:
+     ```bash
+     node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --replace
+     ```
+     Exit 7: Brevo did not make the application this time. The project keeps the key it holds, nothing else changes: say it in one sentence, and go to the menu (a later `/add-email` offers the move again).
+  2. The mail layer that uses it: Brevo's `src/server/mail.ts` replaces the project's whole. Read the project's copy first: when it holds code the plugin did not write (anything beyond `sendMail`, `escapeForBrevo`, the refusal of local links and their helpers), say what would be lost and ask before replacing. Then:
+     ```bash
+     node "${CLAUDE_SKILL_DIR}/../../scripts/setup-email.mjs" --provider brevo --name "<PROJECT_NAME>" --web-dir "<WEB_DIR>" --mail-only
+     cd "<WEB_DIR>" && pnpm tsc --noEmit && pnpm lint
+     ```
+     The new layer reads `BREVO_CLIENT_ID` and `BREVO_CLIENT_SECRET` first, and `BREVO_API_KEY` only when the two are missing: it works with both, before and after the move. `@getbrevo/brevo` is no longer used by it and may stay in `package.json`.
+  3. The site deployed with both, and that deployment followed to its end: commit `src/server/mail.ts` by its name, ask the user before pushing (a push publishes), push, then wait for it:
+     ```bash
+     node "${CLAUDE_SKILL_DIR}/../../scripts/vercel/check-deploy.mjs" --project-dir "<WEB_DIR>" --sha "$(git -C "<WEB_DIR>" rev-parse HEAD)" --timeout 600
+     ```
+  4. Only once it is ready (exit 0): the old variable taken out of `.env` and of the hosting (a confirmed gesture, names only):
+     ```bash
+     node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" retire-legacy --project-dir "<WEB_DIR>"
+     ```
+  5. Then the user's gesture at Brevo, said plainly: the key made for the project is deleted in Brevo's console (SMTP & API, API keys: `toDeleteByHand` names it when the manifest recorded it). With `holds: "account"`, the account's key is renewed instead (`accountKey` in the answer), as said above.
+
+  A push declined, or a deployment failed or timed out: nothing is taken out, `BREVO_API_KEY` stays until the next run (`ownAlready: true` then skips step 1).
+- `holds: "other"` → the project holds a key this harness did not make (made by hand, or an account key renewed since). Say so, and offer the same replacement (`--replace`): the user decides.
 - `holds: "none"` → a provider is installed but the project holds no key: Step 2b, then back here.
 
 Show a menu tailored to the provider:
@@ -85,7 +110,7 @@ Wait for the answer.
 | 1 (change sender) | Jump to **Step 6** (domain config via `_dns-resend`). | Ask for the new `BREVO_SENDER_EMAIL`. If custom domain, invoke `_dns-brevo`. Then `_push-env-vars BREVO_SENDER_EMAIL=<email>` (and `BREVO_SENDER_NAME` if changed). Reminder: the sender must be verified in the Brevo dashboard (Settings then Senders & IPs). |
 | 2 (change recipient) | Invoke `_create-contact-page` in "update recipient only" mode - run just its Step 2 (`CONTACT_RECIPIENT_EMAIL`) and skip creation if it already exists. |
 | 3 (create contact page) | Invoke `_create-contact-page` directly. |
-| 4 (start over) | For Resend: revoke the project's own key (`node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <its id, from status>`, a confirmation is asked) and delete `RESEND_API_KEY` from `.env`. For Brevo: delete `BREVO_API_KEY` from `.env`, and have the user delete the key named after the project in Brevo's console (SMTP & API, API keys). In both cases: delete `src/server/mail.ts` + `src/server/api/routers/contact.ts`. Then go back to the normal **Step 1**. |
+| 4 (start over) | For Resend: revoke the project's own key (`node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" revoke --project-dir "<WEB_DIR>" --id <its id, from status>`, a confirmation is asked) and delete `RESEND_API_KEY` from `.env`. For Brevo: delete the project's sending application the same way (`revoke --id <its id, from the "apps" of status>`: a token it gave keeps working up to an hour, say it) and delete `BREVO_CLIENT_ID` and `BREVO_CLIENT_SECRET` from `.env`; a `BREVO_API_KEY` made by hand is deleted from `.env` too, and the user deletes that key in Brevo's console (SMTP & API, API keys). In both cases: delete `src/server/mail.ts` + `src/server/api/routers/contact.ts`. Then go back to the normal **Step 1**. |
 | 5 (other) | Ask for clarification. Do not run the install flow by default. |
 
 **At the end**, jump straight to **Step 9** (summary).
@@ -151,7 +176,7 @@ node "$VAULT" get RESEND api_key >/dev/null 2>&1; RC=$?
 
 ### If `CHOSEN_PROVIDER = brevo`
 
-Check that the Brevo key is in the vault (the app sends via the SDK + `BREVO_API_KEY`):
+Check that the Brevo account's key is in the vault (it makes the project's sending application at Step 2b, and never goes into the project):
 
 ```bash
 VAULT="${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs"
@@ -160,7 +185,7 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
 - `RC=0` then key present, move on to Step 3.
 - `RC=2/3` (vault locked/expired) then warn the user, `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking), retry.
 - `RC=4` (key missing) then have it created + stored in the vault:
-  > To use Brevo, I need your Brevo account's key (just once - I store it in your vault). It stays there, for your senders and your sending domain; each project gets a key of its own (next step).
+  > To use Brevo, I need your Brevo account's key (just once - I store it in your vault). It stays there: with it, I make each project a sending application of its own, that can only send, and I set up your senders and your sending domain.
   > 1. Go to **https://app.brevo.com/settings/keys/api** then **Generate a new API key** (name `claude-code`) and copy it (`xkeysib-...`).
   > 2. A window will open: paste it in (masked input).
   ```bash
@@ -168,7 +193,7 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
   ```
   Then retry the `get`.
 
-⚠️ This is the ACCOUNT's key: it never goes into the project. The scripts read it from the vault for the senders (Step 6) and to make sure the project's key is not it (Step 2b).
+⚠️ This is the ACCOUNT's key: it never goes into the project. The scripts read it from the vault in their own process for the senders (Step 6) and to make the project's sending application (Step 2b), which is why it must be there BEFORE.
 
 ### Decide on the sender (Brevo only)
 
@@ -200,7 +225,18 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_
 
 ### If `CHOSEN_PROVIDER = brevo`
 
-Brevo's API makes no key for an ordinary account: the user makes it, once per project, guided:
+The project's sending application, made by Brevo's API with the account's key read in the script's own process (never shown), limited to transactional email (`transactional.email:write`), a token tried before anything is filed; its two variables go to `.env` and the hosting in one gesture:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/email-key.mjs" mint --project-dir "<WEB_DIR>" --name "<PROJECT_NAME>" --provider brevo
+```
+
+- Exit 0 → one JSON line: `key.id` (the application's id at Brevo), `key.variables` (`BREVO_CLIENT_ID`, `BREVO_CLIENT_SECRET`), `hosting` (`written`, or `local only` before the project is linked to its hosting). Never a secret. An application made but that does not prove itself is deleted at once.
+- Exit 5 → the project holds a key already: read `holds` and follow Step 0 (`own`: keep it; `legacy`, `account` or `other`: the move or the replacement).
+- Exit 2/3 → open the vault (`launch.mjs unlock`), retry. Exit 4 → the account's key is missing: Step 2. Exit 1 → Brevo refused (the account's key, a limit, an unknown address): the message says it, retry once it is fixed.
+- **Exit 7, `fallback: "dashboard-key"`** → Brevo's route did not make the application this time (it is not in Brevo's published reference). Say it in one sentence (*"Brevo did not make the project's sending application automatically this time: you make its key in Brevo's console, once"*), then the key made by hand below, so that nothing blocks the user; a later `/add-email` offers the project its own application in its place (Step 0, `holds: "legacy"`).
+
+#### The key made by hand (the fallback of exit 7 only)
 
 > This project needs a Brevo key of its own (never your account's, which stays in your vault).
 > 1. On the page I am opening, click **Generate a new API key**.
@@ -243,7 +279,7 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/setup-email.mjs" \
 
 Add `--no-contact-router` to either command when the need is not a contact form (Step 2).
 
-The script chains 7 sub-steps: preflight, the project's own key (read in its `.env`; the account's key is refused there, compared in the script's process), install SDK, write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push the sender's env vars (never the key: it reached `.env` and the hosting at Step 2b). The two contact router steps are skipped with `--no-contact-router`, and also when the project's tRPC has no `rateLimitedProcedure` (the router needs it: written anyway, it would break the build). The script then says so in a warning, and its last line carries `contactRouter: "skipped:no-rate-limit"`: say it in the summary, and do not propose the contact page before the security setup of `/bootstrap` is in place.
+The script chains 7 sub-steps: preflight, the project's own key (read in its `.env`: at Brevo its sending application, else the key made by hand; the account's key is refused there, compared in the script's process), install SDK (Resend only: Brevo's `mail.ts` sends with `fetch`, no package), write `mail.ts`, write contact tRPC router, register `contactRouter` in `root.ts`, push the sender's env vars (never the key: it reached `.env` and the hosting at Step 2b). The two contact router steps are skipped with `--no-contact-router`, and also when the project's tRPC has no `rateLimitedProcedure` (the router needs it: written anyway, it would break the build). The script then says so in a warning, and its last line carries `contactRouter: "skipped:no-rate-limit"`: say it in the summary, and do not propose the contact page before the security setup of `/bootstrap` is in place.
 
 ### During execution
 
@@ -290,9 +326,10 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 
 ### If Brevo
 
-- `stack`: `- **Email**: Brevo SDK v5 (\`BrevoClient\`) - transactional emails via \`sendMail()\` in \`<WEB_DIR>/src/server/mail.ts\``
+- `stack`: `- **Email**: Brevo (its API through \`fetch\`, with the project's own sending application) - transactional emails via \`sendMail()\` in \`<WEB_DIR>/src/server/mail.ts\``
 - `env-vars`:
-  - `- \`BREVO_API_KEY\` - the project's own Brevo key, made in Brevo's console under the project's name (the account's key stays in the vault)`
+  - `- \`BREVO_CLIENT_ID\`, \`BREVO_CLIENT_SECRET\` - the project's own Brevo sending application (sending only; the account's key stays in the vault). \`sendMail()\` asks a token of an hour with them, always with the scope \`transactional.email:write\`, keeps it in memory and asks again on its own; the token and the secret are never logged`
+  - when Step 2b fell back on the key made by hand (exit 7), instead: `- \`BREVO_API_KEY\` - the project's own Brevo key, made in Brevo's console under the project's name (the account's key stays in the vault); /add-email offers to move it to a sending application`
   - `- \`BREVO_SENDER_EMAIL\` - default sender email`
   - `- \`BREVO_SENDER_NAME\` - default sender name`
   - `- \`CONTACT_RECIPIENT_EMAIL\` - contact form recipient (optional, falls back to \`BREVO_SENDER_EMAIL\`); preferably a real inbox: an address relayed by Email Routing can send the messages to spam`
@@ -304,11 +341,11 @@ Invoke `_update-claude-md` with **the sections tailored to the chosen provider**
 ```markdown
 ## Email - Brevo quirk
 
-Brevo runs implicit Mustache-style templating on \`htmlContent\` and \`textContent\` at send time. Any \`{{\` in the body (stack traces, malformed JSON, user input) raises an async parse failure - the SDK call already returned 201 by then, so the \`try/catch\` sees nothing and the email is silently dropped.
+Brevo runs implicit Mustache-style templating on \`htmlContent\` and \`textContent\` at send time. Any \`{{\` in the body (stack traces, malformed JSON, user input) raises an async parse failure - Brevo's API already answered 201 by then, so the \`try/catch\` sees nothing and the email is silently dropped.
 
 **Rules:**
 - Always pipe user-provided or error-derived strings through \`escapeForBrevo()\` before inserting into \`htmlContent\`.
-- For \`textContent\`, at minimum neutralize \`{{\` with \`.replace(/\{\{/g, "{ {")\`.
+- For \`textContent\`, at minimum split every pair of braces with \`.replace(/\{(?=\{)/g, "{ ")\` (it turns \`{{{\` into \`{ { {\`, where \`.replace(/\{\{/g, "{ {")\` left \`{ {{\`).
 - Treat \`await sendMail(...)\` as "best effort, not confirmed sent" - for critical flows (password resets, payments), add a Brevo webhook to catch async failures.
 ```
 
@@ -462,7 +499,7 @@ Adapt depending on the provider and the situation:
 
 ### In all cases, add:
 
-- *The project holds its own sending key* (Resend: limited to sending, and to `<domain>` when it is set; Brevo: the key `<PROJECT_NAME>` made in its console). *Your account's key stays in your vault: none of your projects holds it.*
+- *The project holds its own sending key* (Resend: limited to sending, and to `<domain>` when it is set; Brevo: its own sending application, which can only send transactional emails, or, after Brevo's fallback, the key `<PROJECT_NAME>` made in its console). *Your account's key stays in your vault: none of your projects holds it.*
 - *The sending engine is ready (the `contact.send` tRPC procedure, with honeypot + escape + rate limiting)*
 - If the contact page was created: *Your `/contact` page is ready, you can test it right away*
 - Otherwise: *When you want a contact page, tell me "create me a contact page"*

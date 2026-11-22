@@ -49,7 +49,7 @@ console.log("\n── Le script lit l'expéditeur du projet avant de pousser ─
 const setup = readFileSync(join(ROOT, "scripts", "setup-email.mjs"), "utf8");
 check("setup-email.mjs lit les trois expéditeurs du projet par envValue", ["RESEND_FROM_EMAIL", "BREVO_SENDER_EMAIL", "BREVO_SENDER_NAME"].every((k) => setup.includes(`${k}: envValue(WEB_DIR, "${k}")`)));
 check("... et ne pousse que ce que le plan dit manquer", /senderPlan\(\{ provider, inPlace: senderInPlace/.test(setup) && /\.\.\.pushed\]|const kvs = pushed;/.test(setup) && !/kvs\.push\(`RESEND_FROM_EMAIL=onboarding@resend\.dev`\)/.test(setup));
-check("... et ne réclame l'adresse Brevo que si le projet n'en a pas", /if \(provider === "brevo" && !senderInPlace\.BREVO_SENDER_EMAIL(?: && !contactRouterOnly)?\)/.test(setup));
+check("... et ne réclame l'adresse Brevo que si le projet n'en a pas", /if \(provider === "brevo" && !senderInPlace\.BREVO_SENDER_EMAIL(?: && !contactRouterOnly)?(?: && !mailOnly)?\)/.test(setup));
 
 console.log("\n── Le routeur de contact n'est écrit que s'il est voulu et s'il compile (3.4.13) ──");
 const AVEC = "export const rateLimitedProcedure = t.procedure;";

@@ -30,11 +30,11 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 2. **Choix automatique du provider** (si install neuf) : règle de décision basée sur vos clés env (voir tableau ci-dessus). Aucune question posée.
 
 3. **Vérification des prérequis** : la clé de votre compte email, rangée une fois dans le coffre-fort (item `RESEND`, créée sur resend.com/api-keys, ou item `BREVO`). Elle y reste, pour les gestes sur le compte lui-même (votre domaine d'envoi, vos expéditeurs, et chez Resend les clés des projets) : aucun projet ne la tient jamais.
-   - **La clé d'envoi propre au projet** : pour Resend, Hypervibe la fait pour vous par l'API de Resend ; elle ne peut qu'envoyer, et une fois votre domaine d'envoi vérifié, seulement depuis ce domaine. Pour Brevo, dont l'API ne fait pas de clé, vous la faites dans la console de Brevo au nom du projet, et la collez dans une fenêtre masquée qui la range dans le projet seulement.
+   - **La clé d'envoi propre au projet** : pour Resend, Hypervibe la fait pour vous par l'API de Resend ; elle ne peut qu'envoyer, et une fois votre domaine d'envoi vérifié, seulement depuis ce domaine. Pour Brevo, Hypervibe fait au projet sa propre **application d'envoi**, par l'API de Brevo : elle ne sait qu'envoyer des emails transactionnels, et n'ouvre ni vos contacts, ni vos campagnes, ni votre compte. Si Brevo refusait un jour de la faire, vous feriez la clé du projet dans sa console, à son nom, et la colleriez dans une fenêtre masquée qui la range dans le projet seulement.
    - Dans les deux cas, si la clé d'un projet fuit (un `.env` vu à l'écran, un dépôt ou un hébergeur qui fuit), seul l'envoi de ce projet est exposé : jamais tout votre compte, ses domaines et ses contacts, ni vos autres projets.
 
 4. **Installation du SDK + scaffolding** :
-   - Le SDK approprié est installé (`resend` ou `@getbrevo/brevo`)
+   - Le SDK de Resend est installé (`resend`) ; celui de Brevo n'est plus nécessaire, son `mail.ts` parle directement à son API
    - Un fichier `src/server/mail.ts` est créé avec une fonction `sendMail()` réutilisable + tous les garde-fous (`escapeHtml` pour Resend, `escapeForBrevo` pour Brevo qui a un quirk de templating Mustache silencieux)
    - Un router tRPC `contact` est ajouté pour gérer le formulaire de contact côté serveur (honeypot anti-spam, rate limiting, sanitisation), quand l'envoi sert à un formulaire de contact et que le projet a déjà sa limitation de débit ; sinon, la page de contact l'ajoute plus tard
 
@@ -46,11 +46,11 @@ La skill **gère les deux providers** et choisit automatiquement, sans question,
 
 ## Ce que ça crée pour vous
 
-- Une **clé d'envoi propre au projet** (Resend : faite par son API, limitée à l'envoi ; Brevo : faite dans sa console au nom du projet), dans `.env` et chez l'hébergeur, inscrite au manifeste du projet : `/rotate-secret` la renouvelle, `/delete-project` la révoque. La clé de votre compte reste au coffre.
-- Le SDK approprié installé (`resend` ou `@getbrevo/brevo` v5+)
+- Une **clé d'envoi propre au projet** (Resend : faite par son API, limitée à l'envoi ; Brevo : une application d'envoi faite par son API, qui ne sait qu'envoyer), dans `.env` et chez l'hébergeur, inscrite au manifeste du projet : `/rotate-secret` la renouvelle, `/delete-project` la révoque. La clé de votre compte reste au coffre.
+- Pour Resend, son SDK installé (`resend`)
 - `src/server/mail.ts` avec `sendMail()` + helper d'échappement (`escapeHtml` ou `escapeForBrevo`)
 - Un router tRPC `contact` (`src/server/api/routers/contact.ts`) pour le formulaire
-- Les variables d'env nécessaires (`RESEND_API_KEY` + `RESEND_FROM_EMAIL`, ou `BREVO_API_KEY` + `BREVO_SENDER_EMAIL` + `BREVO_SENDER_NAME`) dans `.env` + Vercel
+- Les variables d'env nécessaires (`RESEND_API_KEY` + `RESEND_FROM_EMAIL`, ou `BREVO_CLIENT_ID` + `BREVO_CLIENT_SECRET` + `BREVO_SENDER_EMAIL` + `BREVO_SENDER_NAME`) dans `.env` + Vercel
 - Pour Brevo : une section `## Email - Brevo quirk` dans votre `CLAUDE.md` projet (mémo du piège du templating silencieux)
 - Si vous le souhaitez : votre **domaine configuré dans le provider** avec les DNS records ajoutés à Cloudflare
 - Si vous le souhaitez : une **page `/contact`** complète et fonctionnelle
@@ -80,6 +80,10 @@ Largement suffisant pour démarrer dans les deux cas. Brevo est plus généreux 
 
 {{callout:warning|Les projets montés avant la version 3.4.16}}
 Ils peuvent tenir la clé de votre compte elle-même. Relancez `/add-email` dans chacun : il le remarque et donne au projet sa propre clé. Une fois chaque projet passé à la sienne, renouvelez la clé de votre compte chez le service (Resend : API Keys ; Brevo : SMTP & API, API keys), rangez la nouvelle dans votre coffre, et faites réenregistrer l'alerte de `/quotas` (l'horloge partagée garde une copie de la clé du compte pour l'envoyer) : les anciennes copies de la clé du compte (dans des `.env`, chez l'hébergeur, dans des enregistrements) cessent alors de marcher.
+{{/callout}}
+
+{{callout:warning|Les projets Brevo montés avant la version 3.4.34}}
+Ils tiennent une clé faite à la main dans la console de Brevo (`BREVO_API_KEY`), qui peut ouvrir tout votre compte. Relancez `/add-email` dans chacun : il propose de passer le projet à sa propre application d'envoi, sans coupure de ses emails. Il fait l'application, remplace le fichier `src/server/mail.ts` (en vous demandant d'abord si vous l'aviez modifié), vous demande de mettre le site en ligne, attend que ce soit fait, puis retire l'ancienne variable. Il vous reste un geste : supprimer l'ancienne clé dans la console de Brevo (SMTP & API, API keys).
 {{/callout}}
 
 {{callout:info|Comment switcher de provider}}
