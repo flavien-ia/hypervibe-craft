@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.4.35 (23 novembre 2026)
+
+### Nouveautés
+- **Votre formation prévenue** : lancé avec le code que vous donne votre module de formation (`/start hvi-…`), `/start` prévient votre espace de formation, à la toute fin et seulement si tout est au vert, que votre installation est faite. Votre checklist se coche toute seule. Il n'envoie que ce code, et sans code rien ne part.
+
+### Améliorations
+- **Brevo proposé en premier pour les emails** : `/start` et `/add-email` proposent Brevo d'abord. Beaucoup de gens y ont déjà un compte, son interface est simple, c'est un service européen, et il n'a pas besoin de domaine pour commencer. Resend reste au choix, pour qui préfère la connexion par GitHub.
+- **`/add-email` sans aucune clé** : il vous guide vers Brevo, de la création du compte jusqu'à la clé, au lieu de Resend.
+
 ## v3.4.34 (22 novembre 2026)
 
 ### Sécurité

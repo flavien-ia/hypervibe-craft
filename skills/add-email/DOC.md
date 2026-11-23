@@ -1,6 +1,6 @@
 # /add-email
 
-Enables **transactional email sending** from your app, via Resend or Brevo. For contact forms, confirmations, notifications, welcome emails, etc.
+Enables **transactional email sending** from your app, via Brevo or Resend. For contact forms, confirmations, notifications, welcome emails, etc.
 
 ## When to use it
 
@@ -8,19 +8,19 @@ Enables **transactional email sending** from your app, via Resend or Brevo. For 
 - You want to send automatic emails to your users (signup confirmation, forgotten password, event notification)
 - You want to send emails from your own domain (`contact@mysite.com`) rather than from a third-party service
 
-## Resend or Brevo?
+## Brevo or Resend?
 
 The skill **handles both providers** and chooses automatically, without asking, based on what you already have:
 
 | Your env variables | Provider installed | Note |
 |---|---|---|
-| None | **Resend by default** | You will create the key afterwards, the skill tells you how |
+| None | **Brevo by default** | The skill guides you to create the account (if you have none yet), then the key |
 | `RESEND_API_KEY` only | Resend | silent |
 | `BREVO_API_KEY` only | Brevo | silent |
 | Both | **Brevo by default** | Mentioned in the final summary so you can switch if needed |
 
 {{callout:info|Why these defaults}}
-**Resend** is the default when starting from scratch: modern DX (polished Next.js integrations), a free tier of 3,000 emails/month, easy to get started. **Brevo** takes over when both keys are present because it is a European service with built-in CRM and email marketing - typical of a more advanced "pro" stack. In both cases, you can switch manually by deleting the config and re-running `/add-email`.
+**Brevo** is the default when starting from scratch: many people already have an account there, its interface speaks to people who are not developers, it is a European service, and it sends up to 300 emails a day for free without asking for a domain to start (without a domain, it sends from an address of its own: enough for tests and alerts, not for an app in service). **Resend** stays available, for those who prefer signing in with GitHub. When both keys are there, it is Brevo. In every case, you can switch by hand by deleting the config and re-running `/add-email`.
 {{/callout}}
 
 ## How it works

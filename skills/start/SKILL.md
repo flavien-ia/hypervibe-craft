@@ -41,6 +41,8 @@ uname -s 2>/dev/null || echo "Windows"
 - Result containing `MINGW`, `MSYS`, or `Windows` → **Windows** → store `OS=windows`
 - Result `Linux` → **Linux** → store `OS=linux`
 
+If the invocation arguments contain a training code (a word starting with `hvi-`), store it as `INSTALL_CODE`. Never show it back, never ask for it: a user without a code is not in a training, and everything else in this skill is the same for them.
+
 > **Welcome to Hypervibe!**
 >
 > This plugin lets you build complete web applications in just a few minutes. You describe what you want, and I build it.
@@ -277,7 +279,7 @@ Present a clear report:
 > ❌ Vercel CLI - not installed
 > ❌ Wrangler CLI - not installed
 > 🔒 Vault - ready / to configure
-> 🔑 Cloudflare / Neon / Email - Resend or Brevo (vault keys), to collect (Steps 4, 7, and 7bis)
+> 🔑 Cloudflare / Neon / Email - Brevo or Resend (vault keys), to collect (Steps 4, 7, and 7bis)
 
 ### Cloudflare token (to do BEFORE the CLIs script)
 
@@ -561,7 +563,7 @@ Display an exhaustive report based **strictly** on what was detected:
 > ✅ Wrangler CLI + Cloudflare token (vault): ready
 > ✅ Vault: operational (unlocked)
 > 🔑 Neon: key in the vault
-> 🔑 Email (Resend or Brevo): key in the vault
+> 🔑 Email (Brevo or Resend): key in the vault
 
 **"Vault" line, to display based on the real detected state** (same ✅/⚠️/❌ logic as the CLIs, based on `vault.mjs status`):
 - ✅ **operational (unlocked)**: `vault.mjs status` = `unlocked`.
@@ -665,9 +667,9 @@ Confirm:
 
 ---
 
-## Step 7bis: Email key (Resend or Brevo) in the vault
+## Step 7bis: Email key (Brevo or Resend) in the vault
 
-An email API key is used for sending emails from the apps (`/add-email`, contact page, notifications) AND for the alert emails of the shared clock (quota overage, failed backup, failed scheduled task). It is the key of the whole email ACCOUNT, and it stays in the vault: `/add-email` uses it to give each project a sending key of its own (since 3.4.16 a project never holds the account's key). Hypervibe supports **two providers, Resend and Brevo**: the user picks ONE, and its key is stored in the vault (item `RESEND` or `BREVO`, field `api_key`), once per machine.
+An email API key is used for sending emails from the apps (`/add-email`, contact page, notifications) AND for the alert emails of the shared clock (quota overage, failed backup, failed scheduled task). It is the key of the whole email ACCOUNT, and it stays in the vault: `/add-email` uses it to give each project a sending key of its own (since 3.4.16 a project never holds the account's key). Hypervibe supports **two providers, Brevo and Resend**: the user picks ONE, and its key is stored in the vault (item `RESEND` or `BREVO`, field `api_key`), once per machine.
 
 ### Check whether a key is already in the vault
 
@@ -676,46 +678,17 @@ node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get RESEND api_key >/de
 node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get BREVO api_key >/dev/null 2>&1 && echo "have-brevo" || echo "no-brevo"
 ```
 
-- **At least one key present** → display *"✅ Your email key (Resend/Brevo) is already in your vault"* and move on to Step 8. Do NOT ask the provider question: the key present IS the choice. (Both present → mention that both are available and that the alert emails use Brevo.)
+- **At least one key present** → display *"✅ Your email key (Brevo/Resend) is already in your vault"* and move on to Step 8. Do NOT ask the provider question: the key present IS the choice. (Both present → mention that both are available and that the alert emails use Brevo.)
 - **No key** → ask the user to choose, then guide them through the chosen provider.
 
 ### Choosing the provider (only when no key exists)
 
-Ask ONE structured question via `AskUserQuestion` ("Which email service do you want to use?"), two options:
+Ask ONE structured question via `AskUserQuestion` ("Which email service do you want to use?"), two options, Brevo first (decision of 23/11/2026: many people already have a Brevo account, its interface speaks to people who are not developers, and it is a European service):
 
-- **Resend (Recommended)** - Modern, simple. Free: 3,000 emails/month (100/day). To send from your own address you will need a verified domain later (`/add-domain` handles it); until then, apps send from a test address.
-- **Brevo** - Free: 300 emails/day. No domain needed: you verify your sender address with a simple confirmation email, so it is the fastest way to activate the alert emails if you do not own a domain yet.
+- **Brevo (Recommended)** - Free: 300 emails/day. No domain needed: you verify your sender address with a simple confirmation email, so it is the fastest way to activate the alert emails if you do not own a domain yet. Without a domain, Brevo sends the automatic emails from an address of its own: enough for alerts and tests, not for an app in service (connect your domain later with `/add-domain`).
+- **Resend** - If you prefer signing in with GitHub. Free: 3,000 emails/month (100/day). To send from your own address you will need a verified domain later (`/add-domain` handles it); until then, apps send from a test address.
 
 Whichever is chosen, the other provider stays available later (`/add-email` supports both).
-
-### If the user chose Resend
-
-Open the page (best-effort) and guide:
-
-```bash
-node "${CLAUDE_SKILL_DIR}/../../scripts/open-url.mjs" "https://resend.com/api-keys" 2>/dev/null
-```
-
-> **In order to be able to send emails from your apps**, I need a Resend key (just once, I store it in your vault).
->
-> 1. On the page that just opened (create a free account if needed), click **Create API Key**, name it `claude-code`, leave **Permission** on **Full access**.
-> 2. **Copy the key** (`re_...`, displayed only once).
-> 3. A window will open: paste it in (masked input, I never see it).
-
-Store it in the vault:
-
-```bash
-node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name RESEND --service Resend --fields "api_key:secret"
-```
-
-Validate (read from the vault, never displayed):
-
-```bash
-RKEY=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get RESEND api_key)
-printf 'header = "Authorization: Bearer %s"\n' "$RKEY" | curl -s --config - -o /dev/null -w "%{http_code}" https://api.resend.com/domains | grep -q 200 && echo "VALID" || echo "INVALID"
-```
-
-> ✅ Your Resend key is in your vault. It stays there: `/add-email` uses it to give each of your projects a sending key of its own, limited to sending.
 
 ### If the user chose Brevo
 
@@ -749,6 +722,35 @@ printf 'header = "api-key: %s"\n' "$BKEY" | curl -s --config - -o /dev/null -w "
 > If it offers to **authenticate your domain** (DNS records to add where your domain is registered), leave it for now: your domain is connected later, with `/add-domain` then `/add-email`, which add those records for you (or guide you through them, record by record, where your registrar offers no way to do it automatically). Verifying your address is all that is needed today.
 
 Why this paragraph is always said: an account of this provider that already existed (someone who used it with their own domain) is what sends people into their registrar's DNS settings during the preparation, record by record, for nothing yet (a tester of 08/10/2026, at LWS).
+
+### If the user chose Resend
+
+Open the page (best-effort) and guide:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/open-url.mjs" "https://resend.com/api-keys" 2>/dev/null
+```
+
+> **In order to be able to send emails from your apps**, I need a Resend key (just once, I store it in your vault).
+>
+> 1. On the page that just opened (create a free account if needed), click **Create API Key**, name it `claude-code`, leave **Permission** on **Full access**.
+> 2. **Copy the key** (`re_...`, displayed only once).
+> 3. A window will open: paste it in (masked input, I never see it).
+
+Store it in the vault:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name RESEND --service Resend --fields "api_key:secret"
+```
+
+Validate (read from the vault, never displayed):
+
+```bash
+RKEY=$(node "${CLAUDE_SKILL_DIR}/../../scripts/vault/vault.mjs" get RESEND api_key)
+printf 'header = "Authorization: Bearer %s"\n' "$RKEY" | curl -s --config - -o /dev/null -w "%{http_code}" https://api.resend.com/domains | grep -q 200 && echo "VALID" || echo "INVALID"
+```
+
+> ✅ Your Resend key is in your vault. It stays there: `/add-email` uses it to give each of your projects a sending key of its own, limited to sending.
 
 ---
 
@@ -794,5 +796,16 @@ node "$PLUGIN_DIR/scripts/rules/update-project-claude-md.mjs"
 ---
 
 ## Step 10 - Conclusion
+
+Only if `INSTALL_CODE` is set AND every check of Step 6 is green, tell the training space before the conclusion:
+
+```bash
+node "${CLAUDE_SKILL_DIR}/../../scripts/start/report-install.mjs" --code "$INSTALL_CODE"
+```
+
+- exit 0: say *"I told your training space that your installation is done: your checklist is ticked."*
+- exit 2 or 1: say *"I could not tell your training space. Tick the boxes yourself at the end of the installation module."* Never retry in a loop, never block the conclusion on it.
+
+If a check is not green, send nothing: the checklist must only tick itself for an installation that works. Without `INSTALL_CODE`, nothing is sent at all.
 
 > **It's ready! ✨** Over to you.

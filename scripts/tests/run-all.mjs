@@ -116,6 +116,7 @@ const SUITES = [
   ["the page of a key: its whole address reaches the browser (never cut by cmd), and the screenshot to send when it looks different (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-key-pages.mjs")],
   ["Cloudflare's token page with its permissions already ticked, its keys read at the source, and the same list as the skills' fallback (3.4.29 / 2.5.8)", join(ROOT, "scripts", "tests", "test-cloudflare-token-page.mjs")],
   ["every script of the plugin imports only files the plugin ships (3.4.30 / 2.5.9)", join(ROOT, "scripts", "tests", "test-local-imports.mjs")],
+  ["/start tells the training space that the installation succeeded, with its code only and only when every check is green; Brevo first for the email (3.4.35)", join(ROOT, "scripts", "tests", "test-start-report-install.mjs")],
 ];
 
 // The vault's tool never runs during a recette (_no-real-vault.mjs): every Node process of a suite

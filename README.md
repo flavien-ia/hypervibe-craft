@@ -96,7 +96,7 @@ Each addon can be activated during `/bootstrap` or used standalone on an existin
 | `/add-auth` | NextAuth v5 - admin-only interface OR user accounts (email+password with signup, account, delete, and optional forgot-password if email is configured). Google/GitHub OAuth offered as optional add-ons in users mode. |
 | `/add-google-auth` | Add Google OAuth login (extends `/add-auth`) |
 | `/add-github-auth` | Add GitHub OAuth login (extends `/add-auth`) |
-| `/add-email` | Resend or Brevo transactional emails (auto-detected) |
+| `/add-email` | Brevo or Resend transactional emails (auto-detected) |
 | `/add-stripe` | Stripe Checkout payments |
 | `/add-i18n` | next-intl internationalization |
 | `/add-storage` | Cloudflare R2 file storage |
@@ -135,7 +135,7 @@ Projects bootstrapped with this plugin use:
 - **GitHub** for source control
 - **Vercel** for hosting and deployment (functions pinned to `fra1` - Frankfurt)
 - **Neon** for PostgreSQL database (provisioned in Frankfurt, `aws-eu-central-1` - when DB addon is used)
-- **Resend or Brevo** for transactional emails (when the email addon is used)
+- **Brevo or Resend** for transactional emails (when the email addon is used)
 - **Stripe** for payments (when stripe addon is used)
 - **Cloudflare R2** for file storage (when storage addon is used)
 - **Google Analytics** for analytics (when analytics addon is used)

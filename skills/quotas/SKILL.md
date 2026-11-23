@@ -165,7 +165,7 @@ If it does not, register it:
 - Job just registered (first time only) → mention discreetly **before the table**:
   > 💡 *Note: I set up a daily quota watch in your shared clock - the single Cloudflare Worker that runs all your account-wide scheduled jobs (registry in `~/.hypervibe-jobs/jobs.js`, git-versioned). It will email you if you approach the 10 GB of the R2 free tier. Want a different threshold or recipient? Just ask - I re-register the job with the new values.*
 - No email key in the vault (neither `RESEND` nor `BREVO`) → show **after the table** (right after the summary):
-  > ⚠️ *To activate the quota alert, I need your email key (Resend or Brevo). Re-run `/start` (it collects it in Step 7bis), then re-run `/quotas`. Not blocking - your current storage is at X%.*
+  > ⚠️ *To activate the quota alert, I need your email key (Brevo or Resend). Re-run `/start` (it collects it in Step 7bis), then re-run `/quotas`. Not blocking - your current storage is at X%.*
 - No verified Brevo sender (Brevo machine) → show **after the table** (right after the summary):
   > ⚠️ *To activate the quota alert, a verified Brevo sender is required. Verify one at https://app.brevo.com/senders (add your email, click the verification link you receive), then re-run `/quotas`. Not blocking - your current storage is at X%.*
 - No verified Resend domain (Resend machine) → show **after the table** (right after the summary):

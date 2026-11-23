@@ -1,10 +1,10 @@
 ---
 name: add-email
-description: Add transactional email support (Resend or Brevo) to an existing T3 project. The skill auto-detects which provider to use based on env vars - no question asked when the choice is unambiguous. Can be called by /bootstrap or standalone.
+description: Add transactional email support (Brevo or Resend) to an existing T3 project. The skill auto-detects which provider to use based on env vars - no question asked when the choice is unambiguous. Can be called by /bootstrap or standalone.
 compatibility: "Agent Skills standard (Claude Code or Codex). Requires Node.js; most workflows also use pnpm, git, and project CLIs (vercel, gh)."
 ---
 
-# Add Email - Resend or Brevo
+# Add Email - Brevo or Resend
 
 Adds transactional email support to the current project. **Supports two providers** (Resend and Brevo) with a single unified flow: the skill decides which one to install based on the user's existing API keys, without asking when the choice is unambiguous.
 
@@ -132,7 +132,7 @@ Apply the **decision rule** (NO question to the user):
 
 | Available user keys | Chosen provider | Flag in the final summary? |
 |---|---|---|
-| None | **Resend** | ✅ "I installed Resend by default. Create an API key and I will store it in your vault (item `RESEND`) to finish." |
+| None | **Brevo** | ✅ "I went with Brevo by default. Create your Brevo account if you have none, then its API key: I will store it in your vault (item `BREVO`) to finish. Resend stays available if you prefer signing in with GitHub: re-run `/add-email` once its key is in your vault." |
 | Resend only | **Resend** | no (silent) |
 | Brevo only | **Brevo** | no (silent) |
 | Both | **Brevo** | ✅ "You have both keys. I went with Brevo. To switch back to Resend later: delete your Brevo config and re-run `/add-email`." |
@@ -143,9 +143,9 @@ Show a short message to the user, for example:
 
 > ↳ Provider detected: **Brevo** (Brevo key detected) ✅
 
-Or for the Resend default with no key:
+Or for the Brevo default with no key (decision of 23/11/2026: Brevo is proposed first, Resend stays available):
 
-> ↳ No email key detected - I am installing **Resend by default**. You will finish with the key afterwards. ✅
+> ↳ No email key detected - I am setting up **Brevo by default**. I guide you through creating the account (if needed), then the key. ✅
 
 ---
 
@@ -186,8 +186,9 @@ node "$VAULT" get BREVO api_key >/dev/null 2>&1; RC=$?
 - `RC=2/3` (vault locked/expired) then warn the user, `node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" unlock --lang <LANG>` (blocking), retry.
 - `RC=4` (key missing) then have it created + stored in the vault:
   > To use Brevo, I need your Brevo account's key (just once - I store it in your vault). It stays there: with it, I make each project a sending application of its own, that can only send, and I set up your senders and your sending domain.
-  > 1. Go to **https://app.brevo.com/settings/keys/api** then **Generate a new API key** (name `claude-code`) and copy it (`xkeysib-...`).
-  > 2. A window will open: paste it in (masked input).
+  > 1. No Brevo account yet? Create one for free on **https://www.brevo.com** (**Sign up free**), and confirm your email address.
+  > 2. Go to **https://app.brevo.com/settings/keys/api** then **Generate a new API key** (name `claude-code`) and copy it (`xkeysib-...`).
+  > 3. A window will open: paste it in (masked input).
   ```bash
   node "${CLAUDE_SKILL_DIR}/../../scripts/vault/launch.mjs" add --lang <LANG> --name BREVO --service Brevo --fields "api_key:secret"
   ```

@@ -96,7 +96,7 @@ Chaque addon peut être activé pendant `/bootstrap` ou utilisé seul sur un pro
 | `/add-auth` | NextAuth v5 - interface admin uniquement OU comptes utilisateurs (email+mot de passe avec inscription, page compte, suppression, et mot de passe oublié si email configuré). Google/GitHub OAuth proposés en add-ons optionnels en mode utilisateurs. |
 | `/add-google-auth` | Active la connexion via Google OAuth (se greffe sur `/add-auth`) |
 | `/add-github-auth` | Active la connexion via GitHub OAuth (se greffe sur `/add-auth`) |
-| `/add-email` | Resend ou Brevo pour les emails transactionnels (auto-détecté) |
+| `/add-email` | Brevo ou Resend pour les emails transactionnels (auto-détecté) |
 | `/add-stripe` | Stripe Checkout pour les paiements |
 | `/add-i18n` | Internationalisation avec next-intl |
 | `/add-storage` | Stockage de fichiers avec Cloudflare R2 |
@@ -135,7 +135,7 @@ Les projets créés avec ce plugin utilisent :
 - **GitHub** pour le contrôle de version
 - **Vercel** pour l'hébergement et le déploiement (fonctions configurées en région `fra1` - Frankfurt)
 - **Neon** pour la base de données PostgreSQL (provisionnée à Frankfurt, `aws-eu-central-1` - quand l'addon DB est activé)
-- **Resend ou Brevo** pour les emails transactionnels (quand l'addon email est activé)
+- **Brevo ou Resend** pour les emails transactionnels (quand l'addon email est activé)
 - **Stripe** pour les paiements (quand l'addon stripe est activé)
 - **Cloudflare R2** pour le stockage de fichiers (quand l'addon storage est activé)
 - **Google Analytics** pour le suivi du trafic (quand l'addon analytics est activé)

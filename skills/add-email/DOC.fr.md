@@ -1,6 +1,6 @@
 # /add-email
 
-Active **l'envoi d'emails transactionnels** depuis votre app, via Resend ou Brevo. Pour les formulaires de contact, les confirmations, les notifications, les emails de bienvenue, etc.
+Active **l'envoi d'emails transactionnels** depuis votre app, via Brevo ou Resend. Pour les formulaires de contact, les confirmations, les notifications, les emails de bienvenue, etc.
 
 ## Quand l'utiliser
 
@@ -8,19 +8,19 @@ Active **l'envoi d'emails transactionnels** depuis votre app, via Resend ou Brev
 - Vous voulez envoyer des emails automatiques à vos utilisateurs (confirmation d'inscription, mot de passe oublié, notification d'événement)
 - Vous voulez envoyer des emails depuis votre propre domaine (`contact@monsite.fr`) plutôt que depuis un service tiers
 
-## Resend ou Brevo ?
+## Brevo ou Resend ?
 
 La skill **gère les deux providers** et choisit automatiquement, sans question, selon ce que vous avez déjà :
 
 | Vos variables d'env | Provider installé | Note |
 |---|---|---|
-| Aucune | **Resend par défaut** | Vous créerez la clé après, la skill vous dit comment |
+| Aucune | **Brevo par défaut** | La skill vous guide pour créer le compte (s'il n'existe pas encore), puis la clé |
 | `RESEND_API_KEY` seule | Resend | silencieux |
 | `BREVO_API_KEY` seule | Brevo | silencieux |
 | Les deux | **Brevo par défaut** | Mentionné dans le résumé final pour que vous puissiez switcher si besoin |
 
 {{callout:info|Pourquoi ces défauts}}
-**Resend** est le défaut quand on part de zéro : DX moderne (intégrations Next.js soignées), free tier de 3 000 emails/mois, facile à débuter. **Brevo** prend la main quand les deux clés sont là parce que c'est un service européen avec CRM et marketing email intégrés - typique d'une stack "pro" plus avancée. Dans les deux cas, vous pouvez switcher manuellement en supprimant la config et en relançant `/add-email`.
+**Brevo** est le défaut quand on part de zéro : beaucoup de gens y ont déjà un compte, son interface parle à qui n'est pas développeur, c'est un service européen, et il envoie jusqu'à 300 emails par jour gratuitement sans demander de domaine pour commencer (sans domaine, il envoie depuis une adresse à lui : assez pour des tests et des alertes, pas pour une app en service). **Resend** reste au choix, pour qui préfère la connexion par GitHub. Quand les deux clés sont là, c'est Brevo. Dans tous les cas, vous pouvez changer à la main en supprimant la config et en relançant `/add-email`.
 {{/callout}}
 
 ## Comment ça se passe

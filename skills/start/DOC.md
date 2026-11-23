@@ -16,8 +16,9 @@ This is the **very first command** to run right after installing the plugin. It 
 6. **CLI connections**: a script opens a dedicated window and has you connect to GitHub, Vercel, and Cloudflare one after another. You follow the on-screen instructions (a browser opens for each connection).
 7. **Vercel's GitHub application**: once Vercel is connected, the command checks that Vercel's GitHub application is installed on your GitHub account, with access to all your repositories. It is what lets every `git push` put your site back online by itself. If it is missing, or limited to some repositories, Hypervibe opens the right page and guides you: it is an authorization you give in the browser, it cannot be done in your place.
 8. **Neon key**: if you connected the Neon database, you generate an API key (another 30 seconds) that the command saves. This activates automatic backups of your future databases.
-9. **Final recap + commands**: at the end, you get an overview of the available commands (`/bootstrap`, `/prof`, etc.).
-10. **Global rules**: a small rules file (`~/.claude/CLAUDE.md`) is created so that Claude Code follows your conventions across all your projects (no pointless builds, no push without your approval, etc.).
+9. **Email key**: you choose the service that will send the emails, Brevo first, Resend if you prefer signing in with GitHub, and you generate its key, stored in your vault. It is used for your apps' emails and for your projects' alerts (a quota close to its limit, a failed backup).
+10. **Final recap + commands**: at the end, you get an overview of the available commands (`/bootstrap`, `/prof`, etc.).
+11. **Global rules**: a small rules file (`~/.claude/CLAUDE.md`) is created so that Claude Code follows your conventions across all your projects (no pointless builds, no push without your approval, etc.).
 
 ## What it creates for you
 
@@ -32,11 +33,15 @@ This is the **very first command** to run right after installing the plugin. It 
 None. This is where it all begins.
 
 {{callout:info|Why all these tools}}
-To build complete apps, Hypervibe orchestrates several services: GitHub stores the code, Vercel puts the app online, Neon hosts the database, Resend or Brevo sends the emails, Cloudflare handles DNS and files. The `/start` command installs and connects all of this **just once**: after that you never think about it again.
+To build complete apps, Hypervibe orchestrates several services: GitHub stores the code, Vercel puts the app online, Neon hosts the database, Brevo or Resend sends the emails, Cloudflare handles DNS and files. The `/start` command installs and connects all of this **just once**: after that you never think about it again.
 {{/callout}}
 
 {{callout:warning|Two traps with GitHub and Vercel}}
 Signing in to Vercel "with GitHub" does not install Vercel's GitHub application: it is a mere sign-in, not the right to read your repositories. And an installation limited to "Only select repositories" does not see the projects you create afterwards. Choose **All repositories**: you will never have to come back to it.
+{{/callout}}
+
+{{callout:info|If you are taking a Hypervibe training}}
+Run the command with the code your training module gives you (`/start hvi-…`). At the very end, and only if everything is green, `/start` tells your training space that the installation is done: your checklist ticks itself. It sends only that code, nothing else about you or your computer. Without a code, nothing is sent.
 {{/callout}}
 
 {{callout:tip|If something goes wrong}}
